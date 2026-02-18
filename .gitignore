@@ -42,7 +42,7 @@ logs/
 # Database
 *.db
 *.sqlite
-data/
+/data/
 
 # Cache
 .cache/
