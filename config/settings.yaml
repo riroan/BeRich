@@ -1,0 +1,43 @@
+# Trading Bot Settings
+
+app:
+  name: "TradingBot"
+  env: "development"  # development, production
+
+# Trading Settings
+trading:
+  warmup_hours: 168    # Hours to collect data before trading starts
+  check_interval: 120  # Price check interval in seconds
+
+# Database
+database:
+  url: "${DATABASE_URL}"
+
+# Risk Management
+risk:
+  max_daily_loss: 1000000          # Maximum daily loss (KRW)
+  max_daily_trades: 50             # Maximum trades per day
+  max_position_value: 10000000     # Maximum position value per stock
+  max_total_exposure: 100000000    # Maximum total exposure
+  max_concentration: 0.25          # Maximum single stock concentration (25%)
+  max_drawdown: 5000000            # Maximum drawdown
+
+  position_sizing:
+    method: "fixed_risk"           # fixed, fixed_risk, kelly
+    risk_per_trade: 0.02           # Risk 2% per trade
+
+# Logging
+logging:
+  level: "${LOG_LEVEL}"
+  log_dir: "logs"
+
+# Market Hours
+schedule:
+  krx:
+    start: "09:00"
+    end: "15:30"
+    timezone: "Asia/Seoul"
+  us:
+    start: "09:30"
+    end: "16:00"
+    timezone: "America/New_York"

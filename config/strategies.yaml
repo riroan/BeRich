@@ -1,0 +1,106 @@
+# Trading Strategies Configuration
+
+strategies:
+  # RSI Mean Reversion Strategy (with Averaging Down & Staged Selling)
+  - name: "KRX_RSI_MeanReversion"
+    class: "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy"
+    enabled: true
+    market: "krx"
+    symbols:
+      - "069500"  # KODEX 200
+      - "010120"  # LS ELECTRIC
+    params:
+      rsi_period: 14
+      stop_loss: -10   # Stop loss at -10%
+
+      # Cooldown: reset buy stages after N days
+      cooldown_days: 1   # 1일 후 다시 매수 가능
+
+      # Averaging down levels: [RSI threshold, portion]
+      avg_down_levels:
+        - [30, 0.5]    # 1차 매수: RSI 30, 50%
+        - [25, 0.3]    # 2차 매수: RSI 25, 30%
+        - [20, 0.2]    # 3차 매수: RSI 20, 20%
+
+      # Staged selling levels: [RSI threshold, portion]
+      sell_levels:
+        - [65, 0.3]    # 1차 매도: RSI 65, 30%
+        - [70, 0.3]    # 2차 매도: RSI 70, 30%
+        - [75, 0.4]    # 3차 매도: RSI 75, 40% (나머지 전량)
+
+  # RSI Mean Reversion for NASDAQ Stocks
+  - name: "NASDAQ_RSI_MeanReversion"
+    class: "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy"
+    enabled: true
+    market: "nasdaq"
+    symbols:
+      - "GOOG"   # Alphabet
+      - "NVDA"   # NVIDIA
+      - "QQQM"   # Nasdaq 100 ETF
+      - "ASML"   # ASML Holdings
+      - "SOXX"   # Semiconductor ETF
+    params:
+      rsi_period: 14
+      stop_loss: -10
+      cooldown_days: 1
+      avg_down_levels:
+        - [30, 0.5]
+        - [25, 0.3]
+        - [20, 0.2]
+      sell_levels:
+        - [65, 0.3]
+        - [70, 0.3]
+        - [75, 0.4]
+
+  # RSI Mean Reversion for NYSE Stocks (개별주)
+  - name: "NYSE_RSI_MeanReversion"
+    class: "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy"
+    enabled: true
+    market: "nyse"
+    symbols:
+      - "KO"     # Coca-Cola
+    params:
+      rsi_period: 14
+      stop_loss: -10
+      cooldown_days: 1
+      avg_down_levels:
+        - [30, 0.5]
+        - [25, 0.3]
+        - [20, 0.2]
+      sell_levels:
+        - [65, 0.3]
+        - [70, 0.3]
+        - [75, 0.4]
+
+  # RSI Mean Reversion for AMEX/NYSE Arca ETFs
+  - name: "AMEX_RSI_MeanReversion"
+    class: "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy"
+    enabled: true
+    market: "amex"
+    symbols:
+      - "GLD"    # Gold ETF (NYSE Arca)
+      - "VOO"    # S&P 500 ETF (NYSE Arca)
+    params:
+      rsi_period: 14
+      stop_loss: -10
+      cooldown_days: 1
+      avg_down_levels:
+        - [30, 0.5]
+        - [25, 0.3]
+        - [20, 0.2]
+      sell_levels:
+        - [65, 0.3]
+        - [70, 0.3]
+        - [75, 0.4]
+
+  # Momentum Strategy (disabled)
+  - name: "KRX_Momentum"
+    class: "src.strategy.builtin.momentum.MomentumStrategy"
+    enabled: false
+    market: "krx"
+    symbols:
+      - "005930"
+    params:
+      rsi_period: 14
+      fast_ma: 10
+      slow_ma: 20
