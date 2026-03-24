@@ -289,6 +289,9 @@ class TradingBot:
         # Sync existing positions from broker
         await self.strategy_engine.sync_positions()
 
+        # Load chart history from database
+        await self._load_chart_history()
+
         # Start scheduler (1 minute interval)
         await self.scheduler.start()
 
@@ -366,6 +369,46 @@ class TradingBot:
 
         # Update account value
         self.dashboard.account_value = self.risk_manager.account_value
+
+    async def _load_chart_history(self) -> None:
+        """Load price/RSI history from database on startup"""
+        try:
+            symbols = await self.storage.get_all_symbols_with_history()
+            logger.info(f"Loading chart history for {len(symbols)} symbols...")
+
+            for symbol in symbols:
+                history = await self.storage.get_price_rsi_history(symbol, limit=200)
+
+                for record in history:
+                    # Add price point
+                    self.dashboard.add_price_point(
+                        symbol=record["symbol"],
+                        time=record["timestamp"],
+                        open_=record["price"],
+                        high=record["price"],
+                        low=record["price"],
+                        close=record["price"],
+                    )
+
+                    # Add RSI point
+                    if record["rsi"] is not None:
+                        self.dashboard.add_rsi_point(
+                            symbol=record["symbol"],
+                            time=record["timestamp"],
+                            rsi=record["rsi"],
+                        )
+
+                if history:
+                    latest = history[-1]
+                    if latest["rsi"] is not None:
+                        self.dashboard.update_rsi(symbol, latest["rsi"])
+                    logger.info(
+                        f"  [{symbol}] Loaded {len(history)} history points"
+                    )
+
+            logger.info("Chart history loaded successfully")
+        except Exception as e:
+            logger.warning(f"Failed to load chart history: {e}")
 
     async def stop(self) -> None:
         """Stop the bot"""

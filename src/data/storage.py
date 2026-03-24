@@ -247,3 +247,40 @@ class Storage:
             )
             session.add(record)
             await session.commit()
+
+    async def get_price_rsi_history(
+        self,
+        symbol: str,
+        limit: int = 200,
+    ) -> List[dict]:
+        """Get recent price/RSI history for a symbol"""
+        async with self.async_session() as session:
+            query = (
+                select(PriceRSIModel)
+                .where(PriceRSIModel.symbol == symbol)
+                .order_by(PriceRSIModel.timestamp.desc())
+                .limit(limit)
+            )
+
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            # Return in chronological order
+            return [
+                {
+                    "symbol": row.symbol,
+                    "market": row.market,
+                    "price": float(row.price),
+                    "rsi": float(row.rsi) if row.rsi else None,
+                    "timestamp": row.timestamp,
+                }
+                for row in reversed(rows)
+            ]
+
+    async def get_all_symbols_with_history(self) -> List[str]:
+        """Get all symbols that have price/RSI history"""
+        async with self.async_session() as session:
+            from sqlalchemy import distinct
+            query = select(distinct(PriceRSIModel.symbol))
+            result = await session.execute(query)
+            return [row[0] for row in result.all()]
