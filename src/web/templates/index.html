@@ -32,19 +32,19 @@
 
         <section class="summary-cards">
             <div class="card">
-                <h3>Account Value</h3>
-                <p class="value">{{ "{:,.0f}".format(account_value) }}</p>
+                <h3>KRW Balance</h3>
+                <p class="value">₩{{ "{:,.0f}".format(balance_krw) }}</p>
+                <p class="sub-value">예수금: ₩{{ "{:,.0f}".format(cash_krw) }}</p>
+            </div>
+            <div class="card">
+                <h3>USD Balance</h3>
+                <p class="value">${{ "{:,.2f}".format(balance_usd) }}</p>
+                <p class="sub-value">Cash: ${{ "{:,.2f}".format(cash_usd) }}</p>
             </div>
             <div class="card">
                 <h3>Daily P&L</h3>
                 <p class="value {{ 'positive' if daily_pnl >= 0 else 'negative' }}">
                     {{ "{:+,.0f}".format(daily_pnl) }}
-                </p>
-            </div>
-            <div class="card">
-                <h3>Total P&L</h3>
-                <p class="value {{ 'positive' if total_pnl >= 0 else 'negative' }}">
-                    {{ "{:+,.0f}".format(total_pnl) }}
                 </p>
             </div>
             <div class="card">

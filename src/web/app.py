@@ -62,6 +62,11 @@ class DashboardState:
         self.daily_pnl: Decimal = Decimal("0")
         self.total_pnl: Decimal = Decimal("0")
         self.account_value: Decimal = Decimal("0")
+        # Separate balances by currency
+        self.balance_krw: Decimal = Decimal("0")  # 원화 (총 평가)
+        self.balance_usd: Decimal = Decimal("0")  # 달러 (총 평가)
+        self.cash_krw: Decimal = Decimal("0")     # 원화 예수금
+        self.cash_usd: Decimal = Decimal("0")     # 달러 예수금
         self.last_update: Optional[datetime] = None
         # Price history for charts (symbol -> list of price points)
         self.price_history: Dict[str, List[PricePoint]] = {}
@@ -293,6 +298,10 @@ def create_app() -> FastAPI:
             "recent_orders": list(dashboard_state.recent_orders),
             "bot_status": dashboard_state.bot_status,
             "account_value": float(dashboard_state.account_value),
+            "balance_krw": float(dashboard_state.balance_krw),
+            "balance_usd": float(dashboard_state.balance_usd),
+            "cash_krw": float(dashboard_state.cash_krw),
+            "cash_usd": float(dashboard_state.cash_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
             "total_pnl": float(dashboard_state.total_pnl),
             "last_update": dashboard_state.last_update,
@@ -309,6 +318,10 @@ def create_app() -> FastAPI:
         return {
             "bot_status": dashboard_state.bot_status,
             "account_value": float(dashboard_state.account_value),
+            "balance_krw": float(dashboard_state.balance_krw),
+            "balance_usd": float(dashboard_state.balance_usd),
+            "cash_krw": float(dashboard_state.cash_krw),
+            "cash_usd": float(dashboard_state.cash_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
             "total_pnl": float(dashboard_state.total_pnl),
             "last_update": dashboard_state.last_update.isoformat()

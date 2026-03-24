@@ -141,6 +141,12 @@ header h1 {
     color: var(--negative);
 }
 
+.card .sub-value {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-top: 5px;
+}
+
 /* Main Content */
 .main-content {
     display: grid;

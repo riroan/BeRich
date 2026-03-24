@@ -88,11 +88,26 @@ class TradingBot:
         )
         await self.broker.connect()
 
-        # Update account value from broker
+        # Update account value from broker (both KRW and USD)
         try:
-            balance = await self.broker.get_account_balance()
-            total_eval = balance.get("total_eval", Decimal("100000000"))
+            # Get KRW balance
+            krw_balance = await self.broker.get_account_balance(Market.KRX)
+            self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
+            self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
+
+            # Get USD balance
+            usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
+            self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
+            self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
+
+            # Total for risk manager (KRW only for now)
+            total_eval = krw_balance.get("total_eval", Decimal("100000000"))
             self.risk_manager.update_account_value(total_eval)
+
+            logger.info(
+                f"Account balance - KRW: {self.dashboard.balance_krw:,.0f}, "
+                f"USD: {self.dashboard.balance_usd:,.2f}"
+            )
         except Exception as e:
             logger.warning(f"Failed to get account balance: {e}")
 

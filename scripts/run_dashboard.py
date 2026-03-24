@@ -98,6 +98,10 @@ def setup_mock_data():
     # Mock bot status
     from decimal import Decimal
     state.account_value = Decimal("100000000")
+    state.balance_krw = Decimal("85000000")
+    state.balance_usd = Decimal("12500.50")
+    state.cash_krw = Decimal("15000000")
+    state.cash_usd = Decimal("3500.25")
     state.daily_pnl = Decimal("1250000")
     state.total_pnl = Decimal("5430000")
 
