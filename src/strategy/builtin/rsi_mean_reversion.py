@@ -239,6 +239,36 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
         return None
 
+    def sync_position(
+        self,
+        symbol: str,
+        quantity: int,
+        avg_price: Decimal,
+    ) -> None:
+        """Sync position from broker and restore strategy state"""
+        if symbol not in self.symbols:
+            return
+
+        if quantity <= 0:
+            # No position, reset state
+            self._reset_position(symbol)
+            return
+
+        # Restore position
+        self._positions[symbol] = quantity
+        self._entry_prices[symbol] = avg_price
+
+        # Assume at least 1 buy stage completed
+        self._buy_stages[symbol] = 1
+        self._sell_stages[symbol] = 0
+        self._invested[symbol] = avg_price * Decimal(str(quantity))
+
+        logger.info(
+            f"[{symbol}] Position synced | "
+            f"Qty: {quantity} | Avg: {avg_price:,.0f} | "
+            f"Value: {avg_price * quantity:,.0f}"
+        )
+
     def _reset_position(self, symbol: str) -> None:
         """Reset all tracking for a symbol after full exit"""
         if symbol in self._entry_prices:

@@ -263,6 +263,9 @@ class TradingBot:
         # Initialize strategies with historical data
         await self.strategy_engine.initialize()
 
+        # Sync existing positions from broker
+        await self.strategy_engine.sync_positions()
+
         # Start scheduler (1 minute interval)
         await self.scheduler.start()
 

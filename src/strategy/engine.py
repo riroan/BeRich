@@ -1,9 +1,9 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Set
 import asyncio
 from datetime import datetime
 import logging
 
-from src.core.types import Bar, Quote, Signal, Market
+from src.core.types import Bar, Quote, Signal, Market, Position
 from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
 from .base import BaseStrategy
@@ -132,3 +132,40 @@ class StrategyEngine:
     def get_strategies(self) -> List[BaseStrategy]:
         """Get all registered strategies"""
         return self._strategies
+
+    async def sync_positions(self) -> None:
+        """Sync positions from broker to all strategies"""
+        logger.info("Syncing positions from broker...")
+
+        # Collect all unique markets from strategies
+        markets: Set[Market] = set()
+        for strategy in self._strategies:
+            markets.add(strategy.market)
+
+        # Fetch positions for each market
+        all_positions: Dict[str, Position] = {}
+        for market in markets:
+            try:
+                positions = await self.broker.get_positions(market)
+                for pos in positions:
+                    all_positions[pos.symbol] = pos
+                logger.info(f"Fetched {len(positions)} positions from {market.value}")
+            except Exception as e:
+                logger.error(f"Failed to fetch positions for {market.value}: {e}")
+
+        if not all_positions:
+            logger.info("No existing positions found")
+            return
+
+        # Sync to each strategy
+        for strategy in self._strategies:
+            for symbol in strategy.symbols:
+                if symbol in all_positions:
+                    pos = all_positions[symbol]
+                    strategy.sync_position(
+                        symbol=symbol,
+                        quantity=pos.quantity,
+                        avg_price=pos.avg_entry_price,
+                    )
+
+        logger.info(f"Position sync complete: {len(all_positions)} positions")

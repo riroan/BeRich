@@ -90,6 +90,21 @@ class BaseStrategy(ABC):
         """Get current position for a symbol"""
         return self._positions.get(symbol, 0)
 
+    def sync_position(
+        self,
+        symbol: str,
+        quantity: int,
+        avg_price: Decimal,
+    ) -> None:
+        """Sync position from broker (called on startup)
+
+        Override in subclass to restore strategy-specific state.
+        """
+        if symbol not in self.symbols:
+            return
+
+        self._positions[symbol] = quantity
+
     @abstractmethod
     async def calculate_signal(self, symbol: str) -> Optional[Signal]:
         """Calculate trading signal (implement in subclass)"""
