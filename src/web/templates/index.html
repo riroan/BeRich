@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta http-equiv="refresh" content="30">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>BeRich Trading Dashboard</h1>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                <span class="mode {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                    {{ 'PAPER' if bot_status.paper_trading else 'REAL' }}
+                </span>
+                {% if bot_status.warmup_remaining %}
+                <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+                {% endif %}
+                {% endif %}
+                <span class="update-time">
+                    Last update: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <section class="summary-cards">
+            <div class="card">
+                <h3>Account Value</h3>
+                <p class="value">{{ "{:,.0f}".format(account_value) }}</p>
+            </div>
+            <div class="card">
+                <h3>Daily P&L</h3>
+                <p class="value {{ 'positive' if daily_pnl >= 0 else 'negative' }}">
+                    {{ "{:+,.0f}".format(daily_pnl) }}
+                </p>
+            </div>
+            <div class="card">
+                <h3>Total P&L</h3>
+                <p class="value {{ 'positive' if total_pnl >= 0 else 'negative' }}">
+                    {{ "{:+,.0f}".format(total_pnl) }}
+                </p>
+            </div>
+            <div class="card">
+                <h3>Positions</h3>
+                <p class="value">{{ positions|length }}</p>
+            </div>
+        </section>
+
+        <section class="main-content">
+            <div class="panel positions-panel">
+                <h2>Positions</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Market</th>
+                            <th>Qty</th>
+                            <th>Avg Price</th>
+                            <th>Current</th>
+                            <th>P&L</th>
+                            <th>P&L %</th>
+                            <th>RSI</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pos in positions %}
+                        <tr onclick="location.href='/symbol/{{ pos.symbol }}'" style="cursor: pointer;">
+                            <td class="symbol">{{ pos.symbol }}</td>
+                            <td>{{ pos.market }}</td>
+                            <td class="number">{{ pos.quantity }}</td>
+                            <td class="number">{{ "{:,.0f}".format(pos.avg_price) }}</td>
+                            <td class="number">{{ "{:,.0f}".format(pos.current_price) }}</td>
+                            <td class="number {{ 'positive' if pos.pnl >= 0 else 'negative' }}">
+                                {{ "{:+,.0f}".format(pos.pnl) }}
+                            </td>
+                            <td class="number {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">
+                                {{ "{:+.1f}%".format(pos.pnl_pct) }}
+                            </td>
+                            <td class="number rsi {{ 'oversold' if pos.rsi and pos.rsi <= 30 else ('overbought' if pos.rsi and pos.rsi >= 70 else '') }}">
+                                {{ "{:.1f}".format(pos.rsi) if pos.rsi else '-' }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="8" class="empty">No positions</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="panel rsi-panel">
+                <h2>RSI Monitor</h2>
+                <div class="rsi-grid">
+                    {% for symbol, rsi in rsi_values.items() %}
+                    <div class="rsi-item {{ 'oversold' if rsi <= 30 else ('overbought' if rsi >= 70 else '') }}" onclick="location.href='/symbol/{{ symbol }}'" style="cursor: pointer;">
+                        <span class="rsi-symbol">{{ symbol }}</span>
+                        <span class="rsi-value">{{ "{:.1f}".format(rsi) }}</span>
+                        <div class="rsi-bar">
+                            <div class="rsi-fill" style="width: {{ rsi }}%"></div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <p class="empty">No RSI data</p>
+                    {% endfor %}
+                </div>
+            </div>
+        </section>
+
+        <section class="activity-section">
+            <div class="panel signals-panel">
+                <h2>Recent Signals</h2>
+                <ul class="activity-list">
+                    {% for signal in recent_signals %}
+                    <li class="{{ signal.type|lower }}">
+                        <span class="time">{{ signal.timestamp }}</span>
+                        <span class="type">{{ signal.type }}</span>
+                        <span class="symbol">{{ signal.symbol }}</span>
+                        <span class="detail">RSI: {{ signal.rsi|default('-') }}</span>
+                    </li>
+                    {% else %}
+                    <li class="empty">No recent signals</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            <div class="panel orders-panel">
+                <h2>Recent Orders</h2>
+                <ul class="activity-list">
+                    {% for order in recent_orders %}
+                    <li class="{{ order.side|lower }}">
+                        <span class="time">{{ order.timestamp }}</span>
+                        <span class="side">{{ order.side }}</span>
+                        <span class="symbol">{{ order.symbol }}</span>
+                        <span class="detail">{{ order.quantity }} @ {{ "{:,.0f}".format(order.price) }}</span>
+                    </li>
+                    {% else %}
+                    <li class="empty">No recent orders</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot Dashboard</p>
+            {% if bot_status %}
+            <p>Strategies: {{ bot_status.strategies|join(', ') }}</p>
+            <p>Uptime: {{ bot_status.uptime }}</p>
+            {% endif %}
+        </footer>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>

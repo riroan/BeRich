@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ symbol }} - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Back</a>
+                <h1>{{ symbol }}</h1>
+            </div>
+            <div class="status-bar">
+                <span class="update-time">
+                    Last update: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <section class="symbol-info">
+            {% if position %}
+            <div class="info-cards">
+                <div class="card">
+                    <h3>Position</h3>
+                    <p class="value">{{ position.quantity }}</p>
+                </div>
+                <div class="card">
+                    <h3>Avg Price</h3>
+                    <p class="value">{{ "{:,.0f}".format(position.avg_price) }}</p>
+                </div>
+                <div class="card">
+                    <h3>Current</h3>
+                    <p class="value">{{ "{:,.0f}".format(position.current_price) }}</p>
+                </div>
+                <div class="card">
+                    <h3>P&L</h3>
+                    <p class="value {{ 'positive' if position.pnl >= 0 else 'negative' }}">
+                        {{ "{:+,.0f}".format(position.pnl) }}
+                        ({{ "{:+.1f}%".format(position.pnl_pct) }})
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>RSI</h3>
+                    <p class="value rsi-value {{ 'oversold' if rsi and rsi <= 30 else ('overbought' if rsi and rsi >= 70 else '') }}">
+                        {{ "{:.1f}".format(rsi) if rsi else '-' }}
+                    </p>
+                </div>
+            </div>
+            {% else %}
+            <div class="info-cards">
+                <div class="card">
+                    <h3>RSI</h3>
+                    <p class="value rsi-value {{ 'oversold' if rsi and rsi <= 30 else ('overbought' if rsi and rsi >= 70 else '') }}">
+                        {{ "{:.1f}".format(rsi) if rsi else '-' }}
+                    </p>
+                </div>
+                <div class="card">
+                    <h3>Position</h3>
+                    <p class="value">No position</p>
+                </div>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="chart-section">
+            <div class="panel">
+                <h2>Price Chart</h2>
+                <div id="price-chart" class="chart-container"></div>
+            </div>
+        </section>
+
+        <section class="chart-section">
+            <div class="panel">
+                <h2>RSI Chart</h2>
+                <div id="rsi-chart" class="chart-container-small"></div>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot - {{ symbol }}</p>
+        </footer>
+    </div>
+
+    <script>
+        const symbol = '{{ symbol }}';
+
+        // Chart colors
+        const colors = {
+            bg: '#1a1a2e',
+            text: '#eaeaea',
+            grid: '#16213e',
+            up: '#00d26a',
+            down: '#ff4757',
+            rsi: '#e94560',
+            oversold: '#00d26a',
+            overbought: '#ff4757',
+        };
+
+        // Create price chart
+        const priceChartContainer = document.getElementById('price-chart');
+        const priceChart = LightweightCharts.createChart(priceChartContainer, {
+            layout: {
+                background: { color: colors.bg },
+                textColor: colors.text,
+            },
+            grid: {
+                vertLines: { color: colors.grid },
+                horzLines: { color: colors.grid },
+            },
+            width: priceChartContainer.clientWidth,
+            height: 400,
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+            },
+        });
+
+        const candleSeries = priceChart.addCandlestickSeries({
+            upColor: colors.up,
+            downColor: colors.down,
+            borderUpColor: colors.up,
+            borderDownColor: colors.down,
+            wickUpColor: colors.up,
+            wickDownColor: colors.down,
+        });
+
+        // Create RSI chart
+        const rsiChartContainer = document.getElementById('rsi-chart');
+        const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
+            layout: {
+                background: { color: colors.bg },
+                textColor: colors.text,
+            },
+            grid: {
+                vertLines: { color: colors.grid },
+                horzLines: { color: colors.grid },
+            },
+            width: rsiChartContainer.clientWidth,
+            height: 200,
+            timeScale: {
+                timeVisible: true,
+                secondsVisible: false,
+            },
+        });
+
+        const rsiSeries = rsiChart.addLineSeries({
+            color: colors.rsi,
+            lineWidth: 2,
+        });
+
+        // Add RSI reference lines
+        const oversoldLine = rsiChart.addLineSeries({
+            color: colors.oversold,
+            lineWidth: 1,
+            lineStyle: 2,
+        });
+
+        const overboughtLine = rsiChart.addLineSeries({
+            color: colors.overbought,
+            lineWidth: 1,
+            lineStyle: 2,
+        });
+
+        // Parse time string to timestamp
+        function parseTime(timeStr) {
+            // Handle "YYYY-MM-DD HH:MM" format
+            const date = new Date(timeStr.replace(' ', 'T'));
+            return Math.floor(date.getTime() / 1000);
+        }
+
+        // Fetch and display data
+        async function loadChartData() {
+            try {
+                const response = await fetch(`/api/symbol/${symbol}/history?limit=200`);
+                const data = await response.json();
+
+                if (data.prices && data.prices.length > 0) {
+                    const candleData = data.prices.map(p => ({
+                        time: parseTime(p.time),
+                        open: p.open,
+                        high: p.high,
+                        low: p.low,
+                        close: p.close,
+                    }));
+                    candleSeries.setData(candleData);
+                    priceChart.timeScale().fitContent();
+                }
+
+                if (data.rsi && data.rsi.length > 0) {
+                    const rsiData = data.rsi.map(r => ({
+                        time: parseTime(r.time),
+                        value: r.value,
+                    }));
+                    rsiSeries.setData(rsiData);
+
+                    // Add constant lines for oversold/overbought
+                    const times = rsiData.map(r => r.time);
+                    if (times.length >= 2) {
+                        oversoldLine.setData([
+                            { time: times[0], value: 30 },
+                            { time: times[times.length - 1], value: 30 },
+                        ]);
+                        overboughtLine.setData([
+                            { time: times[0], value: 70 },
+                            { time: times[times.length - 1], value: 70 },
+                        ]);
+                    }
+
+                    rsiChart.timeScale().fitContent();
+                }
+            } catch (error) {
+                console.error('Error loading chart data:', error);
+            }
+        }
+
+        // Resize charts on window resize
+        window.addEventListener('resize', () => {
+            priceChart.applyOptions({ width: priceChartContainer.clientWidth });
+            rsiChart.applyOptions({ width: rsiChartContainer.clientWidth });
+        });
+
+        // Load data on page load
+        loadChartData();
+
+        // Refresh every 30 seconds
+        setInterval(loadChartData, 30000);
+    </script>
+</body>
+</html>

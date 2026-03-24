@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .login-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: var(--bg-primary);
+        }
+
+        .login-box {
+            background: var(--bg-secondary);
+            padding: 40px;
+            border-radius: 10px;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-box h1 {
+            text-align: center;
+            color: var(--accent);
+            margin-bottom: 30px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid var(--bg-card);
+            border-radius: 5px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            font-size: 1rem;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .login-btn:hover {
+            background: #c73e54;
+        }
+
+        .error-message {
+            background: rgba(255, 71, 87, 0.2);
+            border: 1px solid var(--negative);
+            color: var(--negative);
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-box">
+            <h1>BeRich</h1>
+
+            {% if error %}
+            <div class="error-message">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" action="/login">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" required autofocus>
+                </div>
+
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+
+                <button type="submit" class="login-btn">Login</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

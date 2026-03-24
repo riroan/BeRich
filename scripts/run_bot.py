@@ -24,6 +24,7 @@ from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.scheduler import TradingScheduler
 from src.utils.notifier import DiscordNotifier
+from src.web.app import get_dashboard_state
 
 logger = setup_logger("TradingBot")
 
@@ -42,6 +43,7 @@ class TradingBot:
         self.risk_manager = None
         self.scheduler = None
         self.notifier = None
+        self.dashboard = get_dashboard_state()
 
         self._running = False
         self._start_time: datetime = None
@@ -174,6 +176,12 @@ class TradingBot:
             minutes = remainder // 60
             logger.info(f"[WARMUP] {hours}h {minutes}m remaining - data only")
 
+        # Update dashboard status
+        self._update_dashboard_status()
+
+        # Update dashboard positions
+        await self._update_dashboard_positions()
+
         logger.debug(f"Tick: {datetime.now().strftime('%H:%M:%S')}")
 
         for strategy in self.strategy_engine.get_strategies():
@@ -225,6 +233,21 @@ class TradingBot:
                         market=strategy.market,
                         price=price,
                         rsi=rsi,
+                    )
+
+                    # Update dashboard
+                    if rsi is not None:
+                        self.dashboard.update_rsi(symbol, rsi)
+                        self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
+
+                    # Add price point to chart history
+                    self.dashboard.add_price_point(
+                        symbol=symbol,
+                        time=datetime.now(),
+                        open_=float(price),
+                        high=float(price),
+                        low=float(price),
+                        close=float(price),
                     )
 
                     logger.info(f"[{symbol}] Price: {price:,}{rsi_str}")
@@ -286,6 +309,64 @@ class TradingBot:
                 paper_trading=self.broker.paper_trading,
             )
 
+        # Update dashboard status
+        self._update_dashboard_status()
+
+    async def _update_dashboard_positions(self) -> None:
+        """Update dashboard with current positions"""
+        try:
+            # Get positions for all markets
+            for market in [Market.KRX, Market.NASDAQ, Market.NYSE, Market.AMEX]:
+                try:
+                    positions = await self.broker.get_positions(market)
+                    for pos in positions:
+                        # Get RSI if available
+                        rsi = self.dashboard.rsi_values.get(pos.symbol)
+                        self.dashboard.update_position(
+                            symbol=pos.symbol,
+                            market=market.value.upper(),
+                            quantity=pos.quantity,
+                            avg_price=float(pos.avg_entry_price),
+                            current_price=float(pos.current_price),
+                            rsi=rsi,
+                        )
+                except Exception:
+                    pass  # Skip markets with no positions
+        except Exception as e:
+            logger.debug(f"Error updating dashboard positions: {e}")
+
+    def _update_dashboard_status(self) -> None:
+        """Update dashboard with current bot status"""
+        strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
+
+        # Calculate uptime
+        if self._start_time:
+            uptime = datetime.now() - self._start_time
+            hours, remainder = divmod(int(uptime.total_seconds()), 3600)
+            minutes = remainder // 60
+            uptime_str = f"{hours}h {minutes}m"
+        else:
+            uptime_str = "0m"
+
+        # Calculate warmup remaining
+        warmup_str = None
+        if not self.is_warmup_complete():
+            remaining = self.get_warmup_remaining()
+            hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+            minutes = remainder // 60
+            warmup_str = f"{hours}h {minutes}m"
+
+        self.dashboard.set_bot_status(
+            running=self._running,
+            paper_trading=self.broker.paper_trading,
+            strategies=strategy_names,
+            uptime=uptime_str,
+            warmup_remaining=warmup_str,
+        )
+
+        # Update account value
+        self.dashboard.account_value = self.risk_manager.account_value
+
     async def stop(self) -> None:
         """Stop the bot"""
         logger.info("Stopping Trading Bot...")
@@ -334,9 +415,19 @@ class TradingBot:
             await asyncio.sleep(1)
 
 
+def run_web_server(host: str, port: int):
+    """Run web server in a separate thread"""
+    import uvicorn
+    from src.web.app import create_app
+
+    app = create_app()
+    uvicorn.run(app, host=host, port=port, log_level="warning")
+
+
 async def main():
     """Main entry point"""
     import argparse
+    import threading
 
     parser = argparse.ArgumentParser(description="Trading Bot")
     parser.add_argument(
@@ -345,7 +436,28 @@ async def main():
         default=0,
         help="Warmup period in hours before trading starts (default: 0)",
     )
+    parser.add_argument(
+        "--web",
+        action="store_true",
+        help="Enable web dashboard",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=8080,
+        help="Web dashboard port (default: 8080)",
+    )
     args = parser.parse_args()
+
+    # Start web server in background thread
+    if args.web:
+        web_thread = threading.Thread(
+            target=run_web_server,
+            args=("0.0.0.0", args.web_port),
+            daemon=True,
+        )
+        web_thread.start()
+        logger.info(f"Web dashboard started at http://localhost:{args.web_port}")
 
     bot = TradingBot(warmup_hours=args.warmup)
 

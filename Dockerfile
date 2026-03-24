@@ -13,4 +13,7 @@ COPY . .
 # Install package
 RUN pip install --no-cache-dir -e .
 
-CMD ["python", "scripts/run_bot.py"]
+# Expose dashboard port
+EXPOSE 9095
+
+CMD ["python", "scripts/run_bot.py", "--web", "--web-port", "9095"]

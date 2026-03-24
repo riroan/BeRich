@@ -8,6 +8,8 @@ services:
     environment:
       - TZ=Asia/Seoul
       - DATABASE_URL=mysql+aiomysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+    ports:
+      - "9095:9095"
     volumes:
       - ./logs:/app/logs
       - ./data:/app/data
