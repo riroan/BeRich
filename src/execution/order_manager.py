@@ -77,6 +77,11 @@ class OrderManager:
             return
 
         # Submit order
+        logger.info(
+            f"*** SUBMITTING ORDER *** | {order.side.value.upper()} {order.symbol} | "
+            f"Qty: {order.quantity} | Price: {order.price:,} | "
+            f"Value: {order.quantity * order.price:,}"
+        )
         await self._submit_order(order)
 
     async def _signal_to_order(self, signal: Signal) -> Optional[Order]:

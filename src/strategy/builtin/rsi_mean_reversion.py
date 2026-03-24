@@ -11,9 +11,12 @@ from typing import Optional
 from decimal import Decimal
 from datetime import datetime, timedelta
 import pandas as pd
+import logging
 
 from src.core.types import Signal, SignalType, Market
 from src.strategy.base import BaseStrategy
+
+logger = logging.getLogger(__name__)
 
 
 class RSIMeanReversionStrategy(BaseStrategy):
@@ -88,6 +91,11 @@ class RSIMeanReversionStrategy(BaseStrategy):
             pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
             if pnl_pct <= stop_loss_pct:
+                logger.info(
+                    f"[{symbol}] *** STOP LOSS TRIGGERED *** | "
+                    f"PnL: {pnl_pct:.1f}% <= {stop_loss_pct}% | "
+                    f"Avg: {avg_price:,} → Current: {current_price:,}"
+                )
                 self._reset_position(symbol)
                 return Signal(
                     signal_type=SignalType.EXIT_LONG,
@@ -105,6 +113,24 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
         # Staged selling: Check each sell level
         if current_position > 0:
+            next_sell_threshold = None
+            for stage, (rsi_threshold, portion) in enumerate(sell_levels):
+                if current_sell_stage > stage:
+                    continue
+                next_sell_threshold = rsi_threshold
+                break
+
+            avg_price = self._entry_prices.get(symbol, current_price)
+            pnl_pct = float(
+                (current_price - avg_price) / avg_price * 100
+            ) if avg_price else 0
+
+            logger.info(
+                f"[{symbol}] SELL CHECK | RSI: {current_rsi:.1f} | "
+                f"Threshold: {next_sell_threshold} | "
+                f"Stage: {current_sell_stage}/{len(sell_levels)} | PnL: {pnl_pct:.1f}%"
+            )
+
             for stage, (rsi_threshold, portion) in enumerate(sell_levels):
                 # Skip if already sold at this stage
                 if current_sell_stage > stage:
@@ -119,6 +145,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
                     # Check if this is the last sell stage
                     is_final_sell = (stage + 1) >= len(sell_levels)
+
+                    logger.info(
+                        f"[{symbol}] *** SELL SIGNAL GENERATED *** | "
+                        f"RSI: {current_rsi:.1f} >= {rsi_threshold} | "
+                        f"Stage {stage + 1}/{len(sell_levels)} | "
+                        f"Portion: {portion*100:.0f}% | PnL: {pnl_pct:.1f}%"
+                    )
 
                     # If final stage, reset everything
                     if is_final_sell:
@@ -141,6 +174,20 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     )
 
         # Buy signals: Check each averaging down level
+        next_buy_threshold = None
+        for stage, (rsi_threshold, portion) in enumerate(avg_down_levels):
+            if current_buy_stage > stage:
+                continue
+            next_buy_threshold = rsi_threshold
+            break
+
+        # Log buy condition check
+        logger.info(
+            f"[{symbol}] BUY CHECK | RSI: {current_rsi:.1f} | "
+            f"Threshold: {next_buy_threshold} | "
+            f"Stage: {current_buy_stage}/{len(avg_down_levels)} | Pos: {current_position}"
+        )
+
         for stage, (rsi_threshold, portion) in enumerate(avg_down_levels):
             if current_buy_stage > stage:
                 continue
@@ -160,10 +207,18 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
                 if old_invested > 0 and symbol in self._entry_prices:
                     old_avg = self._entry_prices[symbol]
-                    new_avg = (old_avg * old_invested + current_price * new_investment) / total_invested
+                    total = old_avg * old_invested + current_price * new_investment
+                    new_avg = total / total_invested
                     self._entry_prices[symbol] = new_avg
                 else:
                     self._entry_prices[symbol] = current_price
+
+                logger.info(
+                    f"[{symbol}] *** BUY SIGNAL GENERATED *** | "
+                    f"RSI: {current_rsi:.1f} <= {rsi_threshold} | "
+                    f"Stage {stage + 1}/{len(avg_down_levels)} | "
+                    f"Portion: {portion*100:.0f}% | Price: {current_price:,}"
+                )
 
                 return Signal(
                     signal_type=SignalType.ENTRY_LONG,
