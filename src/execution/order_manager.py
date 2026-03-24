@@ -5,17 +5,16 @@ import logging
 
 from src.core.types import (
     Order,
-    OrderStatus,
     Signal,
     SignalType,
     OrderSide,
     OrderType,
-    Market,
 )
 from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
 from src.risk.manager import RiskManager
 from src.data.storage import Storage
+from src.utils.notifier import DiscordNotifier
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +29,14 @@ class OrderManager:
         risk_manager: RiskManager,
         storage: Storage,
         is_trading_enabled: Callable[[], bool] = None,
+        notifier: Optional[DiscordNotifier] = None,
     ):
         self.event_bus = event_bus
         self.broker = broker
         self.risk_manager = risk_manager
         self.storage = storage
         self._is_trading_enabled = is_trading_enabled or (lambda: True)
+        self.notifier = notifier
 
         self._pending_orders: Dict[str, Order] = {}
         self._active_orders: Dict[str, Order] = {}
@@ -157,8 +158,25 @@ class OrderManager:
             self._active_orders[order_id] = order
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
+
+            # Send Discord notification
+            if self.notifier:
+                await self.notifier.notify_order_submitted(
+                    symbol=order.symbol,
+                    side=order.side.value,
+                    price=order.price,
+                    quantity=order.quantity,
+                )
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
+
+            # Send error notification
+            if self.notifier:
+                await self.notifier.notify_error(
+                    error=str(e),
+                    context=f"Order submission: {order.side.value} {order.symbol}",
+                )
+
             await self.event_bus.publish(
                 Event(
                     event_type=EventType.ERROR,

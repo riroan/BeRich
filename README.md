@@ -21,6 +21,9 @@ MYSQL_ROOT_PASSWORD=your_root_password
 MYSQL_DATABASE=quant
 MYSQL_USER=quant_user
 MYSQL_PASSWORD=your_password
+
+# Discord Notifications (optional)
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
 ### 2. Docker로 실행

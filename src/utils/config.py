@@ -76,3 +76,11 @@ class Config:
     def get_risk_config(self) -> dict:
         """Get risk management configuration"""
         return self._settings.get("risk", {})
+
+    def get_discord_config(self) -> dict:
+        """Get Discord notification configuration"""
+        discord_config = self._settings.get("discord", {})
+        return {
+            "enabled": discord_config.get("enabled", False),
+            "webhook_url": discord_config.get("webhook_url", ""),
+        }

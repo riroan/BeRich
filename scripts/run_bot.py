@@ -23,6 +23,7 @@ from src.risk.limits import RiskLimits
 from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.scheduler import TradingScheduler
+from src.utils.notifier import DiscordNotifier
 
 logger = setup_logger("TradingBot")
 
@@ -40,6 +41,7 @@ class TradingBot:
         self.order_manager = None
         self.risk_manager = None
         self.scheduler = None
+        self.notifier = None
 
         self._running = False
         self._start_time: datetime = None
@@ -87,9 +89,22 @@ class TradingBot:
         # Update account value from broker
         try:
             balance = await self.broker.get_account_balance()
-            self.risk_manager.update_account_value(balance.get("total_eval", Decimal("100000000")))
+            total_eval = balance.get("total_eval", Decimal("100000000"))
+            self.risk_manager.update_account_value(total_eval)
         except Exception as e:
             logger.warning(f"Failed to get account balance: {e}")
+
+        # Initialize Discord notifier
+        discord_config = self.config.get_discord_config()
+        if discord_config.get("enabled") and discord_config.get("webhook_url"):
+            self.notifier = DiscordNotifier(
+                webhook_url=discord_config["webhook_url"],
+                enabled=True,
+            )
+            logger.info("Discord notifications enabled")
+        else:
+            self.notifier = DiscordNotifier(enabled=False)
+            logger.info("Discord notifications disabled")
 
         # Initialize strategy engine
         self.strategy_engine = StrategyEngine(
@@ -105,6 +120,7 @@ class TradingBot:
             risk_manager=self.risk_manager,
             storage=self.storage,
             is_trading_enabled=self.is_warmup_complete,
+            notifier=self.notifier,
         )
 
         # Initialize scheduler (1 minute interval)
@@ -156,7 +172,7 @@ class TradingBot:
             remaining = self.get_warmup_remaining()
             hours, remainder = divmod(int(remaining.total_seconds()), 3600)
             minutes = remainder // 60
-            logger.info(f"[WARMUP] {hours}h {minutes}m remaining - collecting data only")
+            logger.info(f"[WARMUP] {hours}h {minutes}m remaining - data only")
 
         logger.debug(f"Tick: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -252,15 +268,29 @@ class TradingBot:
 
         logger.info("Trading Bot started")
         logger.info(f"Paper trading: {self.broker.paper_trading}")
-        logger.info(f"Strategies: {[s.name for s in self.strategy_engine.get_strategies()]}")
+        strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
+        logger.info(f"Strategies: {strategy_names}")
         if self._warmup_hours > 0:
-            logger.info(f"Warmup period: {self._warmup_hours} hours (trading starts after warmup)")
+            logger.info(
+                f"Warmup period: {self._warmup_hours} hours (trading after warmup)"
+            )
         logger.info(f"Check interval: {self.scheduler.interval} seconds")
+
+        # Send startup notification
+        if self.notifier:
+            await self.notifier.notify_startup(
+                strategies=strategy_names,
+                paper_trading=self.broker.paper_trading,
+            )
 
     async def stop(self) -> None:
         """Stop the bot"""
         logger.info("Stopping Trading Bot...")
         self._running = False
+
+        # Send shutdown notification
+        if self.notifier:
+            await self.notifier.notify_shutdown()
 
         # Stop scheduler
         if self.scheduler:
@@ -284,6 +314,10 @@ class TradingBot:
         # Close storage
         if self.storage:
             await self.storage.close()
+
+        # Close notifier
+        if self.notifier:
+            await self.notifier.close()
 
         logger.info("Trading Bot stopped")
 

@@ -4,6 +4,11 @@ app:
   name: "TradingBot"
   env: "development"  # development, production
 
+# Discord Notifications
+discord:
+  enabled: true
+  webhook_url: "${DISCORD_WEBHOOK_URL}"
+
 # Trading Settings
 trading:
   warmup_hours: 168    # Hours to collect data before trading starts
