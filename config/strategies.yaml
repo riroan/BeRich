@@ -34,6 +34,7 @@ strategies:
     enabled: true
     market: "nasdaq"
     symbols:
+      - "AAPL"   # Apple
       - "GOOG"   # Alphabet
       - "NVDA"   # NVIDIA
       - "QQQM"   # Nasdaq 100 ETF
@@ -78,8 +79,8 @@ strategies:
     enabled: true
     market: "amex"
     symbols:
+      - "SPY"    # S&P 500 ETF (NYSE Arca)
       - "GLD"    # Gold ETF (NYSE Arca)
-      - "VOO"    # S&P 500 ETF (NYSE Arca)
     params:
       rsi_period: 14
       stop_loss: -10
