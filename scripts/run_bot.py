@@ -94,11 +94,13 @@ class TradingBot:
             krw_balance = await self.broker.get_account_balance(Market.KRX)
             self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
+            self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
 
             # Get USD balance
             usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
             self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
+            self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
 
             # Total for risk manager (KRW only for now)
             total_eval = krw_balance.get("total_eval", Decimal("100000000"))

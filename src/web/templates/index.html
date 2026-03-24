@@ -42,9 +42,15 @@
                 <p class="sub-value">Cash: ${{ "{:,.2f}".format(cash_usd) }}</p>
             </div>
             <div class="card">
-                <h3>Daily P&L</h3>
-                <p class="value {{ 'positive' if daily_pnl >= 0 else 'negative' }}">
-                    {{ "{:+,.0f}".format(daily_pnl) }}
+                <h3>KRW P&L</h3>
+                <p class="value {{ 'positive' if pnl_krw >= 0 else 'negative' }}">
+                    ₩{{ "{:+,.0f}".format(pnl_krw) }}
+                </p>
+            </div>
+            <div class="card">
+                <h3>USD P&L</h3>
+                <p class="value {{ 'positive' if pnl_usd >= 0 else 'negative' }}">
+                    ${{ "{:+,.2f}".format(pnl_usd) }}
                 </p>
             </div>
             <div class="card">

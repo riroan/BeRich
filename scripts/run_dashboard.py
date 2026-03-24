@@ -102,6 +102,8 @@ def setup_mock_data():
     state.balance_usd = Decimal("12500.50")
     state.cash_krw = Decimal("15000000")
     state.cash_usd = Decimal("3500.25")
+    state.pnl_krw = Decimal("1250000")
+    state.pnl_usd = Decimal("-125.30")
     state.daily_pnl = Decimal("1250000")
     state.total_pnl = Decimal("5430000")
 

@@ -67,6 +67,8 @@ class DashboardState:
         self.balance_usd: Decimal = Decimal("0")  # 달러 (총 평가)
         self.cash_krw: Decimal = Decimal("0")     # 원화 예수금
         self.cash_usd: Decimal = Decimal("0")     # 달러 예수금
+        self.pnl_krw: Decimal = Decimal("0")      # 원화 평가손익
+        self.pnl_usd: Decimal = Decimal("0")      # 달러 평가손익
         self.last_update: Optional[datetime] = None
         # Price history for charts (symbol -> list of price points)
         self.price_history: Dict[str, List[PricePoint]] = {}
@@ -302,6 +304,8 @@ def create_app() -> FastAPI:
             "balance_usd": float(dashboard_state.balance_usd),
             "cash_krw": float(dashboard_state.cash_krw),
             "cash_usd": float(dashboard_state.cash_usd),
+            "pnl_krw": float(dashboard_state.pnl_krw),
+            "pnl_usd": float(dashboard_state.pnl_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
             "total_pnl": float(dashboard_state.total_pnl),
             "last_update": dashboard_state.last_update,
@@ -322,6 +326,8 @@ def create_app() -> FastAPI:
             "balance_usd": float(dashboard_state.balance_usd),
             "cash_krw": float(dashboard_state.cash_krw),
             "cash_usd": float(dashboard_state.cash_usd),
+            "pnl_krw": float(dashboard_state.pnl_krw),
+            "pnl_usd": float(dashboard_state.pnl_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
             "total_pnl": float(dashboard_state.total_pnl),
             "last_update": dashboard_state.last_update.isoformat()
