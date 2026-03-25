@@ -38,6 +38,8 @@ strategies:
       - "GOOG"   # Alphabet
       - "NVDA"   # NVIDIA
       - "SOXX"   # Semiconductor ETF
+      - "PEP"    # PepsiCo
+      - "WMT"    # Walmart (NYSE지만 NASDAQ으로 테스트)
     params:
       rsi_period: 14
       stop_loss: -10
@@ -60,8 +62,6 @@ strategies:
       - "KO"     # Coca-Cola
       - "O"      # Realty Income (REIT)
       - "VZ"     # Verizon
-      - "WMT"    # Walmart
-      - "PEP"    # PepsiCo
       - "JNJ"    # Johnson & Johnson
     params:
       rsi_period: 14

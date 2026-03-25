@@ -173,13 +173,15 @@ class KISBroker:
                 logger.warning(f"Overseas balance API failed, trying fallback: {data.get('msg1')}")
                 return await self._get_overseas_balance_fallback()
 
-            output2 = data.get("output2", [])
-            output3 = data.get("output3", {})
+            output1 = data.get("output1", [])  # Stock positions
+            output2 = data.get("output2", [])  # Currency balances
+            output3 = data.get("output3", {})  # Summary
+            logger.info(f"Overseas balance output1 count: {len(output1)}")
             logger.info(f"Overseas balance output2: {output2}")
             logger.info(f"Overseas balance output3: {output3}")
 
             # output2 is a list of currency balances, get USD balance
-            # frcr_dncl_amt_2: 외화예수금액 (USD)
+            # frcr_dncl_amt_2: 외화예수금액 (USD cash)
             usd_cash = Decimal("0")
             if output2 and isinstance(output2, list):
                 for currency_balance in output2:
@@ -187,17 +189,23 @@ class KISBroker:
                         usd_cash = Decimal(currency_balance.get("frcr_dncl_amt_2", "0") or "0")
                         break
 
-            # output3 has summary info (in KRW)
-            stock_eval = Decimal(output3.get("evlu_amt_smtl", "0") or "0") if output3 else Decimal("0")
-            profit_loss = Decimal(output3.get("tot_evlu_pfls_amt", "0") or "0") if output3 else Decimal("0")
+            # output1 has individual stock positions - sum up evaluation amounts
+            # evlu_amt: 평가금액 (USD)
+            stock_eval = Decimal("0")
+            total_profit_loss = Decimal("0")
+            for position in output1:
+                eval_amt = Decimal(position.get("evlu_amt", "0") or "0")
+                pfls_amt = Decimal(position.get("evlu_pfls_amt", "0") or "0")
+                stock_eval += eval_amt
+                total_profit_loss += pfls_amt
 
-            logger.info(f"Account balance - KRW: {output3.get('tot_dncl_amt', '0') if output3 else 0}, USD: {usd_cash:,.2f}")
+            logger.info(f"Account balance - USD cash: {usd_cash:,.2f}, stocks: {stock_eval:,.2f}")
 
             return {
-                "total_eval": usd_cash + stock_eval,  # In USD context
+                "total_eval": usd_cash + stock_eval,
                 "cash": usd_cash,
                 "stocks_eval": stock_eval,
-                "profit_loss": profit_loss,
+                "profit_loss": total_profit_loss,
             }
 
     async def _get_overseas_balance_fallback(self) -> dict:
@@ -552,6 +560,7 @@ class KISBroker:
 
             price_str = data["output"].get("last", "")
             if not price_str or price_str == "0":
+                logger.warning(f"No price data for {symbol}, API response: {data.get('output', {})}")
                 raise BrokerError(f"No price data for {symbol}")
 
             return Decimal(price_str)
