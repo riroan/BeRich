@@ -48,7 +48,9 @@ class TradingBot:
         self._running = False
         self._start_time: datetime = None
         self._warmup_hours = warmup_hours  # Hours to wait before trading
-        self._warmup_file = Path("data/warmup_start.txt")
+        # Use absolute path based on script location
+        self._project_root = Path(__file__).parent.parent
+        self._warmup_file = self._project_root / "data" / "warmup_start.txt"
 
     async def initialize(self) -> None:
         """Initialize all components"""
@@ -60,12 +62,13 @@ class TradingBot:
         # Load warmup hours from config if not set via CLI
         if self._warmup_hours == 0:
             self._warmup_hours = self.config.get("trading.warmup_hours", 0)
+            logger.info(f"Warmup hours loaded from config: {self._warmup_hours}")
 
         # Initialize storage
         db_url = self.config.get("database.url", "sqlite+aiosqlite:///data/trading.db")
 
         # Ensure data directory exists
-        Path("data").mkdir(exist_ok=True)
+        (self._project_root / "data").mkdir(exist_ok=True)
 
         self.storage = Storage(db_url)
         await self.storage.initialize()
@@ -334,6 +337,8 @@ class TradingBot:
 
     def _load_warmup_start(self) -> None:
         """Load warmup start time from file if exists"""
+        logger.debug(f"Warmup check: hours={self._warmup_hours}, file={self._warmup_file}, exists={self._warmup_file.exists()}")
+
         if self._warmup_hours > 0 and self._warmup_file.exists():
             try:
                 saved_time = datetime.fromisoformat(self._warmup_file.read_text().strip())
@@ -354,6 +359,10 @@ class TradingBot:
                     logger.info("Previous warmup already completed")
             except Exception as e:
                 logger.warning(f"Failed to load warmup start time: {e}")
+        elif self._warmup_hours <= 0:
+            logger.debug("Warmup disabled (warmup_hours <= 0)")
+        elif not self._warmup_file.exists():
+            logger.debug(f"Warmup file not found: {self._warmup_file}")
 
     async def start(self) -> None:
         """Start the bot"""
