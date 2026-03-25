@@ -187,7 +187,7 @@ def backtest_symbol(
                 continue
 
             if rsi <= rsi_threshold:
-                buy_amount = initial_capital * portion
+                buy_amount = capital * portion  # 남은 현금 기준으로 변경
                 shares_to_buy = int(buy_amount / price)
 
                 if shares_to_buy > 0 and capital >= shares_to_buy * price:
