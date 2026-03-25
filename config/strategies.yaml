@@ -37,8 +37,6 @@ strategies:
       - "AAPL"   # Apple
       - "GOOG"   # Alphabet
       - "NVDA"   # NVIDIA
-      - "QQQM"   # Nasdaq 100 ETF
-      - "ASML"   # ASML Holdings
       - "SOXX"   # Semiconductor ETF
     params:
       rsi_period: 14
@@ -60,6 +58,11 @@ strategies:
     market: "nyse"
     symbols:
       - "KO"     # Coca-Cola
+      - "O"      # Realty Income (REIT)
+      - "VZ"     # Verizon
+      - "WMT"    # Walmart
+      - "PEP"    # PepsiCo
+      - "JNJ"    # Johnson & Johnson
     params:
       rsi_period: 14
       stop_loss: -10
