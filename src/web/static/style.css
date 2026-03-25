@@ -1077,33 +1077,303 @@ footer p {
     background: var(--accent);
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-    header {
-        flex-direction: column;
-        gap: 10px;
+/* Responsive - Tablet */
+@media (max-width: 1024px) {
+    .container {
+        padding: 15px;
     }
 
-    .status-bar {
-        flex-wrap: wrap;
-        justify-content: center;
-    }
-
-    .summary-row {
-        flex-direction: column;
+    .monitor-section,
+    .activity-section {
+        grid-template-columns: 1fr;
     }
 
     .signal-grid {
         grid-template-columns: 1fr;
     }
 
+    .rsi-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    }
+
+    .chart-container {
+        height: 300px;
+    }
+}
+
+/* Responsive - Mobile */
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+
+    header {
+        flex-direction: column;
+        gap: 10px;
+        text-align: center;
+    }
+
+    header h1 {
+        font-size: 1.3rem;
+    }
+
+    .status-bar {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+    }
+
+    .status-bar span,
+    .nav-link,
+    .logout-btn {
+        font-size: 0.7rem;
+        padding: 3px 8px;
+    }
+
+    /* Portfolio Summary */
+    .summary-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .summary-group {
+        min-width: 100%;
+        padding: 12px;
+    }
+
+    .summary-cards {
+        gap: 8px;
+    }
+
+    .summary-group .card {
+        min-width: 60px;
+        padding: 8px;
+    }
+
+    .summary-group .card .value {
+        font-size: 0.9rem;
+    }
+
+    .summary-group .card .label {
+        font-size: 0.65rem;
+    }
+
+    /* Signal Panel */
+    .signal-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    .signal-group {
+        padding: 10px;
+    }
+
+    .signal-group li {
+        padding: 5px 6px;
+        font-size: 0.8rem;
+    }
+
+    /* Positions Table - Horizontal Scroll */
+    .positions-section {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
     .positions-table {
-        font-size: 0.75rem;
+        font-size: 0.7rem;
+        min-width: 600px;
     }
 
     .positions-table th,
     .positions-table td {
         padding: 6px 4px;
+        white-space: nowrap;
+    }
+
+    /* RSI Grid */
+    .rsi-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .rsi-item {
+        padding: 10px;
+    }
+
+    .rsi-symbol {
+        font-size: 0.8rem;
+    }
+
+    .rsi-value {
+        font-size: 0.9rem;
+    }
+
+    /* Market Panel */
+    .market-grid {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    /* Activity Section */
+    .activity-section {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .activity-list li {
+        padding: 6px 8px;
+        font-size: 0.8rem;
+        flex-wrap: wrap;
+    }
+
+    .activity-list .detail {
+        width: 100%;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+
+    /* Trades Table - Horizontal Scroll */
+    .panel {
+        padding: 10px;
+        overflow-x: auto;
+    }
+
+    .trades-table {
+        font-size: 0.7rem;
+        min-width: 500px;
+    }
+
+    .trades-table th,
+    .trades-table td {
+        padding: 6px 4px;
+        white-space: nowrap;
+    }
+
+    /* System Section */
+    .system-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .system-item {
+        padding: 10px;
+    }
+
+    .system-item .label {
+        font-size: 0.65rem;
+    }
+
+    .system-item .value {
+        font-size: 0.85rem;
+    }
+
+    /* Charts */
+    .chart-container {
+        height: 250px;
+    }
+
+    .chart-container-small {
+        height: 150px;
+    }
+
+    .chart-legend {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .legend-item {
+        font-size: 0.75rem;
+    }
+
+    /* Metrics */
+    .metrics-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .metric-card {
+        padding: 15px;
+    }
+
+    .metric-card .value {
+        font-size: 1.5rem;
+    }
+
+    /* Stats */
+    .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+    }
+
+    .stat-card {
+        padding: 12px;
+    }
+
+    .stat-card .value {
+        font-size: 1.2rem;
+    }
+
+    /* Filters */
+    .filters {
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .filter-btn {
+        padding: 5px 10px;
+        font-size: 0.75rem;
+    }
+
+    /* Panels */
+    .panel h2 {
+        font-size: 0.9rem;
+    }
+
+    /* Footer */
+    footer {
+        padding: 10px;
+        font-size: 0.7rem;
+    }
+}
+
+/* Responsive - Small Mobile */
+@media (max-width: 480px) {
+    .container {
+        padding: 8px;
+    }
+
+    header h1 {
+        font-size: 1.1rem;
+    }
+
+    .summary-group .card .value {
+        font-size: 0.8rem;
+    }
+
+    .rsi-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .system-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .metrics-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .chart-container {
+        height: 200px;
+    }
+
+    /* Hide less important columns on very small screens */
+    .positions-table .hide-mobile,
+    .trades-table .hide-mobile {
+        display: none;
     }
 }
 
@@ -1213,4 +1483,181 @@ a.rsi-item {
     text-decoration: none;
     color: inherit;
     cursor: pointer;
+}
+
+/* Mobile-friendly touch targets */
+@media (max-width: 768px) {
+    .nav-link,
+    .logout-btn,
+    .filter-btn,
+    .back-link {
+        min-height: 44px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    a.rsi-item {
+        min-height: 60px;
+    }
+
+    .positions-table tr,
+    .trades-table tr {
+        min-height: 44px;
+    }
+}
+
+/* Hamburger menu for mobile navigation */
+.mobile-menu-toggle {
+    display: none;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 10px;
+}
+
+@media (max-width: 768px) {
+    .mobile-menu-toggle {
+        display: block;
+        position: absolute;
+        right: 10px;
+        top: 10px;
+    }
+
+    header {
+        position: relative;
+    }
+
+    .status-bar.collapsed {
+        display: none;
+    }
+
+    .status-bar.expanded {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        padding: 10px 0;
+    }
+}
+
+/* Swipe hint for horizontal scroll */
+.scroll-hint {
+    position: relative;
+}
+
+.scroll-hint::after {
+    content: '← 스와이프 →';
+    display: none;
+    position: absolute;
+    bottom: -20px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.7rem;
+    color: var(--text-secondary);
+}
+
+@media (max-width: 768px) {
+    .scroll-hint::after {
+        display: block;
+    }
+}
+
+/* Pull to refresh indicator (for PWA) */
+.pull-to-refresh {
+    text-align: center;
+    padding: 10px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    display: none;
+}
+
+/* Bottom navigation for mobile */
+.bottom-nav {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .bottom-nav {
+        display: flex;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--bg-card);
+        padding: 8px 0;
+        justify-content: space-around;
+        z-index: 1000;
+    }
+
+    .bottom-nav a {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        color: var(--text-secondary);
+        text-decoration: none;
+        font-size: 0.7rem;
+        padding: 5px 15px;
+        min-height: 50px;
+        justify-content: center;
+    }
+
+    .bottom-nav a.active {
+        color: var(--accent);
+    }
+
+    .bottom-nav a:hover {
+        color: var(--accent);
+    }
+
+    .bottom-nav .icon {
+        font-size: 1.2rem;
+        margin-bottom: 3px;
+    }
+
+    /* Add padding to body for bottom nav */
+    body {
+        padding-bottom: 70px;
+    }
+
+    /* Hide desktop nav links on mobile */
+    .status-bar .nav-link,
+    .status-bar .logout-btn {
+        display: none;
+    }
+}
+
+/* Landscape mode adjustments */
+@media (max-width: 768px) and (orientation: landscape) {
+    .summary-row {
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+
+    .summary-group {
+        min-width: 45%;
+        flex: 1;
+    }
+
+    .rsi-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+
+    .chart-container {
+        height: 180px;
+    }
+}
+
+/* Safe area for notched phones */
+@supports (padding: max(0px)) {
+    .container {
+        padding-left: max(10px, env(safe-area-inset-left));
+        padding-right: max(10px, env(safe-area-inset-right));
+    }
+
+    .bottom-nav {
+        padding-bottom: max(8px, env(safe-area-inset-bottom));
+    }
 }

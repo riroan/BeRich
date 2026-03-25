@@ -52,6 +52,9 @@ class TradingBot:
         # Use absolute path based on script location
         self._project_root = Path(__file__).parent.parent
         self._warmup_file = self._project_root / "data" / "warmup_start.txt"
+        # Equity snapshot save interval (every N ticks, 1 tick = 60 seconds)
+        self._equity_save_interval = 5  # 5분마다 저장
+        self._equity_save_counter = 0
 
     async def initialize(self) -> None:
         """Initialize all components"""
@@ -512,31 +515,35 @@ class TradingBot:
                 self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
                 self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
 
-                # Save equity snapshot for chart
-                position_value_krw = self.dashboard.balance_krw - self.dashboard.cash_krw
-                position_value_usd = self.dashboard.balance_usd - self.dashboard.cash_usd
-                await self.storage.save_equity_snapshot(
-                    total_krw=self.dashboard.balance_krw,
-                    total_usd=self.dashboard.balance_usd,
-                    cash_krw=self.dashboard.cash_krw,
-                    cash_usd=self.dashboard.cash_usd,
-                    position_value_krw=position_value_krw,
-                    position_value_usd=position_value_usd,
-                )
+                # Save equity snapshot for chart (every N ticks to reduce data)
+                self._equity_save_counter += 1
+                if self._equity_save_counter >= self._equity_save_interval:
+                    self._equity_save_counter = 0
 
-                # Also update dashboard equity history for live chart
-                self.dashboard.equity_history.append({
-                    "timestamp": datetime.now().isoformat(),
-                    "total_krw": float(self.dashboard.balance_krw),
-                    "total_usd": float(self.dashboard.balance_usd),
-                    "cash_krw": float(self.dashboard.cash_krw),
-                    "cash_usd": float(self.dashboard.cash_usd),
-                    "position_value_krw": float(position_value_krw),
-                    "position_value_usd": float(position_value_usd),
-                })
-                # Keep only last 1000 points in memory
-                if len(self.dashboard.equity_history) > 1000:
-                    self.dashboard.equity_history = self.dashboard.equity_history[-1000:]
+                    position_value_krw = self.dashboard.balance_krw - self.dashboard.cash_krw
+                    position_value_usd = self.dashboard.balance_usd - self.dashboard.cash_usd
+                    await self.storage.save_equity_snapshot(
+                        total_krw=self.dashboard.balance_krw,
+                        total_usd=self.dashboard.balance_usd,
+                        cash_krw=self.dashboard.cash_krw,
+                        cash_usd=self.dashboard.cash_usd,
+                        position_value_krw=position_value_krw,
+                        position_value_usd=position_value_usd,
+                    )
+
+                    # Also update dashboard equity history for live chart
+                    self.dashboard.equity_history.append({
+                        "timestamp": datetime.now().isoformat(),
+                        "total_krw": float(self.dashboard.balance_krw),
+                        "total_usd": float(self.dashboard.balance_usd),
+                        "cash_krw": float(self.dashboard.cash_krw),
+                        "cash_usd": float(self.dashboard.cash_usd),
+                        "position_value_krw": float(position_value_krw),
+                        "position_value_usd": float(position_value_usd),
+                    })
+                    # Keep only last 1000 points in memory (5분 간격 = 약 3.5일)
+                    if len(self.dashboard.equity_history) > 1000:
+                        self.dashboard.equity_history = self.dashboard.equity_history[-1000:]
 
                 # Check low cash ratio (USD)
                 if self.dashboard.balance_usd > 0:

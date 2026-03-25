@@ -226,8 +226,15 @@
                     const krwData = [];
                     const usdData = [];
 
+                    // Parse time as KST (server sends KST time)
+                    function parseKST(timeStr) {
+                        // Parse as local time, add 9 hours offset for chart display
+                        const date = new Date(timeStr.replace(' ', 'T'));
+                        return Math.floor(date.getTime() / 1000) + 32400;
+                    }
+
                     data.forEach(point => {
-                        const time = Math.floor(new Date(point.timestamp).getTime() / 1000);
+                        const time = parseKST(point.timestamp);
 
                         if (point.total_krw > 0) {
                             krwData.push({
@@ -264,5 +271,25 @@
             });
         }
     </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="/">
+            <span class="icon">📊</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="/trades">
+            <span class="icon">📝</span>
+            <span>Trades</span>
+        </a>
+        <a href="/performance" class="active">
+            <span class="icon">📈</span>
+            <span>Performance</span>
+        </a>
+        <a href="/logout">
+            <span class="icon">🚪</span>
+            <span>Logout</span>
+        </a>
+    </nav>
 </body>
 </html>
