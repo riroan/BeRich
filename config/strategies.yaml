@@ -18,15 +18,15 @@ strategies:
 
       # Averaging down levels: [RSI threshold, portion]
       avg_down_levels:
-        - [35, 0.2]    # 1차 매수: RSI 30, 20%
-        - [30, 0.3]    # 2차 매수: RSI 25, 30%
-        - [25, 0.4]    # 3차 매수: RSI 20, 40%
+        - [35, 0.3]    # 1차 매수: RSI 35, 30%
+        - [30, 0.35]   # 2차 매수: RSI 30, 35%
+        - [25, 0.35]   # 3차 매수: RSI 25, 35%
 
       # Staged selling levels: [RSI threshold, portion]
       sell_levels:
-        - [65, 0.3]    # 1차 매도: RSI 65, 30%
-        - [70, 0.3]    # 2차 매도: RSI 70, 30%
-        - [75, 0.4]    # 3차 매도: RSI 75, 40% (나머지 전량)
+        - [70, 0.25]   # 1차 매도: RSI 70, 25%
+        - [75, 0.35]   # 2차 매도: RSI 75, 35%
+        - [80, 0.4]    # 3차 매도: RSI 80, 40% (나머지 전량)
 
   # RSI Mean Reversion for NASDAQ Stocks
   - name: "NASDAQ_RSI_MeanReversion"
@@ -43,13 +43,13 @@ strategies:
       stop_loss: -10
       cooldown_days: 3
       avg_down_levels:
-        - [35, 0.2]
-        - [30, 0.3]
-        - [25, 0.4]
+        - [35, 0.3]
+        - [30, 0.35]
+        - [25, 0.35]
       sell_levels:
-        - [65, 0.3]
-        - [70, 0.3]
-        - [75, 0.4]
+        - [70, 0.25]
+        - [75, 0.35]
+        - [80, 0.4]
 
   # RSI Mean Reversion for NYSE Stocks (개별주)
   - name: "NYSE_RSI_MeanReversion"
@@ -68,13 +68,13 @@ strategies:
       stop_loss: -10
       cooldown_days: 3
       avg_down_levels:
-        - [35, 0.2]
-        - [30, 0.3]
-        - [25, 0.4]
+        - [35, 0.3]
+        - [30, 0.35]
+        - [25, 0.35]
       sell_levels:
-        - [65, 0.3]
-        - [70, 0.3]
-        - [75, 0.4]
+        - [70, 0.25]
+        - [75, 0.35]
+        - [80, 0.4]
 
   # RSI Mean Reversion for AMEX/NYSE Arca ETFs
   - name: "AMEX_RSI_MeanReversion"
@@ -89,13 +89,13 @@ strategies:
       stop_loss: -10
       cooldown_days: 3
       avg_down_levels:
-        - [35, 0.2]
-        - [30, 0.3]
-        - [25, 0.4]
+        - [35, 0.3]
+        - [30, 0.35]
+        - [25, 0.35]
       sell_levels:
-        - [65, 0.3]
-        - [70, 0.3]
-        - [75, 0.4]
+        - [70, 0.25]
+        - [75, 0.35]
+        - [80, 0.4]
 
   # Momentum Strategy (disabled)
   - name: "KRX_Momentum"
