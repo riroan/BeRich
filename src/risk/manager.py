@@ -3,7 +3,7 @@ from decimal import Decimal
 from datetime import datetime, date
 import logging
 
-from src.core.types import Order, Position
+from src.core.types import Order, Position, OrderSide
 from .limits import RiskLimits
 
 logger = logging.getLogger(__name__)
@@ -63,7 +63,10 @@ class RiskManager:
         # 5. Position quantity limit
         current_position = self._positions.get(order.symbol)
         if current_position:
-            new_quantity = current_position.quantity + order.quantity
+            if order.side == OrderSide.BUY:
+                new_quantity = current_position.quantity + order.quantity
+            else:
+                new_quantity = current_position.quantity - order.quantity
             if abs(new_quantity) > self.limits.max_position_quantity:
                 return False, "Single position quantity limit exceeded"
 

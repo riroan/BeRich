@@ -30,8 +30,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._buy_stages: dict[str, int] = {}
         # Track sell stages (how many times we've sold)
         self._sell_stages: dict[str, int] = {}
-        # Track total invested amount
-        self._invested: dict[str, Decimal] = {}
         # Track last buy time for cooldown reset
         self._last_buy_time: dict[str, datetime] = {}
 
@@ -206,18 +204,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 # Reset sell stages when buying
                 self._sell_stages[symbol] = 0
 
-                # Calculate new average price
-                old_invested = self._invested.get(symbol, Decimal("0"))
-                new_investment = current_price * Decimal(str(portion))
-                total_invested = old_invested + new_investment
-                self._invested[symbol] = total_invested
-
-                if old_invested > 0 and symbol in self._entry_prices:
-                    old_avg = self._entry_prices[symbol]
-                    total = old_avg * old_invested + current_price * new_investment
-                    new_avg = total / total_invested
-                    self._entry_prices[symbol] = new_avg
-                else:
+                # Entry price will be updated via on_fill or sync_position
+                # For now, set initial entry price if not exists
+                if symbol not in self._entry_prices:
                     self._entry_prices[symbol] = current_price
 
                 logger.info(
@@ -268,7 +257,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # Assume at least 1 buy stage completed
         self._buy_stages[symbol] = 1
         self._sell_stages[symbol] = 0
-        self._invested[symbol] = avg_price * Decimal(str(quantity))
 
         logger.info(
             f"[{symbol}] Position synced | "
@@ -284,8 +272,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._buy_stages[symbol]
         if symbol in self._sell_stages:
             del self._sell_stages[symbol]
-        if symbol in self._invested:
-            del self._invested[symbol]
         if symbol in self._last_buy_time:
             del self._last_buy_time[symbol]
 
@@ -299,7 +285,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
         avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
         avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
 
-        rs = avg_gain / avg_loss
+        rs = avg_gain / avg_loss.replace(0, 1e-10)  # Avoid division by zero
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
@@ -314,10 +300,25 @@ class RSIMeanReversionStrategy(BaseStrategy):
         return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else None
 
     async def on_fill(self, fill) -> None:
-        """Track fills"""
-        await super().on_fill(fill)
+        """Track fills and update average price"""
+        symbol = fill.symbol
 
         if fill.side.value == "buy":
-            self._last_buy_time[fill.symbol] = datetime.now()
-            # Reset sell stages on buy
-            self._sell_stages[fill.symbol] = 0
+            # Calculate new average price before updating position
+            old_qty = self._positions.get(symbol, 0)
+            old_avg = self._entry_prices.get(symbol, Decimal("0"))
+            new_qty = fill.quantity
+            new_price = fill.price
+
+            if old_qty > 0 and old_avg > 0:
+                # Weighted average: (old_qty * old_avg + new_qty * new_price) / total_qty
+                total_qty = old_qty + new_qty
+                new_avg = (old_avg * old_qty + new_price * new_qty) / total_qty
+                self._entry_prices[symbol] = new_avg
+            else:
+                self._entry_prices[symbol] = new_price
+
+            self._last_buy_time[symbol] = datetime.now()
+            self._sell_stages[symbol] = 0
+
+        await super().on_fill(fill)

@@ -30,7 +30,7 @@ class KISAuth:
         """Check if currently authenticated"""
         if not self._access_token:
             return False
-        if datetime.now() >= self._token_expires_at:
+        if self._token_expires_at is None or datetime.now() >= self._token_expires_at:
             return False
         return True
 

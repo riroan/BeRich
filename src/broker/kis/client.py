@@ -136,7 +136,8 @@ class KISBroker:
             if data.get("rt_cd") != "0":
                 raise BrokerError(f"Failed to get balance: {data.get('msg1')}")
 
-            output2 = data.get("output2", [{}])[0]
+            output2_list = data.get("output2", [])
+            output2 = output2_list[0] if output2_list else {}
             logger.info(f"Domestic balance output2: {output2}")
             return {
                 "total_eval": Decimal(output2.get("tot_evlu_amt", "0") or "0"),
@@ -198,8 +199,6 @@ class KISBroker:
                 "stocks_eval": stock_eval,
                 "profit_loss": profit_loss,
             }
-
-            return {"total_eval": Decimal("0"), "cash": Decimal("0"), "stocks_eval": Decimal("0"), "profit_loss": Decimal("0")}
 
     async def _get_overseas_balance_fallback(self) -> dict:
         """Fallback overseas balance API"""
