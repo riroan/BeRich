@@ -1,5 +1,5 @@
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -7,7 +7,7 @@ from sqlalchemy import select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market
-from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel
+from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot
 
 logger = logging.getLogger(__name__)
 
@@ -191,6 +191,28 @@ class Storage:
             session.add(fill_model)
             await session.commit()
 
+    async def get_all_fills(self) -> List[Fill]:
+        """Get all fills for performance calculation"""
+        async with self.async_session() as session:
+            query = select(FillModel).order_by(FillModel.timestamp)
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            return [
+                Fill(
+                    order_id=row.order_id,
+                    symbol=row.symbol,
+                    market=row.market,
+                    side=row.side,
+                    quantity=row.quantity,
+                    price=Decimal(str(row.price)),
+                    commission=Decimal(str(row.commission)),
+                    pnl=Decimal(str(row.pnl)) if row.pnl else None,
+                    timestamp=row.timestamp,
+                )
+                for row in rows
+            ]
+
     async def get_fills(
         self,
         start: datetime,
@@ -269,7 +291,7 @@ class Storage:
             return [
                 {
                     "symbol": row.symbol,
-                    "market": row.market,
+                    "market": row.market.value.upper() if row.market else None,
                     "price": float(row.price),
                     "rsi": float(row.rsi) if row.rsi else None,
                     "timestamp": row.timestamp,
@@ -284,3 +306,54 @@ class Storage:
             query = select(distinct(PriceRSIModel.symbol))
             result = await session.execute(query)
             return [row[0] for row in result.all()]
+
+    # ==================== Equity Snapshots ====================
+
+    async def save_equity_snapshot(
+        self,
+        total_krw: Decimal,
+        total_usd: Decimal,
+        cash_krw: Decimal,
+        cash_usd: Decimal,
+        position_value_krw: Decimal,
+        position_value_usd: Decimal,
+    ) -> None:
+        """Save equity snapshot"""
+        async with self.async_session() as session:
+            snapshot = EquitySnapshot(
+                timestamp=datetime.now(),
+                total_krw=total_krw,
+                total_usd=total_usd,
+                cash_krw=cash_krw,
+                cash_usd=cash_usd,
+                position_value_krw=position_value_krw,
+                position_value_usd=position_value_usd,
+            )
+            session.add(snapshot)
+            await session.commit()
+
+    async def get_equity_history(self, days: int = 90) -> List[dict]:
+        """Get equity history for the last N days"""
+        async with self.async_session() as session:
+            from_date = datetime.now() - timedelta(days=days)
+            query = (
+                select(EquitySnapshot)
+                .where(EquitySnapshot.timestamp >= from_date)
+                .order_by(EquitySnapshot.timestamp)
+            )
+
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "timestamp": row.timestamp.isoformat(),
+                    "total_krw": float(row.total_krw),
+                    "total_usd": float(row.total_usd),
+                    "cash_krw": float(row.cash_krw),
+                    "cash_usd": float(row.cash_usd),
+                    "position_value_krw": float(row.position_value_krw),
+                    "position_value_usd": float(row.position_value_usd),
+                }
+                for row in rows
+            ]

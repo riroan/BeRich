@@ -8,7 +8,7 @@ from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
 from .base import BaseStrategy
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("TradingBot")
 
 
 class StrategyEngine:

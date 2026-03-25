@@ -48,6 +48,7 @@ class TradingBot:
         self._running = False
         self._start_time: datetime = None
         self._warmup_hours = warmup_hours  # Hours to wait before trading
+        self._warmup_file = Path("data/warmup_start.txt")
 
     async def initialize(self) -> None:
         """Initialize all components"""
@@ -92,15 +93,20 @@ class TradingBot:
         try:
             # Get KRW balance
             krw_balance = await self.broker.get_account_balance(Market.KRX)
+            logger.debug(f"KRW balance response: {krw_balance}")
             self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
             self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
 
             # Get USD balance
-            usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
-            self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
-            self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
+            try:
+                usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
+                logger.debug(f"USD balance response: {usd_balance}")
+                self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
+                self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
+                self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
+            except Exception as e:
+                logger.warning(f"Failed to get USD balance: {e}")
 
             # Total for risk manager (KRW only for now)
             total_eval = krw_balance.get("total_eval", Decimal("100000000"))
@@ -254,7 +260,7 @@ class TradingBot:
 
                     # Update dashboard
                     if rsi is not None:
-                        self.dashboard.update_rsi(symbol, rsi)
+                        self.dashboard.update_rsi(symbol, rsi, price=float(price), market=strategy.market.value.upper())
                         self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
 
                     # Add price point to chart history
@@ -267,10 +273,21 @@ class TradingBot:
                         close=float(price),
                     )
 
+                    # Update last price update time
+                    self.dashboard.last_price_update = datetime.now()
+
                     logger.info(f"[{symbol}] Price: {price:,}{rsi_str}")
 
                 except Exception as e:
                     logger.error(f"Error fetching {symbol}: {e}")
+
+        # Update system status with latest price update time
+        self.dashboard.update_system_status(
+            auto_trading=self.is_warmup_complete(),
+            api_connected=True,
+            account_tradable=True,
+            data_ok=True,
+        )
 
     def is_warmup_complete(self) -> bool:
         """Check if warmup period is complete"""
@@ -279,7 +296,14 @@ class TradingBot:
         if self._start_time is None:
             return False
         elapsed = datetime.now() - self._start_time
-        return elapsed >= timedelta(hours=self._warmup_hours)
+        complete = elapsed >= timedelta(hours=self._warmup_hours)
+
+        # Clean up warmup file when complete
+        if complete and self._warmup_file.exists():
+            self._warmup_file.unlink()
+            logger.info("Warmup complete - auto trading enabled")
+
+        return complete
 
     def get_warmup_remaining(self) -> timedelta:
         """Get remaining warmup time"""
@@ -289,11 +313,47 @@ class TradingBot:
         remaining = timedelta(hours=self._warmup_hours) - elapsed
         return max(remaining, timedelta(0))
 
+    def _save_warmup_start(self) -> None:
+        """Save warmup start time to file for persistence across restarts"""
+        if self._start_time and self._warmup_hours > 0:
+            self._warmup_file.write_text(self._start_time.isoformat())
+            logger.info(f"Warmup start time saved: {self._start_time}")
+
+    def _load_warmup_start(self) -> None:
+        """Load warmup start time from file if exists"""
+        if self._warmup_hours > 0 and self._warmup_file.exists():
+            try:
+                saved_time = datetime.fromisoformat(self._warmup_file.read_text().strip())
+                # Check if warmup is still relevant (not completed yet)
+                elapsed = datetime.now() - saved_time
+                if elapsed < timedelta(hours=self._warmup_hours):
+                    self._start_time = saved_time
+                    remaining = timedelta(hours=self._warmup_hours) - elapsed
+                    hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+                    minutes = remainder // 60
+                    logger.info(
+                        f"Warmup resumed from {saved_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                        f"({hours}h {minutes}m remaining)"
+                    )
+                else:
+                    # Warmup already completed, delete the file
+                    self._warmup_file.unlink()
+                    logger.info("Previous warmup already completed")
+            except Exception as e:
+                logger.warning(f"Failed to load warmup start time: {e}")
+
     async def start(self) -> None:
         """Start the bot"""
         logger.info("Starting Trading Bot...")
         self._running = True
-        self._start_time = datetime.now()
+
+        # Try to load warmup start time from previous run
+        self._load_warmup_start()
+
+        # If no saved warmup time, use current time
+        if self._start_time is None:
+            self._start_time = datetime.now()
+            self._save_warmup_start()
 
         # Start components
         await self.event_bus.start()
@@ -306,8 +366,17 @@ class TradingBot:
         # Sync existing positions from broker
         await self.strategy_engine.sync_positions()
 
-        # Load chart history from database
+        # Load chart history from database (for charts only)
         await self._load_chart_history()
+
+        # Load equity history for equity curve
+        await self._load_equity_history()
+
+        # Load fills for performance calculation
+        await self._load_fills()
+
+        # Calculate initial RSI values from loaded historical data (overrides DB values)
+        await self._update_initial_rsi()
 
         # Start scheduler (1 minute interval)
         await self.scheduler.start()
@@ -335,6 +404,20 @@ class TradingBot:
     async def _update_dashboard_positions(self) -> None:
         """Update dashboard with current positions"""
         try:
+            # Get strategy state for additional info
+            strategy_states = {}
+            for strategy in self.strategy_engine.get_strategies():
+                if hasattr(strategy, '_buy_stages'):
+                    for symbol in strategy.symbols:
+                        strategy_states[symbol] = {
+                            'buy_stage': strategy._buy_stages.get(symbol, 0),
+                            'sell_stage': strategy._sell_stages.get(symbol, 0),
+                            'max_buy_stages': len(strategy.params.get('avg_down_levels', [(30, 0.5), (25, 0.3), (20, 0.2)])),
+                            'max_sell_stages': len(strategy.params.get('sell_levels', [(70, 0.3), (75, 0.4), (80, 0.5)])),
+                            'last_buy_time': strategy._last_buy_time.get(symbol),
+                            'stop_loss_pct': strategy.params.get('stop_loss', -10),
+                        }
+
             # Get positions for all markets
             for market in [Market.KRX, Market.NASDAQ, Market.NYSE, Market.AMEX]:
                 try:
@@ -342,6 +425,13 @@ class TradingBot:
                     for pos in positions:
                         # Get RSI if available
                         rsi = self.dashboard.rsi_values.get(pos.symbol)
+
+                        # Get strategy state
+                        state = strategy_states.get(pos.symbol, {})
+                        last_buy_date = None
+                        if state.get('last_buy_time'):
+                            last_buy_date = state['last_buy_time'].strftime('%m-%d %H:%M')
+
                         self.dashboard.update_position(
                             symbol=pos.symbol,
                             market=market.value.upper(),
@@ -349,9 +439,56 @@ class TradingBot:
                             avg_price=float(pos.avg_entry_price),
                             current_price=float(pos.current_price),
                             rsi=rsi,
+                            buy_stage=state.get('buy_stage', 0),
+                            sell_stage=state.get('sell_stage', 0),
+                            max_buy_stages=state.get('max_buy_stages', 3),
+                            max_sell_stages=state.get('max_sell_stages', 3),
+                            last_buy_date=last_buy_date,
+                            stop_loss_pct=state.get('stop_loss_pct', -10.0),
                         )
                 except Exception:
                     pass  # Skip markets with no positions
+
+            # Update balances
+            try:
+                krw_balance = await self.broker.get_account_balance(Market.KRX)
+                self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
+                self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
+                self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
+
+                usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
+                self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
+                self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
+                self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
+
+                # Save equity snapshot for chart
+                position_value_krw = self.dashboard.balance_krw - self.dashboard.cash_krw
+                position_value_usd = self.dashboard.balance_usd - self.dashboard.cash_usd
+                await self.storage.save_equity_snapshot(
+                    total_krw=self.dashboard.balance_krw,
+                    total_usd=self.dashboard.balance_usd,
+                    cash_krw=self.dashboard.cash_krw,
+                    cash_usd=self.dashboard.cash_usd,
+                    position_value_krw=position_value_krw,
+                    position_value_usd=position_value_usd,
+                )
+
+                # Also update dashboard equity history for live chart
+                self.dashboard.equity_history.append({
+                    "timestamp": datetime.now().isoformat(),
+                    "total_krw": float(self.dashboard.balance_krw),
+                    "total_usd": float(self.dashboard.balance_usd),
+                    "cash_krw": float(self.dashboard.cash_krw),
+                    "cash_usd": float(self.dashboard.cash_usd),
+                    "position_value_krw": float(position_value_krw),
+                    "position_value_usd": float(position_value_usd),
+                })
+                # Keep only last 1000 points in memory
+                if len(self.dashboard.equity_history) > 1000:
+                    self.dashboard.equity_history = self.dashboard.equity_history[-1000:]
+            except Exception:
+                pass
+
         except Exception as e:
             logger.debug(f"Error updating dashboard positions: {e}")
 
@@ -387,6 +524,41 @@ class TradingBot:
         # Update account value
         self.dashboard.account_value = self.risk_manager.account_value
 
+        # Update system status
+        self.dashboard.last_strategy_run = datetime.now()
+        self.dashboard.update_system_status(
+            auto_trading=self.is_warmup_complete(),
+            api_connected=True,
+            account_tradable=True,
+            data_ok=True,
+        )
+
+    async def _update_initial_rsi(self) -> None:
+        """Calculate and update initial RSI values from loaded historical data"""
+        logger.info("Calculating initial RSI values...")
+
+        # Clear old RSI values and only keep active strategy symbols
+        self.dashboard.rsi_values.clear()
+        self.dashboard.rsi_prices.clear()
+
+        for strategy in self.strategy_engine.get_strategies():
+            for symbol in strategy.symbols:
+                try:
+                    if hasattr(strategy, "get_current_rsi"):
+                        rsi = strategy.get_current_rsi(symbol)
+                        if rsi is not None:
+                            # Get latest price from strategy data
+                            df = strategy.get_dataframe(symbol)
+                            price = float(df["close"].iloc[-1]) if len(df) > 0 else None
+                            market = strategy.market.value.upper()
+
+                            self.dashboard.update_rsi(
+                                symbol, rsi, price=price, market=market
+                            )
+                            logger.info(f"  [{symbol}] RSI: {rsi:.1f}")
+                except Exception as e:
+                    logger.error(f"Failed to calculate RSI for {symbol}: {e}")
+
     async def _load_chart_history(self) -> None:
         """Load price/RSI history from database on startup"""
         try:
@@ -418,7 +590,12 @@ class TradingBot:
                 if history:
                     latest = history[-1]
                     if latest["rsi"] is not None:
-                        self.dashboard.update_rsi(symbol, latest["rsi"])
+                        self.dashboard.update_rsi(
+                            symbol,
+                            latest["rsi"],
+                            price=latest.get("price"),
+                            market=latest.get("market"),
+                        )
                     logger.info(
                         f"  [{symbol}] Loaded {len(history)} history points"
                     )
@@ -426,6 +603,38 @@ class TradingBot:
             logger.info("Chart history loaded successfully")
         except Exception as e:
             logger.warning(f"Failed to load chart history: {e}")
+
+    async def _load_equity_history(self) -> None:
+        """Load equity history from database for equity curve chart"""
+        try:
+            history = await self.storage.get_equity_history(days=90)
+            self.dashboard.equity_history = history
+            logger.info(f"Loaded {len(history)} equity history points")
+        except Exception as e:
+            logger.warning(f"Failed to load equity history: {e}")
+
+    async def _load_fills(self) -> None:
+        """Load fills from database for performance calculation"""
+        try:
+            fills = await self.storage.get_all_fills()
+            self.dashboard.fills = [
+                {
+                    "order_id": f.order_id,
+                    "symbol": f.symbol,
+                    "market": f.market.value if f.market else None,
+                    "side": f.side.value if f.side else None,
+                    "quantity": f.quantity,
+                    "price": float(f.price),
+                    "commission": float(f.commission),
+                    "pnl": float(f.pnl) if f.pnl else None,
+                    "timestamp": f.timestamp.isoformat() if f.timestamp else None,
+                }
+                for f in fills
+            ]
+            self.dashboard.calculate_performance()
+            logger.info(f"Loaded {len(fills)} fills, performance calculated")
+        except Exception as e:
+            logger.warning(f"Failed to load fills: {e}")
 
     async def stop(self) -> None:
         """Stop the bot"""

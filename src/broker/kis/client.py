@@ -19,7 +19,7 @@ from .auth import KISAuth
 from .mapper import KISMapper
 from .websocket import KISWebSocket
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("TradingBot")
 
 
 class KISBroker:
@@ -111,6 +111,7 @@ class KISBroker:
         tr_id = "VTTC8434R" if self.paper_trading else "TTTC8434R"
         endpoint = "/uapi/domestic-stock/v1/trading/inquire-balance"
         headers = self._auth.get_headers(tr_id)
+        logger.debug(f"Fetching domestic balance with tr_id={tr_id}")
 
         params = {
             "CANO": self._auth.account_no[:8],
@@ -130,20 +131,78 @@ class KISBroker:
             f"{self.base_url}{endpoint}", headers=headers, params=params
         ) as resp:
             data = await resp.json()
+            logger.info(f"Domestic balance API response: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}")
 
             if data.get("rt_cd") != "0":
                 raise BrokerError(f"Failed to get balance: {data.get('msg1')}")
 
             output2 = data.get("output2", [{}])[0]
+            logger.info(f"Domestic balance output2: {output2}")
             return {
-                "total_eval": Decimal(output2.get("tot_evlu_amt", "0")),
-                "cash": Decimal(output2.get("dnca_tot_amt", "0")),
-                "stocks_eval": Decimal(output2.get("scts_evlu_amt", "0")),
-                "profit_loss": Decimal(output2.get("evlu_pfls_smtl_amt", "0")),
+                "total_eval": Decimal(output2.get("tot_evlu_amt", "0") or "0"),
+                "cash": Decimal(output2.get("dnca_tot_amt", "0") or "0"),
+                "stocks_eval": Decimal(output2.get("scts_evlu_amt", "0") or "0"),
+                "profit_loss": Decimal(output2.get("evlu_pfls_smtl_amt", "0") or "0"),
             }
 
     async def _get_overseas_balance(self) -> dict:
-        """Get overseas stock balance"""
+        """Get overseas stock balance including cash"""
+        # Use 해외주식 체결기준현재잔고 API for complete balance info
+        tr_id = "VTRP6504R" if self.paper_trading else "CTRP6504R"
+        endpoint = "/uapi/overseas-stock/v1/trading/inquire-present-balance"
+        headers = self._auth.get_headers(tr_id)
+
+        params = {
+            "CANO": self._auth.account_no[:8],
+            "ACNT_PRDT_CD": self._auth.account_no[9:],
+            "WCRC_FRCR_DVSN_CD": "02",  # 02: 외화
+            "NATN_CD": "840",  # 미국
+            "TR_MKET_CD": "00",  # 전체
+            "INQR_DVSN_CD": "00",  # 전체
+        }
+
+        async with self._session.get(
+            f"{self.base_url}{endpoint}", headers=headers, params=params
+        ) as resp:
+            data = await resp.json()
+            logger.info(f"Overseas balance API response: rt_cd={data.get('rt_cd')}, msg={data.get('msg1')}, keys={list(data.keys())}")
+
+            if data.get("rt_cd") != "0":
+                # Fallback to old API if this one fails
+                logger.warning(f"Overseas balance API failed, trying fallback: {data.get('msg1')}")
+                return await self._get_overseas_balance_fallback()
+
+            output2 = data.get("output2", [])
+            output3 = data.get("output3", {})
+            logger.info(f"Overseas balance output2: {output2}")
+            logger.info(f"Overseas balance output3: {output3}")
+
+            # output2 is a list of currency balances, get USD balance
+            # frcr_dncl_amt_2: 외화예수금액 (USD)
+            usd_cash = Decimal("0")
+            if output2 and isinstance(output2, list):
+                for currency_balance in output2:
+                    if currency_balance.get("crcy_cd") == "USD":
+                        usd_cash = Decimal(currency_balance.get("frcr_dncl_amt_2", "0") or "0")
+                        break
+
+            # output3 has summary info (in KRW)
+            stock_eval = Decimal(output3.get("evlu_amt_smtl", "0") or "0") if output3 else Decimal("0")
+            profit_loss = Decimal(output3.get("tot_evlu_pfls_amt", "0") or "0") if output3 else Decimal("0")
+
+            logger.info(f"Account balance - KRW: {output3.get('tot_dncl_amt', '0') if output3 else 0}, USD: {usd_cash:,.2f}")
+
+            return {
+                "total_eval": usd_cash + stock_eval,  # In USD context
+                "cash": usd_cash,
+                "stocks_eval": stock_eval,
+                "profit_loss": profit_loss,
+            }
+
+            return {"total_eval": Decimal("0"), "cash": Decimal("0"), "stocks_eval": Decimal("0"), "profit_loss": Decimal("0")}
+
+    async def _get_overseas_balance_fallback(self) -> dict:
+        """Fallback overseas balance API"""
         tr_id = "VTTS3012R" if self.paper_trading else "TTTS3012R"
         endpoint = "/uapi/overseas-stock/v1/trading/inquire-balance"
         headers = self._auth.get_headers(tr_id)
@@ -163,13 +222,16 @@ class KISBroker:
             data = await resp.json()
 
             if data.get("rt_cd") != "0":
-                raise BrokerError(f"Failed to get overseas balance: {data.get('msg1')}")
+                return {"total_eval": Decimal("0"), "cash": Decimal("0"), "stocks_eval": Decimal("0"), "profit_loss": Decimal("0")}
 
             output2 = data.get("output2", {})
+            profit_loss = Decimal(output2.get("ovrs_tot_pfls", "0") or "0")
+
             return {
-                "total_eval": Decimal(output2.get("tot_evlu_pfls_amt", "0")),
-                "cash": Decimal(output2.get("frcr_dncl_amt_2", "0")),
-                "profit_loss": Decimal(output2.get("ovrs_tot_pfls", "0")),
+                "total_eval": Decimal("0"),
+                "cash": Decimal("0"),
+                "stocks_eval": Decimal("0"),
+                "profit_loss": profit_loss,
             }
 
     # ==================== Positions ====================

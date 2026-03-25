@@ -15,6 +15,7 @@ from src.broker.kis.client import KISBroker
 from src.risk.manager import RiskManager
 from src.data.storage import Storage
 from src.utils.notifier import DiscordNotifier
+from src.web.app import get_dashboard_state
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class OrderManager:
             f"Qty: {order.quantity} | Price: {order.price:,} | "
             f"Value: {order.quantity * order.price:,}"
         )
-        await self._submit_order(order)
+        await self._submit_order(order, signal_metadata=signal.metadata)
 
     async def _signal_to_order(self, signal: Signal) -> Optional[Order]:
         """Convert signal to order"""
@@ -151,13 +152,52 @@ class OrderManager:
             price=price,
         )
 
-    async def _submit_order(self, order: Order) -> None:
+    async def _submit_order(self, order: Order, signal_metadata: dict = None) -> None:
         """Submit order to broker"""
         try:
             order_id = await self.broker.submit_order(order)
             self._active_orders[order_id] = order
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
+
+            # Add to dashboard trade log
+            dashboard = get_dashboard_state()
+            action = "buy" if order.side == OrderSide.BUY else "sell"
+            if signal_metadata:
+                if signal_metadata.get("reason") == "stop_loss":
+                    action = "stop_loss"
+                elif "staged_sell" in str(signal_metadata.get("reason", "")):
+                    action = "partial_sell"
+
+            trigger_rule = signal_metadata.get("reason", "manual") if signal_metadata else "manual"
+            rsi = signal_metadata.get("rsi") if signal_metadata else None
+
+            dashboard.add_trade_log(
+                symbol=order.symbol,
+                market=order.market.value.upper(),
+                action=action,
+                price=float(order.price),
+                quantity=order.quantity,
+                trigger_rule=trigger_rule,
+                result="success",
+                rsi=rsi,
+            )
+
+            # Add signal to dashboard
+            dashboard.add_signal({
+                "type": "ENTRY_LONG" if order.side == OrderSide.BUY else "EXIT_LONG",
+                "symbol": order.symbol,
+                "rsi": rsi,
+                "reason": trigger_rule,
+            })
+
+            # Add order to dashboard
+            dashboard.add_order({
+                "symbol": order.symbol,
+                "side": order.side.value.upper(),
+                "quantity": order.quantity,
+                "price": float(order.price),
+            })
 
             # Send Discord notification
             if self.notifier:
@@ -169,6 +209,18 @@ class OrderManager:
                 )
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
+
+            # Add failed trade to dashboard
+            dashboard = get_dashboard_state()
+            dashboard.add_trade_log(
+                symbol=order.symbol,
+                market=order.market.value.upper(),
+                action="buy" if order.side == OrderSide.BUY else "sell",
+                price=float(order.price),
+                quantity=order.quantity,
+                trigger_rule="failed",
+                result="failed",
+            )
 
             # Send error notification
             if self.notifier:

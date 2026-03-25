@@ -94,3 +94,22 @@ class PriceRSIModel(Base):
     __table_args__ = (
         Index("idx_price_rsi_symbol_timestamp", "symbol", "timestamp"),
     )
+
+
+class EquitySnapshot(Base):
+    """Daily equity/portfolio value snapshot"""
+
+    __tablename__ = "equity_snapshots"
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False)
+    total_krw = Column(Numeric(20, 2), nullable=False)  # KRW total value
+    total_usd = Column(Numeric(20, 2), nullable=False)  # USD total value
+    cash_krw = Column(Numeric(20, 2), nullable=False)
+    cash_usd = Column(Numeric(20, 2), nullable=False)
+    position_value_krw = Column(Numeric(20, 2), nullable=False)
+    position_value_usd = Column(Numeric(20, 2), nullable=False)
+
+    __table_args__ = (
+        Index("idx_equity_timestamp", "timestamp"),
+    )

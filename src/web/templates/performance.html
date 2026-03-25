@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta http-equiv="refresh" content="60">
+    <script src="https://unpkg.com/lightweight-charts@4.0.0/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Dashboard</a>
+                <h1>Performance Analysis</h1>
+            </div>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                {% endif %}
+                <span class="update-time">
+                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Performance Metrics -->
+        <section class="performance-metrics">
+            <div class="metrics-grid">
+                <div class="metric-card primary">
+                    <h3>Total Return</h3>
+                    <p class="value {{ 'positive' if performance.total_return_pct >= 0 else 'negative' }}">
+                        {{ "{:+.2f}%".format(performance.total_return_pct) }}
+                    </p>
+                </div>
+                <div class="metric-card">
+                    <h3>CAGR</h3>
+                    <p class="value {{ 'positive' if performance.cagr >= 0 else 'negative' }}">
+                        {{ "{:+.2f}%".format(performance.cagr) }}
+                    </p>
+                </div>
+                <div class="metric-card">
+                    <h3>MDD</h3>
+                    <p class="value negative">
+                        {{ "{:.2f}%".format(performance.mdd) }}
+                    </p>
+                </div>
+                <div class="metric-card">
+                    <h3>Sharpe Ratio</h3>
+                    <p class="value">
+                        {{ "{:.2f}".format(performance.sharpe_ratio) }}
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Trade Statistics -->
+        <section class="trade-statistics">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Win Rate</h3>
+                    <p class="value {{ 'positive' if performance.win_rate >= 50 else 'negative' }}">
+                        {{ "{:.1f}%".format(performance.win_rate) }}
+                    </p>
+                    <p class="sub-value">{{ performance.winning_trades }}W / {{ performance.losing_trades }}L</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Total Trades</h3>
+                    <p class="value">{{ performance.total_trades }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Total P&L</h3>
+                    <p class="value {{ 'positive' if performance.total_pnl >= 0 else 'negative' }}">
+                        ${{ "{:,.2f}".format(performance.total_pnl) }}
+                    </p>
+                </div>
+                <div class="stat-card">
+                    <h3>Avg Profit</h3>
+                    <p class="value positive">${{ "{:,.2f}".format(performance.avg_profit) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Avg Loss</h3>
+                    <p class="value negative">${{ "{:,.2f}".format(performance.avg_loss) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Profit Factor</h3>
+                    <p class="value">{{ "{:.2f}".format(performance.profit_factor) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Best Trade</h3>
+                    <p class="value positive">${{ "{:,.2f}".format(performance.best_trade) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Worst Trade</h3>
+                    <p class="value negative">${{ "{:,.2f}".format(performance.worst_trade) }}</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Equity Curve Chart -->
+        <section class="chart-section">
+            <div class="panel">
+                <h2>Equity Curve</h2>
+                <div class="chart-legend">
+                    <span class="legend-item"><span class="legend-color" style="background: #e94560;"></span> KRW</span>
+                    <span class="legend-item"><span class="legend-color" style="background: #3498db;"></span> USD</span>
+                </div>
+                <div id="equity-chart" class="chart-container"></div>
+            </div>
+        </section>
+
+        <!-- Monthly Returns -->
+        <section class="monthly-section">
+            <div class="panel">
+                <h2>Monthly Returns</h2>
+                <div class="monthly-grid" id="monthly-returns">
+                    <p class="empty">Not enough data for monthly analysis</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Recent Trades Performance -->
+        <section class="recent-performance">
+            <div class="panel">
+                <h2>Recent Trade Performance</h2>
+                <table class="performance-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Symbol</th>
+                            <th>Action</th>
+                            <th>Entry RSI</th>
+                            <th>P&L</th>
+                            <th>P&L %</th>
+                            <th>Trigger</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in trade_logs %}
+                        {% if log.pnl is not none %}
+                        <tr class="{{ 'win' if log.pnl >= 0 else 'loss' }}">
+                            <td class="time">{{ log.timestamp }}</td>
+                            <td class="symbol">{{ log.symbol }}</td>
+                            <td class="action {{ log.action }}">{{ log.action | upper }}</td>
+                            <td class="number">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
+                            <td class="number {{ 'positive' if log.pnl >= 0 else 'negative' }}">
+                                {{ "{:+,.0f}".format(log.pnl) if log.pnl else '-' }}
+                            </td>
+                            <td class="number {{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else 'negative' }}">
+                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
+                            </td>
+                            <td class="trigger">{{ log.trigger_rule }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot - Performance Analysis</p>
+        </footer>
+    </div>
+
+    <script>
+        // Chart colors
+        const colors = {
+            bg: '#1a1a2e',
+            text: '#eaeaea',
+            grid: '#16213e',
+            up: '#00d26a',
+            down: '#ff4757',
+            line: '#e94560',
+        };
+
+        // Create equity chart
+        const equityChartContainer = document.getElementById('equity-chart');
+        if (equityChartContainer) {
+            const chart = LightweightCharts.createChart(equityChartContainer, {
+                layout: {
+                    background: { color: colors.bg },
+                    textColor: colors.text,
+                },
+                grid: {
+                    vertLines: { color: colors.grid },
+                    horzLines: { color: colors.grid },
+                },
+                width: equityChartContainer.clientWidth,
+                height: 400,
+                timeScale: {
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+            });
+
+            // KRW equity line (red)
+            const krwSeries = chart.addLineSeries({
+                color: colors.line,
+                lineWidth: 2,
+                title: 'KRW',
+            });
+
+            // USD equity line (blue)
+            const usdSeries = chart.addLineSeries({
+                color: '#3498db',
+                lineWidth: 2,
+                title: 'USD',
+            });
+
+            // Fetch real equity data from API
+            fetch('/api/equity-history')
+                .then(res => res.json())
+                .then(result => {
+                    const data = result.data || [];
+
+                    if (data.length === 0) {
+                        equityChartContainer.innerHTML = '<p class="empty">Not enough data for equity curve</p>';
+                        return;
+                    }
+
+                    const krwData = [];
+                    const usdData = [];
+
+                    data.forEach(point => {
+                        const time = Math.floor(new Date(point.timestamp).getTime() / 1000);
+
+                        if (point.total_krw > 0) {
+                            krwData.push({
+                                time: time,
+                                value: point.total_krw,
+                            });
+                        }
+
+                        if (point.total_usd > 0) {
+                            usdData.push({
+                                time: time,
+                                value: point.total_usd,
+                            });
+                        }
+                    });
+
+                    if (krwData.length > 0) {
+                        krwSeries.setData(krwData);
+                    }
+                    if (usdData.length > 0) {
+                        usdSeries.setData(usdData);
+                    }
+
+                    chart.timeScale().fitContent();
+                })
+                .catch(err => {
+                    console.error('Failed to load equity data:', err);
+                    equityChartContainer.innerHTML = '<p class="empty">Failed to load equity data</p>';
+                });
+
+            // Resize handler
+            window.addEventListener('resize', () => {
+                chart.applyOptions({ width: equityChartContainer.clientWidth });
+            });
+        }
+    </script>
+</body>
+</html>

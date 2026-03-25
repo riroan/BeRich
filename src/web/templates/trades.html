@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trade Log - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta http-equiv="refresh" content="60">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Dashboard</a>
+                <h1>Trade Log</h1>
+            </div>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                {% endif %}
+                <span class="update-time">
+                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <section class="trades-section">
+            <div class="panel">
+                <h2>All Trades ({{ trade_logs|length }})</h2>
+
+                <!-- Filters -->
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="buy">Buy</button>
+                    <button class="filter-btn" data-filter="sell">Sell</button>
+                    <button class="filter-btn" data-filter="stop_loss">Stop Loss</button>
+                </div>
+
+                <table class="trades-table full">
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Symbol</th>
+                            <th>Market</th>
+                            <th>Action</th>
+                            <th>Price</th>
+                            <th>Quantity</th>
+                            <th>RSI</th>
+                            <th>Trigger Rule</th>
+                            <th>Result</th>
+                            <th>P&L</th>
+                            <th>P&L %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in trade_logs %}
+                        <tr class="{{ log.action }}" data-action="{{ log.action }}">
+                            <td class="time">{{ log.timestamp }}</td>
+                            <td class="symbol">
+                                <a href="/symbol/{{ log.symbol }}">{{ log.symbol }}</a>
+                            </td>
+                            <td>{{ log.market }}</td>
+                            <td class="action {{ log.action }}">
+                                {% if log.action == 'buy' %}
+                                BUY
+                                {% elif log.action == 'sell' %}
+                                SELL
+                                {% elif log.action == 'partial_sell' %}
+                                PARTIAL SELL
+                                {% elif log.action == 'stop_loss' %}
+                                STOP LOSS
+                                {% else %}
+                                {{ log.action | upper }}
+                                {% endif %}
+                            </td>
+                            <td class="number">
+                                {% if log.market == 'KRX' %}
+                                {{ "{:,.0f}".format(log.price) }}
+                                {% else %}
+                                ${{ "{:,.2f}".format(log.price) }}
+                                {% endif %}
+                            </td>
+                            <td class="number">{{ log.quantity }}</td>
+                            <td class="number rsi {{ 'oversold' if log.rsi and log.rsi <= 30 else ('overbought' if log.rsi and log.rsi >= 70 else '') }}">
+                                {{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}
+                            </td>
+                            <td class="trigger">{{ log.trigger_rule }}</td>
+                            <td class="result {{ log.result }}">
+                                {% if log.result == 'success' %}
+                                <span class="success">Success</span>
+                                {% elif log.result == 'failed' %}
+                                <span class="failed">Failed</span>
+                                {% else %}
+                                {{ log.result }}
+                                {% endif %}
+                            </td>
+                            <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}">
+                                {% if log.pnl %}
+                                    {% if log.market == 'KRX' %}
+                                    {{ "{:+,.0f}".format(log.pnl) }}
+                                    {% else %}
+                                    ${{ "{:+,.2f}".format(log.pnl) }}
+                                    {% endif %}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="number {{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else 'negative' }}">
+                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="11" class="empty">No trades recorded</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Trade Summary Stats -->
+        <section class="trade-stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Trades</h3>
+                    <p class="value">{{ trade_logs|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Buy Orders</h3>
+                    <p class="value">{{ trade_logs|selectattr('action', 'equalto', 'buy')|list|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Sell Orders</h3>
+                    <p class="value">{{ trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Stop Losses</h3>
+                    <p class="value negative">{{ trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length }}</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot - Trade Log</p>
+        </footer>
+    </div>
+
+    <script>
+        // Filter functionality
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const filter = this.dataset.filter;
+
+                // Update active button
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                // Filter rows
+                document.querySelectorAll('.trades-table tbody tr').forEach(row => {
+                    if (filter === 'all') {
+                        row.style.display = '';
+                    } else {
+                        const action = row.dataset.action;
+                        if (filter === 'sell' && (action === 'sell' || action === 'partial_sell')) {
+                            row.style.display = '';
+                        } else if (action === filter) {
+                            row.style.display = '';
+                        } else {
+                            row.style.display = 'none';
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

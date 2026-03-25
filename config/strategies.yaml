@@ -4,7 +4,7 @@ strategies:
   # RSI Mean Reversion Strategy (with Averaging Down & Staged Selling)
   - name: "KRX_RSI_MeanReversion"
     class: "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy"
-    enabled: true
+    enabled: false  # 한국 주식 비활성화
     market: "krx"
     symbols:
       - "069500"  # KODEX 200

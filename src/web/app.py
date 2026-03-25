@@ -4,10 +4,11 @@ import asyncio
 import hashlib
 import secrets
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from pathlib import Path
+from enum import Enum
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -22,6 +23,18 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).parent
 
 
+class SignalCandidate(BaseModel):
+    """Signal candidate for upcoming trades"""
+    symbol: str
+    market: str
+    signal_type: str  # buy_candidate, sell_candidate, stop_loss_alert
+    rsi: float
+    threshold: float
+    distance: float  # how far from threshold
+    current_price: float
+    reason: str
+
+
 class PositionInfo(BaseModel):
     symbol: str
     market: str
@@ -31,6 +44,67 @@ class PositionInfo(BaseModel):
     pnl: float
     pnl_pct: float
     rsi: Optional[float] = None
+    # Strategy-specific info
+    buy_stage: int = 0
+    sell_stage: int = 0
+    max_buy_stages: int = 3
+    max_sell_stages: int = 3
+    last_buy_date: Optional[str] = None
+    stop_loss_pct: float = -10.0
+    stop_loss_distance: float = 0.0  # how far from stop loss
+
+
+class TradeLog(BaseModel):
+    """Trade/order log entry"""
+    timestamp: str
+    symbol: str
+    market: str
+    action: str  # buy, sell, partial_sell, stop_loss
+    price: float
+    quantity: int
+    rsi: Optional[float] = None
+    trigger_rule: str  # what triggered this trade
+    result: str  # success, failed, pending
+    pnl: Optional[float] = None
+    pnl_pct: Optional[float] = None
+
+
+class SystemStatus(BaseModel):
+    """System status info"""
+    auto_trading_enabled: bool = True
+    last_strategy_run: Optional[str] = None
+    last_price_update: Optional[str] = None
+    api_connected: bool = True
+    account_tradable: bool = True
+    data_collection_ok: bool = True
+    error_message: Optional[str] = None
+
+
+class PerformanceMetrics(BaseModel):
+    """Performance analysis metrics"""
+    total_return_pct: float = 0.0
+    cagr: float = 0.0
+    mdd: float = 0.0
+    win_rate: float = 0.0
+    total_trades: int = 0
+    winning_trades: int = 0
+    losing_trades: int = 0
+    avg_profit: float = 0.0
+    avg_loss: float = 0.0
+    profit_factor: float = 0.0
+    sharpe_ratio: float = 0.0
+    total_pnl: float = 0.0
+    best_trade: float = 0.0
+    worst_trade: float = 0.0
+
+
+class MarketStatus(BaseModel):
+    """Market overview status"""
+    market_rsi: Optional[float] = None
+    oversold_count: int = 0
+    overbought_count: int = 0
+    total_symbols: int = 0
+    market_state: str = "neutral"  # oversold, neutral, overbought
 
 
 class BotStatus(BaseModel):
@@ -54,25 +128,64 @@ class DashboardState:
     """Shared state for dashboard data"""
 
     def __init__(self):
+        # Core data
         self.positions: Dict[str, PositionInfo] = {}
         self.rsi_values: Dict[str, float] = {}
+        self.rsi_prices: Dict[str, Dict[str, Any]] = {}  # symbol -> {price, market}
         self.recent_signals: List[Dict[str, Any]] = []
         self.recent_orders: List[Dict[str, Any]] = []
         self.bot_status: Optional[BotStatus] = None
+
+        # Balance info - separate by currency
+        self.account_value: Decimal = Decimal("0")
+        self.balance_krw: Decimal = Decimal("0")
+        self.balance_usd: Decimal = Decimal("0")
+        self.cash_krw: Decimal = Decimal("0")
+        self.cash_usd: Decimal = Decimal("0")
+        self.pnl_krw: Decimal = Decimal("0")
+        self.pnl_usd: Decimal = Decimal("0")
         self.daily_pnl: Decimal = Decimal("0")
         self.total_pnl: Decimal = Decimal("0")
-        self.account_value: Decimal = Decimal("0")
-        # Separate balances by currency
-        self.balance_krw: Decimal = Decimal("0")  # 원화 (총 평가)
-        self.balance_usd: Decimal = Decimal("0")  # 달러 (총 평가)
-        self.cash_krw: Decimal = Decimal("0")     # 원화 예수금
-        self.cash_usd: Decimal = Decimal("0")     # 달러 예수금
-        self.pnl_krw: Decimal = Decimal("0")      # 원화 평가손익
-        self.pnl_usd: Decimal = Decimal("0")      # 달러 평가손익
+
+        # Timestamps
         self.last_update: Optional[datetime] = None
-        # Price history for charts (symbol -> list of price points)
+        self.last_strategy_run: Optional[datetime] = None
+        self.last_price_update: Optional[datetime] = None
+
+        # Price/RSI history for charts
         self.price_history: Dict[str, List[PricePoint]] = {}
         self.rsi_history: Dict[str, List[Dict[str, Any]]] = {}
+
+        # Trade logs (extended from recent_orders)
+        self.trade_logs: List[TradeLog] = []
+
+        # Signal candidates
+        self.signal_candidates: List[SignalCandidate] = []
+
+        # System status
+        self.system_status: SystemStatus = SystemStatus()
+
+        # Performance metrics
+        self.performance: PerformanceMetrics = PerformanceMetrics()
+
+        # Market status
+        self.market_status_krx: MarketStatus = MarketStatus()
+        self.market_status_us: MarketStatus = MarketStatus()
+
+        # Risk alerts
+        self.risk_alerts: List[Dict[str, Any]] = []
+
+        # Strategy internal state (synced from strategy)
+        self.strategy_state: Dict[str, Dict[str, Any]] = {}
+
+        # Trade points for chart markers
+        self.trade_points: Dict[str, List[Dict[str, Any]]] = {}
+
+        # Equity history for equity curve chart
+        self.equity_history: List[Dict[str, Any]] = []
+
+        # Fills for performance calculation
+        self.fills: List[Dict[str, Any]] = []
 
     def update_position(
         self,
@@ -82,9 +195,16 @@ class DashboardState:
         avg_price: float,
         current_price: float,
         rsi: Optional[float] = None,
+        buy_stage: int = 0,
+        sell_stage: int = 0,
+        max_buy_stages: int = 3,
+        max_sell_stages: int = 3,
+        last_buy_date: Optional[str] = None,
+        stop_loss_pct: float = -10.0,
     ):
         pnl = (current_price - avg_price) * quantity
         pnl_pct = ((current_price - avg_price) / avg_price * 100) if avg_price else 0
+        stop_loss_distance = pnl_pct - stop_loss_pct  # how far from stop loss
 
         self.positions[symbol] = PositionInfo(
             symbol=symbol,
@@ -95,11 +215,20 @@ class DashboardState:
             pnl=pnl,
             pnl_pct=pnl_pct,
             rsi=rsi,
+            buy_stage=buy_stage,
+            sell_stage=sell_stage,
+            max_buy_stages=max_buy_stages,
+            max_sell_stages=max_sell_stages,
+            last_buy_date=last_buy_date,
+            stop_loss_pct=stop_loss_pct,
+            stop_loss_distance=stop_loss_distance,
         )
         self.last_update = datetime.now()
 
-    def update_rsi(self, symbol: str, rsi: float):
+    def update_rsi(self, symbol: str, rsi: float, price: float = None, market: str = None):
         self.rsi_values[symbol] = rsi
+        if price is not None:
+            self.rsi_prices[symbol] = {"price": price, "market": market}
         if symbol in self.positions:
             self.positions[symbol].rsi = rsi
         self.last_update = datetime.now()
@@ -149,18 +278,194 @@ class DashboardState:
     def add_signal(self, signal_data: Dict[str, Any]):
         self.recent_signals.insert(0, {
             **signal_data,
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
-        # Keep only last 20 signals
-        self.recent_signals = self.recent_signals[:20]
+        # Keep only last 50 signals
+        self.recent_signals = self.recent_signals[:50]
 
     def add_order(self, order_data: Dict[str, Any]):
         self.recent_orders.insert(0, {
             **order_data,
-            "timestamp": datetime.now().strftime("%H:%M:%S"),
+            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         })
-        # Keep only last 20 orders
-        self.recent_orders = self.recent_orders[:20]
+        # Keep only last 50 orders
+        self.recent_orders = self.recent_orders[:50]
+
+    def add_trade_log(
+        self,
+        symbol: str,
+        market: str,
+        action: str,
+        price: float,
+        quantity: int,
+        trigger_rule: str,
+        result: str = "success",
+        rsi: Optional[float] = None,
+        pnl: Optional[float] = None,
+        pnl_pct: Optional[float] = None,
+    ):
+        """Add detailed trade log"""
+        log = TradeLog(
+            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            symbol=symbol,
+            market=market,
+            action=action,
+            price=price,
+            quantity=quantity,
+            rsi=rsi,
+            trigger_rule=trigger_rule,
+            result=result,
+            pnl=pnl,
+            pnl_pct=pnl_pct,
+        )
+        self.trade_logs.insert(0, log)
+        # Keep only last 100 logs
+        self.trade_logs = self.trade_logs[:100]
+
+        # Also add to trade points for chart markers
+        if symbol not in self.trade_points:
+            self.trade_points[symbol] = []
+        self.trade_points[symbol].append({
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "action": action,
+            "price": price,
+            "rsi": rsi,
+        })
+        # Keep only last 50 points per symbol
+        if len(self.trade_points[symbol]) > 50:
+            self.trade_points[symbol] = self.trade_points[symbol][-50:]
+
+    def update_signal_candidates(self):
+        """Update list of signal candidates based on RSI values"""
+        candidates = []
+
+        for symbol, rsi in self.rsi_values.items():
+            position = self.positions.get(symbol)
+            market = position.market if position else "Unknown"
+            current_price = position.current_price if position else 0
+
+            # Buy candidates: RSI approaching 30
+            if rsi <= 35:
+                threshold = 30
+                distance = rsi - threshold
+                candidates.append(SignalCandidate(
+                    symbol=symbol,
+                    market=market,
+                    signal_type="buy_candidate",
+                    rsi=rsi,
+                    threshold=threshold,
+                    distance=distance,
+                    current_price=current_price,
+                    reason=f"RSI {rsi:.1f} approaching oversold",
+                ))
+
+            # Additional buy candidates: RSI approaching 25
+            if rsi <= 30:
+                threshold = 25
+                distance = rsi - threshold
+                candidates.append(SignalCandidate(
+                    symbol=symbol,
+                    market=market,
+                    signal_type="buy_candidate_2",
+                    rsi=rsi,
+                    threshold=threshold,
+                    distance=distance,
+                    current_price=current_price,
+                    reason=f"RSI {rsi:.1f} deep oversold candidate",
+                ))
+
+            # Sell candidates: RSI approaching 70
+            if rsi >= 65 and position and position.quantity > 0:
+                threshold = 70
+                distance = rsi - threshold
+                candidates.append(SignalCandidate(
+                    symbol=symbol,
+                    market=market,
+                    signal_type="sell_candidate",
+                    rsi=rsi,
+                    threshold=threshold,
+                    distance=distance,
+                    current_price=current_price,
+                    reason=f"RSI {rsi:.1f} approaching overbought",
+                ))
+
+            # Stop loss alert
+            if position and position.quantity > 0:
+                if position.stop_loss_distance <= 2:  # within 2% of stop loss
+                    candidates.append(SignalCandidate(
+                        symbol=symbol,
+                        market=market,
+                        signal_type="stop_loss_alert",
+                        rsi=rsi,
+                        threshold=position.stop_loss_pct,
+                        distance=position.stop_loss_distance,
+                        current_price=current_price,
+                        reason=f"PnL {position.pnl_pct:.1f}% near stop loss {position.stop_loss_pct}%",
+                    ))
+
+        self.signal_candidates = sorted(candidates, key=lambda x: abs(x.distance))
+
+    def update_market_status(self):
+        """Update market status overview"""
+        krx_rsis = []
+        us_rsis = []
+
+        for symbol, rsi in self.rsi_values.items():
+            position = self.positions.get(symbol)
+            if position:
+                if position.market == "KRX":
+                    krx_rsis.append(rsi)
+                else:
+                    us_rsis.append(rsi)
+
+        # KRX market
+        if krx_rsis:
+            avg_rsi = sum(krx_rsis) / len(krx_rsis)
+            oversold = sum(1 for r in krx_rsis if r <= 30)
+            overbought = sum(1 for r in krx_rsis if r >= 70)
+            state = "oversold" if avg_rsi < 40 else ("overbought" if avg_rsi > 60 else "neutral")
+            self.market_status_krx = MarketStatus(
+                market_rsi=avg_rsi,
+                oversold_count=oversold,
+                overbought_count=overbought,
+                total_symbols=len(krx_rsis),
+                market_state=state,
+            )
+
+        # US market
+        if us_rsis:
+            avg_rsi = sum(us_rsis) / len(us_rsis)
+            oversold = sum(1 for r in us_rsis if r <= 30)
+            overbought = sum(1 for r in us_rsis if r >= 70)
+            state = "oversold" if avg_rsi < 40 else ("overbought" if avg_rsi > 60 else "neutral")
+            self.market_status_us = MarketStatus(
+                market_rsi=avg_rsi,
+                oversold_count=oversold,
+                overbought_count=overbought,
+                total_symbols=len(us_rsis),
+                market_state=state,
+            )
+
+    def update_risk_alerts(self):
+        """Update risk alerts"""
+        alerts = []
+
+        for symbol, position in self.positions.items():
+            # Stop loss imminent
+            if position.stop_loss_distance <= 2:
+                alerts.append({
+                    "type": "stop_loss_imminent",
+                    "symbol": symbol,
+                    "message": f"{symbol}: {position.pnl_pct:.1f}% (stop loss at {position.stop_loss_pct}%)",
+                    "severity": "high",
+                })
+
+            # Large position warning (if position value > 20% of total)
+            # This would need total portfolio value calculation
+
+            # Consecutive losses would need trade history analysis
+
+        self.risk_alerts = alerts
 
     def set_bot_status(
         self,
@@ -177,6 +482,122 @@ class DashboardState:
             uptime=uptime,
             warmup_remaining=warmup_remaining,
         )
+
+    def update_system_status(
+        self,
+        auto_trading: bool = True,
+        api_connected: bool = True,
+        account_tradable: bool = True,
+        data_ok: bool = True,
+        error: Optional[str] = None,
+    ):
+        self.system_status = SystemStatus(
+            auto_trading_enabled=auto_trading,
+            last_strategy_run=self.last_strategy_run.strftime("%Y-%m-%d %H:%M:%S") if self.last_strategy_run else None,
+            last_price_update=self.last_price_update.strftime("%Y-%m-%d %H:%M:%S") if self.last_price_update else None,
+            api_connected=api_connected,
+            account_tradable=account_tradable,
+            data_collection_ok=data_ok,
+            error_message=error,
+        )
+
+    def calculate_performance(self):
+        """Calculate performance metrics from equity history and fills"""
+        import math
+
+        # Calculate from equity history
+        if len(self.equity_history) >= 2:
+            # Get initial and current values (use USD for now, or combine)
+            initial = self.equity_history[0]
+            current = self.equity_history[-1]
+
+            # Total return (using USD as primary)
+            initial_value = initial.get("total_usd", 0) or 0
+            current_value = current.get("total_usd", 0) or 0
+
+            if initial_value > 0:
+                self.performance.total_return_pct = (
+                    (current_value - initial_value) / initial_value * 100
+                )
+
+            # Calculate MDD (Maximum Drawdown)
+            peak = 0
+            max_drawdown = 0
+            for point in self.equity_history:
+                value = point.get("total_usd", 0) or 0
+                if value > peak:
+                    peak = value
+                if peak > 0:
+                    drawdown = (peak - value) / peak * 100
+                    if drawdown > max_drawdown:
+                        max_drawdown = drawdown
+            self.performance.mdd = max_drawdown
+
+            # Calculate CAGR
+            if len(self.equity_history) > 1 and initial_value > 0:
+                first_time = datetime.fromisoformat(initial.get("timestamp", ""))
+                last_time = datetime.fromisoformat(current.get("timestamp", ""))
+                days = (last_time - first_time).days
+                if days > 0:
+                    years = days / 365.0
+                    if years > 0 and current_value > 0:
+                        self.performance.cagr = (
+                            (pow(current_value / initial_value, 1 / years) - 1) * 100
+                        )
+
+            # Calculate Sharpe Ratio (simplified - daily returns)
+            if len(self.equity_history) > 2:
+                returns = []
+                for i in range(1, len(self.equity_history)):
+                    prev_val = self.equity_history[i - 1].get("total_usd", 0) or 1
+                    curr_val = self.equity_history[i].get("total_usd", 0) or 1
+                    if prev_val > 0:
+                        daily_return = (curr_val - prev_val) / prev_val
+                        returns.append(daily_return)
+
+                if returns:
+                    avg_return = sum(returns) / len(returns)
+                    variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
+                    std_dev = math.sqrt(variance) if variance > 0 else 0
+                    if std_dev > 0:
+                        # Annualized Sharpe (assuming ~252 trading days)
+                        self.performance.sharpe_ratio = (
+                            avg_return / std_dev * math.sqrt(252)
+                        )
+
+        # Calculate from fills/trades
+        if self.fills:
+            sell_trades = [f for f in self.fills if f.get("side") == "sell"]
+            pnls = [f.get("pnl", 0) or 0 for f in sell_trades if f.get("pnl") is not None]
+
+            if pnls:
+                self.performance.total_trades = len(pnls)
+                self.performance.total_pnl = sum(pnls)
+
+                winning = [p for p in pnls if p > 0]
+                losing = [p for p in pnls if p < 0]
+
+                self.performance.winning_trades = len(winning)
+                self.performance.losing_trades = len(losing)
+
+                if self.performance.total_trades > 0:
+                    self.performance.win_rate = (
+                        len(winning) / self.performance.total_trades * 100
+                    )
+
+                if winning:
+                    self.performance.avg_profit = sum(winning) / len(winning)
+                    self.performance.best_trade = max(winning)
+
+                if losing:
+                    self.performance.avg_loss = sum(losing) / len(losing)
+                    self.performance.worst_trade = min(losing)
+
+                # Profit Factor
+                gross_profit = sum(winning) if winning else 0
+                gross_loss = abs(sum(losing)) if losing else 0
+                if gross_loss > 0:
+                    self.performance.profit_factor = gross_profit / gross_loss
 
 
 # Global dashboard state
@@ -220,7 +641,6 @@ def verify_session(request: Request) -> bool:
 
     # Check expiry
     created = valid_sessions[session_token]
-    from datetime import timedelta
     if datetime.now() - created > timedelta(hours=SESSION_EXPIRE_HOURS):
         del valid_sessions[session_token]
         return False
@@ -291,28 +711,118 @@ def create_app() -> FastAPI:
         """Main dashboard page"""
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
-        """Main dashboard page"""
+
+        # Update derived states
+        dashboard_state.update_signal_candidates()
+        dashboard_state.update_market_status()
+        dashboard_state.update_risk_alerts()
+
+        # Calculate portfolio summary
+        krw_positions = [p for p in dashboard_state.positions.values() if p.market == "KRX"]
+        us_positions = [p for p in dashboard_state.positions.values() if p.market != "KRX"]
+
+        total_krw_value = float(dashboard_state.balance_krw)
+        total_usd_value = float(dashboard_state.balance_usd)
+        cash_ratio_krw = (float(dashboard_state.cash_krw) / total_krw_value * 100) if total_krw_value > 0 else 0
+        cash_ratio_usd = (float(dashboard_state.cash_usd) / total_usd_value * 100) if total_usd_value > 0 else 0
+
+        # Separate buy/sell candidates
+        buy_candidates = [c for c in dashboard_state.signal_candidates if "buy" in c.signal_type]
+        sell_candidates = [c for c in dashboard_state.signal_candidates if c.signal_type == "sell_candidate"]
+        stop_loss_alerts = [c for c in dashboard_state.signal_candidates if c.signal_type == "stop_loss_alert"]
+
         context = {
             "request": request,
+            # Portfolio summary
             "positions": list(dashboard_state.positions.values()),
-            "rsi_values": dict(dashboard_state.rsi_values),
-            "recent_signals": list(dashboard_state.recent_signals),
-            "recent_orders": list(dashboard_state.recent_orders),
-            "bot_status": dashboard_state.bot_status,
-            "account_value": float(dashboard_state.account_value),
+            "krw_positions": krw_positions,
+            "us_positions": us_positions,
+            "position_count": len(dashboard_state.positions),
+            # Balance
             "balance_krw": float(dashboard_state.balance_krw),
             "balance_usd": float(dashboard_state.balance_usd),
             "cash_krw": float(dashboard_state.cash_krw),
             "cash_usd": float(dashboard_state.cash_usd),
+            "cash_ratio_krw": cash_ratio_krw,
+            "cash_ratio_usd": cash_ratio_usd,
             "pnl_krw": float(dashboard_state.pnl_krw),
             "pnl_usd": float(dashboard_state.pnl_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
             "total_pnl": float(dashboard_state.total_pnl),
+            # RSI with price info
+            "rsi_values": dict(dashboard_state.rsi_values),
+            "rsi_with_prices": {
+                symbol: {
+                    "rsi": rsi,
+                    "price": dashboard_state.rsi_prices.get(symbol, {}).get("price"),
+                    "market": dashboard_state.rsi_prices.get(symbol, {}).get("market"),
+                }
+                for symbol, rsi in dashboard_state.rsi_values.items()
+            },
+            # Signals and orders
+            "recent_signals": list(dashboard_state.recent_signals[:20]),
+            "recent_orders": list(dashboard_state.recent_orders[:20]),
+            "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs[:20]],
+            # Signal candidates
+            "buy_candidates": [c.model_dump() for c in buy_candidates[:10]],
+            "sell_candidates": [c.model_dump() for c in sell_candidates[:10]],
+            "stop_loss_alerts": [c.model_dump() for c in stop_loss_alerts],
+            # Status
+            "bot_status": dashboard_state.bot_status,
+            "system_status": dashboard_state.system_status.model_dump(),
             "last_update": dashboard_state.last_update,
+            # Market status
+            "market_status_krx": dashboard_state.market_status_krx.model_dump(),
+            "market_status_us": dashboard_state.market_status_us.model_dump(),
+            # Risk
+            "risk_alerts": dashboard_state.risk_alerts,
+            # Performance
+            "performance": dashboard_state.performance.model_dump(),
         }
         return templates.TemplateResponse(
             request=request,
             name="index.html",
+            context=context,
+        )
+
+    @app.get("/trades", response_class=HTMLResponse)
+    async def trades_page(request: Request):
+        """Trade log page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        context = {
+            "request": request,
+            "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="trades.html",
+            context=context,
+        )
+
+    @app.get("/performance", response_class=HTMLResponse)
+    async def performance_page(request: Request):
+        """Performance analysis page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        # Recalculate performance metrics
+        dashboard_state.calculate_performance()
+
+        context = {
+            "request": request,
+            "performance": dashboard_state.performance.model_dump(),
+            "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
+            "fills": dashboard_state.fills,
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="performance.html",
             context=context,
         )
 
@@ -321,7 +831,7 @@ def create_app() -> FastAPI:
         """Get current bot status"""
         return {
             "bot_status": dashboard_state.bot_status,
-            "account_value": float(dashboard_state.account_value),
+            "system_status": dashboard_state.system_status.model_dump(),
             "balance_krw": float(dashboard_state.balance_krw),
             "balance_usd": float(dashboard_state.balance_usd),
             "cash_krw": float(dashboard_state.cash_krw),
@@ -338,7 +848,7 @@ def create_app() -> FastAPI:
     @app.get("/api/positions")
     async def get_positions():
         """Get current positions"""
-        return list(dashboard_state.positions.values())
+        return [p.model_dump() for p in dashboard_state.positions.values()]
 
     @app.get("/api/rsi")
     async def get_rsi():
@@ -355,6 +865,32 @@ def create_app() -> FastAPI:
         """Get recent orders"""
         return dashboard_state.recent_orders
 
+    @app.get("/api/trade-logs")
+    async def get_trade_logs(limit: int = 50):
+        """Get trade logs"""
+        return [log.model_dump() for log in dashboard_state.trade_logs[:limit]]
+
+    @app.get("/api/signal-candidates")
+    async def get_signal_candidates():
+        """Get signal candidates"""
+        dashboard_state.update_signal_candidates()
+        return [c.model_dump() for c in dashboard_state.signal_candidates]
+
+    @app.get("/api/market-status")
+    async def get_market_status():
+        """Get market status"""
+        dashboard_state.update_market_status()
+        return {
+            "krx": dashboard_state.market_status_krx.model_dump(),
+            "us": dashboard_state.market_status_us.model_dump(),
+        }
+
+    @app.get("/api/risk-alerts")
+    async def get_risk_alerts():
+        """Get risk alerts"""
+        dashboard_state.update_risk_alerts()
+        return dashboard_state.risk_alerts
+
     @app.get("/symbol/{symbol}", response_class=HTMLResponse)
     async def symbol_detail(request: Request, symbol: str):
         """Symbol detail page with chart"""
@@ -363,12 +899,21 @@ def create_app() -> FastAPI:
 
         position = dashboard_state.positions.get(symbol)
         rsi = dashboard_state.rsi_values.get(symbol)
+        trade_points = dashboard_state.trade_points.get(symbol, [])
+
+        # Get symbol-specific trade logs
+        symbol_trades = [
+            log.model_dump() for log in dashboard_state.trade_logs
+            if log.symbol == symbol
+        ][:20]
 
         context = {
             "request": request,
             "symbol": symbol,
             "position": position,
             "rsi": rsi,
+            "trade_points": trade_points,
+            "symbol_trades": symbol_trades,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -382,11 +927,13 @@ def create_app() -> FastAPI:
         """Get price history for a symbol"""
         prices = dashboard_state.price_history.get(symbol, [])
         rsi = dashboard_state.rsi_history.get(symbol, [])
+        trade_points = dashboard_state.trade_points.get(symbol, [])
 
         return {
             "symbol": symbol,
             "prices": [p.model_dump() for p in prices[-limit:]],
             "rsi": rsi[-limit:],
+            "trade_points": trade_points[-limit:],
         }
 
     @app.get("/api/symbol/{symbol}")
@@ -400,6 +947,11 @@ def create_app() -> FastAPI:
             "position": position.model_dump() if position else None,
             "rsi": rsi,
         }
+
+    @app.get("/api/equity-history")
+    async def get_equity_history():
+        """Get equity curve data"""
+        return {"data": dashboard_state.equity_history}
 
     return app
 
