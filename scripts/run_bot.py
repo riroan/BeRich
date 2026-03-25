@@ -46,6 +46,7 @@ class TradingBot:
         self.dashboard = get_dashboard_state()
 
         self._running = False
+        self._stopped = False  # Prevent duplicate stop calls
         self._start_time: datetime = None
         self._warmup_hours = warmup_hours  # Hours to wait before trading
         # Use absolute path based on script location
@@ -706,6 +707,10 @@ class TradingBot:
 
     async def stop(self) -> None:
         """Stop the bot"""
+        if self._stopped:
+            return  # Already stopped
+        self._stopped = True
+
         logger.info("Stopping Trading Bot...")
         self._running = False
 
