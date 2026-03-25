@@ -5,13 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BeRich Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
-    <meta http-equiv="refresh" content="60">
 </head>
 <body>
     <div class="container">
         <header>
             <h1>BeRich Trading Dashboard</h1>
             <div class="status-bar">
+                <span id="ws-status" class="ws-status disconnected">OFFLINE</span>
                 {% if bot_status %}
                 <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
                     {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
@@ -40,17 +40,16 @@
                     <div class="summary-cards">
                         <div class="card">
                             <span class="label">Total</span>
-                            <span class="value">{{ "{:,.0f}".format(balance_krw) }}</span>
+                            <span class="value" id="balance-krw">{{ "{:,.0f}".format(balance_krw) }} KRW</span>
                         </div>
                         <div class="card">
                             <span class="label">Cash</span>
-                            <span class="value">{{ "{:,.0f}".format(cash_krw) }}</span>
-                            <span class="sub">{{ "{:.1f}%".format(cash_ratio_krw) }}</span>
+                            <span class="value" id="cash-krw">{{ "{:,.0f}".format(cash_krw) }} KRW</span>
                         </div>
                         <div class="card">
                             <span class="label">P&L</span>
-                            <span class="value {{ 'positive' if pnl_krw >= 0 else 'negative' }}">
-                                {{ "{:+,.0f}".format(pnl_krw) }}
+                            <span class="value {{ 'positive' if pnl_krw >= 0 else 'negative' }}" id="pnl-krw">
+                                {{ "{:+,.0f}".format(pnl_krw) }} KRW
                             </span>
                         </div>
                     </div>
@@ -60,16 +59,15 @@
                     <div class="summary-cards">
                         <div class="card">
                             <span class="label">Total</span>
-                            <span class="value">${{ "{:,.2f}".format(balance_usd) }}</span>
+                            <span class="value" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</span>
                         </div>
                         <div class="card">
                             <span class="label">Cash</span>
-                            <span class="value">${{ "{:,.2f}".format(cash_usd) }}</span>
-                            <span class="sub">{{ "{:.1f}%".format(cash_ratio_usd) }}</span>
+                            <span class="value" id="cash-usd">${{ "{:,.2f}".format(cash_usd) }}</span>
                         </div>
                         <div class="card">
                             <span class="label">P&L</span>
-                            <span class="value {{ 'positive' if pnl_usd >= 0 else 'negative' }}">
+                            <span class="value {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd">
                                 ${{ "{:+,.2f}".format(pnl_usd) }}
                             </span>
                         </div>

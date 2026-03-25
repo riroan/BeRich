@@ -10,17 +10,57 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 from enum import Enum
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 # Base directory for templates and static files
 BASE_DIR = Path(__file__).parent
+
+
+class ConnectionManager:
+    """WebSocket connection manager"""
+
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+        logger.info(f"WebSocket connected. Total: {len(self.active_connections)}")
+
+    def disconnect(self, websocket: WebSocket):
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
+
+    async def broadcast(self, message: dict):
+        """Broadcast message to all connected clients"""
+        if not self.active_connections:
+            return
+
+        message_json = json.dumps(message, default=str)
+        disconnected = []
+
+        for connection in self.active_connections:
+            try:
+                await connection.send_text(message_json)
+            except Exception:
+                disconnected.append(connection)
+
+        # Clean up disconnected clients
+        for conn in disconnected:
+            self.disconnect(conn)
+
+
+# Global WebSocket manager
+ws_manager = ConnectionManager()
 
 
 class SignalCandidate(BaseModel):
@@ -953,9 +993,70 @@ def create_app() -> FastAPI:
         """Get equity curve data"""
         return {"data": dashboard_state.equity_history}
 
+    @app.websocket("/ws")
+    async def websocket_endpoint(websocket: WebSocket):
+        """WebSocket endpoint for real-time updates"""
+        await ws_manager.connect(websocket)
+        try:
+            # Send initial data on connect
+            await websocket.send_text(json.dumps({
+                "type": "init",
+                "data": get_dashboard_snapshot()
+            }, default=str))
+
+            # Keep connection alive and handle incoming messages
+            while True:
+                try:
+                    # Wait for messages (ping/pong or commands)
+                    data = await websocket.receive_text()
+                    if data == "ping":
+                        await websocket.send_text("pong")
+                except WebSocketDisconnect:
+                    break
+        except Exception as e:
+            logger.error(f"WebSocket error: {e}")
+        finally:
+            ws_manager.disconnect(websocket)
+
     return app
+
+
+def get_dashboard_snapshot() -> dict:
+    """Get current dashboard state as a snapshot for WebSocket"""
+    dashboard_state.update_signal_candidates()
+    dashboard_state.update_market_status()
+
+    return {
+        "balance_krw": float(dashboard_state.balance_krw),
+        "balance_usd": float(dashboard_state.balance_usd),
+        "cash_krw": float(dashboard_state.cash_krw),
+        "cash_usd": float(dashboard_state.cash_usd),
+        "pnl_krw": float(dashboard_state.pnl_krw),
+        "pnl_usd": float(dashboard_state.pnl_usd),
+        "positions": [p.model_dump() for p in dashboard_state.positions.values()],
+        "rsi_values": dict(dashboard_state.rsi_values),
+        "rsi_prices": dict(dashboard_state.rsi_prices),
+        "recent_signals": dashboard_state.recent_signals[:10],
+        "recent_orders": dashboard_state.recent_orders[:10],
+        "bot_status": dashboard_state.bot_status.model_dump() if dashboard_state.bot_status else None,
+        "system_status": dashboard_state.system_status.model_dump(),
+        "last_update": dashboard_state.last_update.isoformat() if dashboard_state.last_update else None,
+    }
+
+
+async def broadcast_update(update_type: str = "update"):
+    """Broadcast dashboard update to all connected clients"""
+    await ws_manager.broadcast({
+        "type": update_type,
+        "data": get_dashboard_snapshot()
+    })
 
 
 def get_dashboard_state() -> DashboardState:
     """Get the global dashboard state"""
     return dashboard_state
+
+
+def get_ws_manager() -> ConnectionManager:
+    """Get the global WebSocket manager"""
+    return ws_manager

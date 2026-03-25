@@ -1181,3 +1181,36 @@ footer p {
     margin-bottom: 20px;
     text-align: center;
 }
+
+/* WebSocket Status Indicator */
+.ws-status {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    margin-right: 10px;
+}
+
+.ws-status.connected {
+    background: rgba(0, 210, 106, 0.2);
+    color: var(--positive);
+    animation: pulse 2s infinite;
+}
+
+.ws-status.disconnected {
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--negative);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+/* RSI item as link */
+a.rsi-item {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+}

@@ -24,7 +24,7 @@ from src.utils.config import Config
 from src.utils.logger import setup_logger
 from src.utils.scheduler import TradingScheduler
 from src.utils.notifier import DiscordNotifier
-from src.web.app import get_dashboard_state
+from src.web.app import get_dashboard_state, broadcast_update
 
 logger = setup_logger("TradingBot")
 
@@ -288,6 +288,12 @@ class TradingBot:
             account_tradable=True,
             data_ok=True,
         )
+
+        # Broadcast update to WebSocket clients
+        try:
+            await broadcast_update("tick")
+        except Exception as e:
+            logger.debug(f"WebSocket broadcast failed: {e}")
 
     def is_warmup_complete(self) -> bool:
         """Check if warmup period is complete"""
