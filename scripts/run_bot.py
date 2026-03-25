@@ -135,6 +135,7 @@ class TradingBot:
         self.strategy_engine = StrategyEngine(
             event_bus=self.event_bus,
             broker=self.broker,
+            notifier=self.notifier,
         )
         await self._load_strategies()
 
@@ -280,6 +281,12 @@ class TradingBot:
 
                 except Exception as e:
                     logger.error(f"Error fetching {symbol}: {e}")
+                    # Send data fetch error notification
+                    if self.notifier:
+                        await self.notifier.notify_data_fetch_failed(
+                            symbol=symbol,
+                            error=str(e),
+                        )
 
         # Update system status with latest price update time
         self.dashboard.update_system_status(
@@ -438,6 +445,16 @@ class TradingBot:
                         if state.get('last_buy_time'):
                             last_buy_date = state['last_buy_time'].strftime('%m-%d %H:%M')
 
+                        # Calculate PnL percentage
+                        pnl_pct = 0
+                        if pos.avg_entry_price > 0:
+                            pnl_pct = float(
+                                (pos.current_price - pos.avg_entry_price)
+                                / pos.avg_entry_price * 100
+                            )
+
+                        stop_loss_pct = state.get('stop_loss_pct', -10.0)
+
                         self.dashboard.update_position(
                             symbol=pos.symbol,
                             market=market.value.upper(),
@@ -450,8 +467,26 @@ class TradingBot:
                             max_buy_stages=state.get('max_buy_stages', 3),
                             max_sell_stages=state.get('max_sell_stages', 3),
                             last_buy_date=last_buy_date,
-                            stop_loss_pct=state.get('stop_loss_pct', -10.0),
+                            stop_loss_pct=stop_loss_pct,
                         )
+
+                        # Check stop loss imminent (within 2%)
+                        distance_to_stop = pnl_pct - stop_loss_pct
+                        if distance_to_stop <= 2.0 and distance_to_stop > 0:
+                            if self.notifier and not hasattr(self, f'_stop_loss_alert_{pos.symbol}'):
+                                await self.notifier.notify_stop_loss_imminent(
+                                    symbol=pos.symbol,
+                                    current_pnl_pct=pnl_pct,
+                                    stop_loss_pct=stop_loss_pct,
+                                    distance_pct=distance_to_stop,
+                                )
+                                # Prevent duplicate alerts
+                                setattr(self, f'_stop_loss_alert_{pos.symbol}', True)
+                        else:
+                            # Reset alert flag
+                            if hasattr(self, f'_stop_loss_alert_{pos.symbol}'):
+                                delattr(self, f'_stop_loss_alert_{pos.symbol}')
+
                 except Exception:
                     pass  # Skip markets with no positions
 
@@ -492,8 +527,26 @@ class TradingBot:
                 # Keep only last 1000 points in memory
                 if len(self.dashboard.equity_history) > 1000:
                     self.dashboard.equity_history = self.dashboard.equity_history[-1000:]
-            except Exception:
-                pass
+
+                # Check low cash ratio (USD)
+                if self.dashboard.balance_usd > 0:
+                    cash_ratio = float(self.dashboard.cash_usd / self.dashboard.balance_usd * 100)
+                    min_cash_ratio = 10.0  # 10% minimum
+                    if cash_ratio < min_cash_ratio:
+                        if self.notifier and not hasattr(self, '_low_cash_alert'):
+                            await self.notifier.notify_low_cash_ratio(
+                                cash_ratio=cash_ratio,
+                                min_ratio=min_cash_ratio,
+                            )
+                            self._low_cash_alert = True
+                    else:
+                        if hasattr(self, '_low_cash_alert'):
+                            delattr(self, '_low_cash_alert')
+
+            except Exception as e:
+                logger.error(f"Failed to update balances: {e}")
+                if self.notifier:
+                    await self.notifier.notify_account_error(error=str(e))
 
         except Exception as e:
             logger.debug(f"Error updating dashboard positions: {e}")

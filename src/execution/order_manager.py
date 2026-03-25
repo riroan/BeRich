@@ -199,14 +199,54 @@ class OrderManager:
                 "price": float(order.price),
             })
 
-            # Send Discord notification
+            # Send Discord notification based on order type
             if self.notifier:
-                await self.notifier.notify_order_submitted(
-                    symbol=order.symbol,
-                    side=order.side.value,
-                    price=order.price,
-                    quantity=order.quantity,
-                )
+                market_type = "KRX" if order.market.value == "krx" else "USD"
+
+                if order.side == OrderSide.BUY:
+                    # Buy execution notification
+                    stage = signal_metadata.get("stage", 1) if signal_metadata else 1
+                    total_stages = signal_metadata.get("total_stages", 3) if signal_metadata else 3
+                    await self.notifier.notify_buy_executed(
+                        symbol=order.symbol,
+                        price=order.price,
+                        quantity=order.quantity,
+                        rsi=rsi or 0,
+                        stage=stage,
+                        total_stages=total_stages,
+                        market=market_type,
+                    )
+                elif action == "stop_loss":
+                    # Stop loss execution notification (HIGH PRIORITY)
+                    pnl = signal_metadata.get("pnl", Decimal("0")) if signal_metadata else Decimal("0")
+                    pnl_pct = signal_metadata.get("pnl_pct", 0) if signal_metadata else 0
+                    await self.notifier.notify_stop_loss_executed(
+                        symbol=order.symbol,
+                        price=order.price,
+                        quantity=order.quantity,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        market=market_type,
+                    )
+                else:
+                    # Sell execution notification
+                    stage = signal_metadata.get("stage", 1) if signal_metadata else 1
+                    total_stages = signal_metadata.get("total_stages", 3) if signal_metadata else 3
+                    pnl = signal_metadata.get("pnl", Decimal("0")) if signal_metadata else Decimal("0")
+                    pnl_pct = signal_metadata.get("pnl_pct", 0) if signal_metadata else 0
+                    is_partial = action == "partial_sell"
+                    await self.notifier.notify_sell_executed(
+                        symbol=order.symbol,
+                        price=order.price,
+                        quantity=order.quantity,
+                        rsi=rsi or 0,
+                        pnl=pnl,
+                        pnl_pct=pnl_pct,
+                        stage=stage,
+                        total_stages=total_stages,
+                        is_partial=is_partial,
+                        market=market_type,
+                    )
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
 
@@ -222,11 +262,12 @@ class OrderManager:
                 result="failed",
             )
 
-            # Send error notification
+            # Send order failed notification (HIGH PRIORITY)
             if self.notifier:
-                await self.notifier.notify_error(
-                    error=str(e),
-                    context=f"Order submission: {order.side.value} {order.symbol}",
+                await self.notifier.notify_order_failed(
+                    symbol=order.symbol,
+                    side=order.side.value,
+                    reason=str(e),
                 )
 
             await self.event_bus.publish(

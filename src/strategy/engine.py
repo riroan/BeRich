@@ -6,6 +6,7 @@ import logging
 from src.core.types import Bar, Quote, Signal, Market, Position
 from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
+from src.utils.notifier import DiscordNotifier
 from .base import BaseStrategy
 
 logger = logging.getLogger("TradingBot")
@@ -18,9 +19,11 @@ class StrategyEngine:
         self,
         event_bus: EventBus,
         broker: KISBroker,
+        notifier: Optional[DiscordNotifier] = None,
     ):
         self.event_bus = event_bus
         self.broker = broker
+        self.notifier = notifier
         self._strategies: List[BaseStrategy] = []
         self._running = False
 
@@ -78,6 +81,11 @@ class StrategyEngine:
                         await self._emit_signal(signal, strategy.name)
                 except Exception as e:
                     logger.error(f"Error in strategy {strategy.name}: {e}")
+                    if self.notifier:
+                        await self.notifier.notify_strategy_error(
+                            strategy_name=strategy.name,
+                            error=str(e),
+                        )
 
     async def _on_quote(self, event: Event) -> None:
         """Handle quote data"""
@@ -91,6 +99,11 @@ class StrategyEngine:
                         await self._emit_signal(signal, strategy.name)
                 except Exception as e:
                     logger.error(f"Error in strategy {strategy.name}: {e}")
+                    if self.notifier:
+                        await self.notifier.notify_strategy_error(
+                            strategy_name=strategy.name,
+                            error=str(e),
+                        )
 
     async def _on_fill(self, event: Event) -> None:
         """Handle fill events"""
