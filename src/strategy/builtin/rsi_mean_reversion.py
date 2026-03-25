@@ -91,6 +91,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
             pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
             if pnl_pct <= stop_loss_pct:
+                # Calculate actual PnL
+                pnl = (current_price - avg_price) * current_position
                 logger.info(
                     f"[{symbol}] *** STOP LOSS TRIGGERED *** | "
                     f"PnL: {pnl_pct:.1f}% <= {stop_loss_pct}% | "
@@ -105,6 +107,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     metadata={
                         "rsi": float(current_rsi),
                         "reason": "stop_loss",
+                        "pnl": pnl,
                         "pnl_pct": pnl_pct,
                         "avg_price": float(avg_price),
                         "sell_portion": 1.0,
@@ -146,6 +149,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     # Check if this is the last sell stage
                     is_final_sell = (stage + 1) >= len(sell_levels)
 
+                    # Calculate actual PnL
+                    pnl = (current_price - avg_price) * current_position
+
                     logger.info(
                         f"[{symbol}] *** SELL SIGNAL GENERATED *** | "
                         f"RSI: {current_rsi:.1f} >= {rsi_threshold} | "
@@ -165,6 +171,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                         metadata={
                             "rsi": float(current_rsi),
                             "reason": f"staged_sell_{stage + 1}",
+                            "pnl": pnl,
                             "pnl_pct": pnl_pct,
                             "sell_portion": portion,
                             "stage": stage + 1,
