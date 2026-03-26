@@ -323,6 +323,35 @@
             }
         });
 
+        // Sync crosshair between charts
+        let isSyncingCrosshair = false;
+
+        priceChart.subscribeCrosshairMove(param => {
+            if (isSyncingCrosshair) return;
+            isSyncingCrosshair = true;
+
+            if (param.time) {
+                rsiChart.setCrosshairPosition(undefined, param.time, rsiSeries);
+            } else {
+                rsiChart.clearCrosshairPosition();
+            }
+
+            isSyncingCrosshair = false;
+        });
+
+        rsiChart.subscribeCrosshairMove(param => {
+            if (isSyncingCrosshair) return;
+            isSyncingCrosshair = true;
+
+            if (param.time) {
+                priceChart.setCrosshairPosition(undefined, param.time, candleSeries);
+            } else {
+                priceChart.clearCrosshairPosition();
+            }
+
+            isSyncingCrosshair = false;
+        });
+
         // Load data on page load
         loadChartData();
 
