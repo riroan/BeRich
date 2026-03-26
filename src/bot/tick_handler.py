@@ -1,0 +1,110 @@
+"""Tick handler for trading bot"""
+
+import asyncio
+from datetime import datetime
+from typing import TYPE_CHECKING
+import logging
+
+from src.core.events import Event, EventType
+from src.core.types import Bar
+
+if TYPE_CHECKING:
+    from src.bot.core import TradingBot
+
+logger = logging.getLogger(__name__)
+
+
+class TickHandlerMixin:
+    """Mixin for tick handling methods"""
+
+    async def on_tick(self: "TradingBot") -> None:
+        """Called every minute - fetch prices and check strategies"""
+        self._warmup.log_status()
+        self.update_dashboard_status()
+        await self.update_dashboard_positions()
+
+        logger.debug(f"Tick: {datetime.now().strftime('%H:%M:%S')}")
+
+        for strategy in self.strategy_engine.get_strategies():
+            for symbol in strategy.symbols:
+                await self._process_symbol_tick(strategy, symbol)
+
+        self.dashboard.update_system_status(
+            auto_trading=self._warmup.is_complete(),
+            api_connected=True,
+            account_tradable=True,
+            data_ok=True,
+        )
+
+        await self.broadcast_tick_update()
+
+    async def _process_symbol_tick(self: "TradingBot", strategy, symbol: str) -> None:
+        """Process tick for a single symbol"""
+        try:
+            # Rate limit: wait between API calls
+            await asyncio.sleep(1)
+
+            price = await self.broker.get_current_price(symbol, strategy.market)
+
+            if hasattr(strategy, "update_daily_close"):
+                strategy.update_daily_close(symbol, float(price))
+
+            bar = Bar(
+                symbol=symbol,
+                market=strategy.market,
+                open=price,
+                high=price,
+                low=price,
+                close=price,
+                volume=0,
+                timestamp=datetime.now(),
+                timeframe="1d",
+            )
+
+            await self.event_bus.publish(
+                Event(
+                    event_type=EventType.BAR_UPDATE,
+                    data=bar,
+                    timestamp=datetime.now(),
+                    source="Scheduler",
+                )
+            )
+
+            rsi = None
+            rsi_str = ""
+            if hasattr(strategy, "get_current_rsi"):
+                rsi = strategy.get_current_rsi(symbol)
+                if rsi is not None:
+                    rsi_str = f" | RSI: {rsi:.1f}"
+
+            await self.storage.save_price_rsi(
+                symbol=symbol,
+                market=strategy.market,
+                price=price,
+                rsi=rsi,
+            )
+
+            if rsi is not None:
+                self.dashboard.update_rsi(
+                    symbol, rsi, price=float(price), market=strategy.market.value.upper()
+                )
+                self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
+                self.dashboard.add_price_point(
+                    symbol=symbol,
+                    time=datetime.now(),
+                    open_=float(price),
+                    high=float(price),
+                    low=float(price),
+                    close=float(price),
+                )
+
+            self.dashboard.last_price_update = datetime.now()
+            logger.info(f"[{symbol}] Price: {price:,}{rsi_str}")
+
+        except Exception as e:
+            logger.error(f"Error fetching {symbol}: {e}")
+            if self.notifier:
+                await self.notifier.notify_data_fetch_failed(
+                    symbol=symbol,
+                    error=str(e),
+                )
