@@ -266,20 +266,19 @@ class TradingBot:
                         rsi=rsi,
                     )
 
-                    # Update dashboard
+                    # Update dashboard (only add chart points when RSI is available)
                     if rsi is not None:
                         self.dashboard.update_rsi(symbol, rsi, price=float(price), market=strategy.market.value.upper())
                         self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
-
-                    # Add price point to chart history
-                    self.dashboard.add_price_point(
-                        symbol=symbol,
-                        time=datetime.now(),
-                        open_=float(price),
-                        high=float(price),
-                        low=float(price),
-                        close=float(price),
-                    )
+                        # Add price point to chart history (same time as RSI)
+                        self.dashboard.add_price_point(
+                            symbol=symbol,
+                            time=datetime.now(),
+                            open_=float(price),
+                            high=float(price),
+                            low=float(price),
+                            close=float(price),
+                        )
 
                     # Update last price update time
                     self.dashboard.last_price_update = datetime.now()
@@ -645,18 +644,16 @@ class TradingBot:
                 history = await self.storage.get_price_rsi_history(symbol, limit=2000)
 
                 for record in history:
-                    # Add price point
-                    self.dashboard.add_price_point(
-                        symbol=record["symbol"],
-                        time=record["timestamp"],
-                        open_=record["price"],
-                        high=record["price"],
-                        low=record["price"],
-                        close=record["price"],
-                    )
-
-                    # Add RSI point
+                    # Only add points when RSI is available (keeps charts in sync)
                     if record["rsi"] is not None:
+                        self.dashboard.add_price_point(
+                            symbol=record["symbol"],
+                            time=record["timestamp"],
+                            open_=record["price"],
+                            high=record["price"],
+                            low=record["price"],
+                            close=record["price"],
+                        )
                         self.dashboard.add_rsi_point(
                             symbol=record["symbol"],
                             time=record["timestamp"],
