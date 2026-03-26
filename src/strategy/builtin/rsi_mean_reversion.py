@@ -1,10 +1,13 @@
 """
-RSI Mean Reversion Strategy
+RSI Mean Reversion Strategy (Daily RSI)
 
 Rules:
-- Buy: RSI <= 30 (oversold), with averaging down
-- Sell: RSI >= 65/70/75 (staged selling) OR Stop Loss -10%
+- Buy: Daily RSI <= 30 (oversold), with averaging down
+- Sell: Daily RSI >= 65/70/75 (staged selling) OR Stop Loss -10%
 - Reset stages after cooldown period
+
+Note: RSI is calculated from daily bars, not intraday data.
+Current price updates today's daily close for real-time RSI estimation.
 """
 
 from typing import Optional
@@ -32,6 +35,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._sell_stages: dict[str, int] = {}
         # Track last buy time for cooldown reset
         self._last_buy_time: dict[str, datetime] = {}
+        # Store daily bars separately for RSI calculation
+        self._daily_bars: dict[str, pd.DataFrame] = {}
 
     @property
     def name(self) -> str:
@@ -41,8 +46,74 @@ class RSIMeanReversionStrategy(BaseStrategy):
     def required_history(self) -> int:
         return 30
 
+    def initialize(self, historical_bars: dict[str, list]) -> None:
+        """Initialize with daily historical data"""
+        super().initialize(historical_bars)
+        # Store daily bars separately for RSI calculation
+        for symbol, bars in historical_bars.items():
+            if not bars:
+                continue
+            df = pd.DataFrame([
+                {
+                    "timestamp": b.timestamp,
+                    "open": float(b.open),
+                    "high": float(b.high),
+                    "low": float(b.low),
+                    "close": float(b.close),
+                    "volume": b.volume,
+                }
+                for b in bars
+            ])
+            df.set_index("timestamp", inplace=True)
+            self._daily_bars[symbol] = df
+            logger.info(f"[{symbol}] Loaded {len(df)} daily bars for RSI")
+
+    def update_daily_close(self, symbol: str, current_price: float) -> None:
+        """Update today's close price for RSI calculation"""
+        if symbol not in self._daily_bars:
+            return
+
+        df = self._daily_bars[symbol]
+        if len(df) == 0:
+            return
+
+        today = datetime.now().date()
+        last_date = df.index[-1].date() if hasattr(df.index[-1], 'date') else df.index[-1]
+
+        if last_date == today:
+            # Update today's close
+            df.iloc[-1, df.columns.get_loc("close")] = current_price
+            # Update high/low if needed
+            if current_price > df.iloc[-1]["high"]:
+                df.iloc[-1, df.columns.get_loc("high")] = current_price
+            if current_price < df.iloc[-1]["low"]:
+                df.iloc[-1, df.columns.get_loc("low")] = current_price
+        else:
+            # Add new row for today
+            new_row = pd.DataFrame([{
+                "timestamp": datetime.now(),
+                "open": current_price,
+                "high": current_price,
+                "low": current_price,
+                "close": current_price,
+                "volume": 0,
+            }]).set_index("timestamp")
+            self._daily_bars[symbol] = pd.concat([df, new_row]).tail(100)
+
+    def get_daily_dataframe(self, symbol: str) -> pd.DataFrame:
+        """Get daily DataFrame for RSI calculation"""
+        return self._daily_bars.get(symbol, pd.DataFrame())
+
+    async def on_bar(self, bar) -> Optional[Signal]:
+        """Override to skip update_bar (we use daily data via update_daily_close)"""
+        if bar.symbol not in self.symbols:
+            return None
+        # Don't call update_bar - daily close is updated separately
+        return await self.calculate_signal(bar.symbol)
+
     async def calculate_signal(self, symbol: str) -> Optional[Signal]:
-        df = self.get_dataframe(symbol)
+        # Use daily bars for RSI calculation
+        df = self.get_daily_dataframe(symbol)
         if len(df) < self.required_history:
             return None
 
@@ -290,8 +361,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         return rsi
 
     def get_current_rsi(self, symbol: str) -> Optional[float]:
-        """Get current RSI value for a symbol"""
-        df = self.get_dataframe(symbol)
+        """Get current RSI value for a symbol (based on daily data)"""
+        df = self.get_daily_dataframe(symbol)
         if len(df) < self.required_history:
             return None
 

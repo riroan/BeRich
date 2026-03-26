@@ -224,7 +224,11 @@ class TradingBot:
                     # Get current price
                     price = await self.broker.get_current_price(symbol, strategy.market)
 
-                    # Create a bar with current price (for RSI update)
+                    # Update daily close for RSI calculation (daily RSI)
+                    if hasattr(strategy, "update_daily_close"):
+                        strategy.update_daily_close(symbol, float(price))
+
+                    # Create daily bar for event system (triggers signal calculation)
                     bar = Bar(
                         symbol=symbol,
                         market=strategy.market,
@@ -234,13 +238,10 @@ class TradingBot:
                         close=price,
                         volume=0,
                         timestamp=datetime.now(),
-                        timeframe="1m",
+                        timeframe="1d",
                     )
 
-                    # Update strategy data directly (for immediate RSI calculation)
-                    strategy.update_bar(bar)
-
-                    # Emit bar event for other handlers
+                    # Emit bar event for signal generation
                     await self.event_bus.publish(
                         Event(
                             event_type=EventType.BAR_UPDATE,
