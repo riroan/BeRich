@@ -28,6 +28,7 @@
                 </span>
                 <a href="/trades" class="nav-link">Trades</a>
                 <a href="/performance" class="nav-link">Performance</a>
+                <a href="/analytics" class="nav-link">Analytics</a>
                 <a href="/logout" class="logout-btn">Logout</a>
             </div>
         </header>
@@ -353,6 +354,39 @@
             </div>
         </section>
 
+        <!-- Analytics Summary -->
+        <section class="analytics-summary">
+            <div class="panel">
+                <h2>Analytics Summary <a href="/analytics" class="view-all">View Details</a></h2>
+                <div class="analytics-grid" id="analytics-summary">
+                    <div class="analytics-item">
+                        <span class="label">Win Rate</span>
+                        <span class="value" id="summary-winrate">-</span>
+                    </div>
+                    <div class="analytics-item">
+                        <span class="label">Profit Factor</span>
+                        <span class="value" id="summary-pf">-</span>
+                    </div>
+                    <div class="analytics-item">
+                        <span class="label">MDD</span>
+                        <span class="value negative" id="summary-mdd">-</span>
+                    </div>
+                    <div class="analytics-item">
+                        <span class="label">Current DD</span>
+                        <span class="value" id="summary-dd">-</span>
+                    </div>
+                    <div class="analytics-item">
+                        <span class="label">Today P&L</span>
+                        <span class="value" id="summary-today-pnl">-</span>
+                    </div>
+                    <div class="analytics-item">
+                        <span class="label">Streak</span>
+                        <span class="value" id="summary-streak">-</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- 5. System Status -->
         <section class="system-section">
             <div class="panel system-panel">
@@ -413,6 +447,10 @@
             <span class="icon">📈</span>
             <span>Performance</span>
         </a>
+        <a href="/analytics">
+            <span class="icon">🔬</span>
+            <span>Analytics</span>
+        </a>
         <a href="/logout">
             <span class="icon">🚪</span>
             <span>Logout</span>
@@ -420,5 +458,67 @@
     </nav>
 
     <script src="/static/script.js"></script>
+    <script>
+        // Load analytics summary
+        async function loadAnalyticsSummary() {
+            try {
+                const [statsRes, ddRes, reportRes] = await Promise.all([
+                    fetch('/api/analytics/statistics'),
+                    fetch('/api/analytics/drawdown'),
+                    fetch('/api/analytics/reports?period=daily'),
+                ]);
+
+                const stats = await statsRes.json();
+                const dd = await ddRes.json();
+                const report = await reportRes.json();
+
+                // Win Rate
+                const winrateEl = document.getElementById('summary-winrate');
+                winrateEl.textContent = stats.win_rate.toFixed(1) + '%';
+                winrateEl.className = 'value ' + (stats.win_rate >= 50 ? 'positive' : 'negative');
+
+                // Profit Factor
+                document.getElementById('summary-pf').textContent = stats.profit_factor.toFixed(2);
+
+                // MDD
+                document.getElementById('summary-mdd').textContent = dd.mdd_pct.toFixed(2) + '%';
+
+                // Current Drawdown
+                const ddEl = document.getElementById('summary-dd');
+                ddEl.textContent = dd.current_drawdown_pct.toFixed(2) + '%';
+                if (dd.current_drawdown_pct >= 10) {
+                    ddEl.className = 'value danger';
+                } else if (dd.current_drawdown_pct >= 5) {
+                    ddEl.className = 'value warning';
+                } else {
+                    ddEl.className = 'value';
+                }
+
+                // Today P&L
+                const todayPnlEl = document.getElementById('summary-today-pnl');
+                const pnlStr = report.total_pnl >= 0 ? '+$' + report.total_pnl.toFixed(2) : '-$' + Math.abs(report.total_pnl).toFixed(2);
+                todayPnlEl.textContent = pnlStr;
+                todayPnlEl.className = 'value ' + (report.total_pnl >= 0 ? 'positive' : 'negative');
+
+                // Streak
+                const streakEl = document.getElementById('summary-streak');
+                if (stats.current_streak > 0) {
+                    streakEl.textContent = '+' + stats.current_streak + 'W';
+                    streakEl.className = 'value positive';
+                } else if (stats.current_streak < 0) {
+                    streakEl.textContent = stats.current_streak + 'L';
+                    streakEl.className = 'value negative';
+                } else {
+                    streakEl.textContent = '-';
+                    streakEl.className = 'value';
+                }
+            } catch (e) {
+                console.error('Failed to load analytics:', e);
+            }
+        }
+
+        // Load on page ready
+        loadAnalyticsSummary();
+    </script>
 </body>
 </html>

@@ -1661,3 +1661,54 @@ a.rsi-item {
         padding-bottom: max(8px, env(safe-area-inset-bottom));
     }
 }
+
+/* Analytics Summary */
+.analytics-summary .panel {
+    margin-bottom: 20px;
+}
+
+.analytics-summary .analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 15px;
+}
+
+.analytics-summary .analytics-item {
+    background: var(--bg-secondary);
+    padding: 15px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.analytics-summary .analytics-item .label {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 5px;
+}
+
+.analytics-summary .analytics-item .value {
+    display: block;
+    font-size: 1.2rem;
+    font-weight: 600;
+}
+
+.analytics-summary .analytics-item .value.warning {
+    color: var(--warning);
+}
+
+.analytics-summary .analytics-item .value.danger {
+    color: var(--negative);
+}
+
+/* View All link */
+.view-all {
+    float: right;
+    font-size: 0.85rem;
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.view-all:hover {
+    text-decoration: underline;
+}

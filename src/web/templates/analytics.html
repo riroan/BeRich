@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .analytics-card {
+            background: #1a1a2e;
+            border-radius: 8px;
+            padding: 1.25rem;
+        }
+
+        .analytics-card h3 {
+            margin: 0 0 1rem 0;
+            font-size: 1rem;
+            color: #888;
+            border-bottom: 1px solid #2a2a3e;
+            padding-bottom: 0.5rem;
+        }
+
+        .report-tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .report-tab {
+            padding: 0.5rem 1rem;
+            background: #2a2a3e;
+            border: none;
+            border-radius: 4px;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .report-tab.active {
+            background: #e94560;
+            color: white;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #888;
+        }
+
+        .stat-value {
+            font-weight: 600;
+        }
+
+        .stat-value.positive { color: #00d26a; }
+        .stat-value.negative { color: #ff4757; }
+        .stat-value.warning { color: #f1c40f; }
+        .stat-value.danger { color: #e74c3c; }
+
+        .drawdown-alert {
+            padding: 0.75rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+        }
+
+        .drawdown-alert.warning {
+            background: rgba(241, 196, 15, 0.2);
+            border: 1px solid #f1c40f;
+        }
+
+        .drawdown-alert.danger {
+            background: rgba(231, 76, 60, 0.2);
+            border: 1px solid #e74c3c;
+        }
+
+        .drawdown-alert.critical {
+            background: rgba(231, 76, 60, 0.4);
+            border: 2px solid #e74c3c;
+        }
+
+        .symbol-stats-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .symbol-stats-table th,
+        .symbol-stats-table td {
+            padding: 0.5rem;
+            text-align: left;
+            border-bottom: 1px solid #2a2a3e;
+        }
+
+        .symbol-stats-table th {
+            color: #888;
+            font-weight: normal;
+        }
+
+        .time-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 0.5rem;
+        }
+
+        .time-stat-item {
+            text-align: center;
+            padding: 0.5rem;
+            background: #2a2a3e;
+            border-radius: 4px;
+        }
+
+        .time-stat-item .label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+
+        .time-stat-item .value {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .streak-display {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .streak-display.win { color: #00d26a; }
+        .streak-display.loss { color: #ff4757; }
+
+        .chart-container-small {
+            height: 200px;
+            width: 100%;
+        }
+
+        .summary-highlight {
+            text-align: center;
+            padding: 1rem;
+            background: #2a2a3e;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .summary-highlight .value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .summary-highlight .label {
+            color: #888;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Dashboard</a>
+                <h1>Analytics</h1>
+            </div>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                {% endif %}
+                <span class="update-time">
+                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Summary Highlights -->
+        <section class="analytics-grid">
+            <div class="summary-highlight">
+                <div class="value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">
+                    {{ "{:.1f}%".format(statistics.win_rate) }}
+                </div>
+                <div class="label">Overall Win Rate</div>
+            </div>
+            <div class="summary-highlight">
+                <div class="value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">
+                    ${{ "{:,.2f}".format(statistics.total_pnl) }}
+                </div>
+                <div class="label">Total P&L</div>
+            </div>
+            <div class="summary-highlight">
+                <div class="value negative">
+                    {{ "{:.2f}%".format(drawdown.mdd_pct) }}
+                </div>
+                <div class="label">Max Drawdown</div>
+            </div>
+            <div class="summary-highlight">
+                <div class="value">
+                    {{ statistics.profit_factor | round(2) }}
+                </div>
+                <div class="label">Profit Factor</div>
+            </div>
+        </section>
+
+        <!-- Period Reports -->
+        <section class="analytics-card" style="grid-column: 1 / -1;">
+            <h3>Trade Reports</h3>
+            <div class="report-tabs">
+                <button class="report-tab active" data-period="daily">Daily</button>
+                <button class="report-tab" data-period="weekly">Weekly</button>
+                <button class="report-tab" data-period="monthly">Monthly</button>
+            </div>
+
+            <div id="report-content">
+                <div class="analytics-grid">
+                    <div>
+                        <div class="stat-row">
+                            <span class="stat-label">Period</span>
+                            <span class="stat-value" id="report-period">
+                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total Trades</span>
+                            <span class="stat-value" id="report-trades">{{ daily_report.total_trades }}</span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Win Rate</span>
+                            <span class="stat-value {{ 'positive' if daily_report.win_rate >= 50 else 'negative' }}" id="report-winrate">
+                                {{ "{:.1f}%".format(daily_report.win_rate) }}
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">W / L</span>
+                            <span class="stat-value" id="report-wl">
+                                {{ daily_report.winning_trades }} / {{ daily_report.losing_trades }}
+                            </span>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="stat-row">
+                            <span class="stat-label">Total P&L</span>
+                            <span class="stat-value {{ 'positive' if daily_report.total_pnl >= 0 else 'negative' }}" id="report-pnl">
+                                ${{ "{:+,.2f}".format(daily_report.total_pnl) }}
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Avg Win</span>
+                            <span class="stat-value positive" id="report-avgwin">
+                                ${{ "{:,.2f}".format(daily_report.avg_win) }}
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Avg Loss</span>
+                            <span class="stat-value negative" id="report-avgloss">
+                                ${{ "{:,.2f}".format(daily_report.avg_loss) }}
+                            </span>
+                        </div>
+                        <div class="stat-row">
+                            <span class="stat-label">Profit Factor</span>
+                            <span class="stat-value" id="report-pf">
+                                {{ "{:.2f}".format(daily_report.profit_factor) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="analytics-grid">
+            <!-- Drawdown Analysis -->
+            <div class="analytics-card">
+                <h3>Drawdown Analysis</h3>
+
+                {% if drawdown.alert_triggered %}
+                <div class="drawdown-alert {{ drawdown.alert_level }}">
+                    {% if drawdown.alert_level == 'critical' %}
+                    CRITICAL: Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
+                    {% elif drawdown.alert_level == 'danger' %}
+                    WARNING: Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
+                    {% else %}
+                    Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="stat-row">
+                    <span class="stat-label">Current Equity</span>
+                    <span class="stat-value">${{ "{:,.2f}".format(drawdown.current_equity) }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Peak Equity</span>
+                    <span class="stat-value">${{ "{:,.2f}".format(drawdown.peak_equity) }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Current Drawdown</span>
+                    <span class="stat-value {{ 'danger' if drawdown.current_drawdown_pct >= 10 else ('warning' if drawdown.current_drawdown_pct >= 5 else '') }}">
+                        {{ "{:.2f}%".format(drawdown.current_drawdown_pct) }}
+                    </span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Max Drawdown (MDD)</span>
+                    <span class="stat-value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Avg Drawdown</span>
+                    <span class="stat-value">{{ "{:.2f}%".format(drawdown.avg_drawdown_pct) }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Max DD Duration</span>
+                    <span class="stat-value">{{ drawdown.max_drawdown_duration_days }} days</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Current DD Duration</span>
+                    <span class="stat-value">{{ drawdown.current_drawdown_duration_days }} days</span>
+                </div>
+
+                <div id="drawdown-chart" class="chart-container-small" style="margin-top: 1rem;"></div>
+            </div>
+
+            <!-- Streaks -->
+            <div class="analytics-card">
+                <h3>Trading Streaks</h3>
+
+                <div style="text-align: center; margin: 1rem 0;">
+                    <div class="stat-label">Current Streak</div>
+                    <div class="streak-display {{ 'win' if statistics.current_streak > 0 else 'loss' }}">
+                        {% if statistics.current_streak > 0 %}
+                        +{{ statistics.current_streak }}W
+                        {% elif statistics.current_streak < 0 %}
+                        {{ statistics.current_streak }}L
+                        {% else %}
+                        -
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="stat-row">
+                    <span class="stat-label">Max Win Streak</span>
+                    <span class="stat-value positive">{{ statistics.max_win_streak }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Max Loss Streak</span>
+                    <span class="stat-value negative">{{ statistics.max_loss_streak }}</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Last 7 Days Win Rate</span>
+                    <span class="stat-value {{ 'positive' if statistics.last_7_days_win_rate >= 50 else 'negative' }}">
+                        {{ "{:.1f}%".format(statistics.last_7_days_win_rate) }}
+                    </span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">Last 30 Days Win Rate</span>
+                    <span class="stat-value {{ 'positive' if statistics.last_30_days_win_rate >= 50 else 'negative' }}">
+                        {{ "{:.1f}%".format(statistics.last_30_days_win_rate) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Symbol Statistics -->
+        <section class="analytics-card">
+            <h3>Performance by Symbol</h3>
+            {% if statistics.by_symbol %}
+            <table class="symbol-stats-table">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Trades</th>
+                        <th>Win Rate</th>
+                        <th>P&L</th>
+                        <th>PF</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in statistics.by_symbol %}
+                    <tr>
+                        <td><a href="/symbol/{{ s.symbol }}">{{ s.symbol }}</a></td>
+                        <td>{{ s.total_trades }}</td>
+                        <td class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}">
+                            {{ "{:.1f}%".format(s.win_rate) }}
+                        </td>
+                        <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}">
+                            ${{ "{:+,.2f}".format(s.total_pnl) }}
+                        </td>
+                        <td>{{ "{:.2f}".format(s.profit_factor) }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="empty">No trade data available</p>
+            {% endif %}
+        </section>
+
+        <!-- Time-based Statistics -->
+        <div class="analytics-grid">
+            <div class="analytics-card">
+                <h3>Win Rate by Day of Week</h3>
+                {% if statistics.by_day_of_week %}
+                <div class="time-stats-grid">
+                    {% for t in statistics.by_day_of_week %}
+                    <div class="time-stat-item">
+                        <div class="label">{{ t.label }}</div>
+                        <div class="value {{ 'positive' if t.win_rate >= 50 else 'negative' }}">
+                            {{ "{:.0f}%".format(t.win_rate) }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="empty">No data</p>
+                {% endif %}
+            </div>
+
+            <div class="analytics-card">
+                <h3>Win Rate by Hour (KST)</h3>
+                {% if statistics.by_hour %}
+                <div class="time-stats-grid">
+                    {% for t in statistics.by_hour %}
+                    <div class="time-stat-item">
+                        <div class="label">{{ t.label }}</div>
+                        <div class="value {{ 'positive' if t.win_rate >= 50 else 'negative' }}">
+                            {{ "{:.0f}%".format(t.win_rate) }}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="empty">No data</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <footer>
+            <p>BeRich Trading Bot - Analytics</p>
+        </footer>
+    </div>
+
+    <script>
+        // Chart colors
+        const colors = {
+            bg: '#1a1a2e',
+            text: '#eaeaea',
+            grid: '#16213e',
+            line: '#e94560',
+        };
+
+        // Drawdown chart
+        const ddChartContainer = document.getElementById('drawdown-chart');
+        if (ddChartContainer) {
+            const ddChart = LightweightCharts.createChart(ddChartContainer, {
+                layout: {
+                    background: { color: colors.bg },
+                    textColor: colors.text,
+                },
+                grid: {
+                    vertLines: { color: colors.grid },
+                    horzLines: { color: colors.grid },
+                },
+                width: ddChartContainer.clientWidth,
+                height: 200,
+                timeScale: {
+                    timeVisible: true,
+                    secondsVisible: false,
+                },
+                rightPriceScale: {
+                    scaleMargins: { top: 0.1, bottom: 0.1 },
+                },
+            });
+
+            const ddSeries = ddChart.addAreaSeries({
+                lineColor: colors.line,
+                topColor: 'rgba(233, 69, 96, 0.4)',
+                bottomColor: 'rgba(233, 69, 96, 0.0)',
+                lineWidth: 2,
+            });
+
+            // Fetch drawdown data
+            fetch('/api/analytics/drawdown')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.history && data.history.length > 0) {
+                        const chartData = data.history.map(p => ({
+                            time: Math.floor(new Date(p.timestamp).getTime() / 1000),
+                            value: p.drawdown_pct,
+                        }));
+                        ddSeries.setData(chartData);
+                        ddChart.timeScale().fitContent();
+                    }
+                });
+
+            window.addEventListener('resize', () => {
+                ddChart.applyOptions({ width: ddChartContainer.clientWidth });
+            });
+        }
+
+        // Report tabs
+        const reportTabs = document.querySelectorAll('.report-tab');
+        reportTabs.forEach(tab => {
+            tab.addEventListener('click', async () => {
+                reportTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                const period = tab.dataset.period;
+                const res = await fetch(`/api/analytics/reports?period=${period}`);
+                const data = await res.json();
+
+                document.getElementById('report-period').textContent = data.start_date.split('T')[0];
+                document.getElementById('report-trades').textContent = data.total_trades;
+                document.getElementById('report-winrate').textContent = data.win_rate.toFixed(1) + '%';
+                document.getElementById('report-winrate').className = 'stat-value ' + (data.win_rate >= 50 ? 'positive' : 'negative');
+                document.getElementById('report-wl').textContent = `${data.winning_trades} / ${data.losing_trades}`;
+                document.getElementById('report-pnl').textContent = '$' + data.total_pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('report-pnl').className = 'stat-value ' + (data.total_pnl >= 0 ? 'positive' : 'negative');
+                document.getElementById('report-avgwin').textContent = '$' + data.avg_win.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('report-avgloss').textContent = '$' + data.avg_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('report-pf').textContent = data.profit_factor.toFixed(2);
+            });
+        });
+    </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="/">
+            <span class="icon">📊</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="/trades">
+            <span class="icon">📝</span>
+            <span>Trades</span>
+        </a>
+        <a href="/performance">
+            <span class="icon">📈</span>
+            <span>Performance</span>
+        </a>
+        <a href="/analytics" class="active">
+            <span class="icon">🔬</span>
+            <span>Analytics</span>
+        </a>
+        <a href="/logout">
+            <span class="icon">🚪</span>
+            <span>Logout</span>
+        </a>
+    </nav>
+</body>
+</html>

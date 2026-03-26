@@ -993,6 +993,162 @@ def create_app() -> FastAPI:
         """Get equity curve data"""
         return {"data": dashboard_state.equity_history}
 
+    # ==================== Analytics Routes ====================
+
+    @app.get("/analytics", response_class=HTMLResponse)
+    async def analytics_page(request: Request):
+        """Analytics page with reports, drawdown, and statistics"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        from src.analytics import ReportGenerator, DrawdownAnalyzer, TradeStatistics
+
+        # Generate reports
+        report_gen = ReportGenerator(
+            fills=dashboard_state.fills,
+            equity_history=dashboard_state.equity_history,
+        )
+        daily_report = report_gen.generate_daily_report()
+        weekly_report = report_gen.generate_weekly_report()
+        monthly_report = report_gen.generate_monthly_report()
+
+        # Drawdown analysis
+        dd_analyzer = DrawdownAnalyzer(dashboard_state.equity_history)
+        drawdown = dd_analyzer.analyze("usd")
+
+        # Trade statistics
+        stats_calc = TradeStatistics(dashboard_state.fills)
+        statistics = stats_calc.calculate()
+
+        context = {
+            "request": request,
+            "daily_report": daily_report,
+            "weekly_report": weekly_report,
+            "monthly_report": monthly_report,
+            "drawdown": drawdown,
+            "statistics": statistics,
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="analytics.html",
+            context=context,
+        )
+
+    @app.get("/api/analytics/reports")
+    async def get_analytics_reports(period: str = "daily"):
+        """Get trade reports"""
+        from src.analytics import ReportGenerator
+
+        report_gen = ReportGenerator(
+            fills=dashboard_state.fills,
+            equity_history=dashboard_state.equity_history,
+        )
+
+        if period == "daily":
+            report = report_gen.generate_daily_report()
+        elif period == "weekly":
+            report = report_gen.generate_weekly_report()
+        elif period == "monthly":
+            report = report_gen.generate_monthly_report()
+        else:
+            report = report_gen.generate_daily_report()
+
+        return {
+            "period_type": report.period_type,
+            "start_date": report.start_date.isoformat(),
+            "end_date": report.end_date.isoformat(),
+            "total_trades": report.total_trades,
+            "winning_trades": report.winning_trades,
+            "losing_trades": report.losing_trades,
+            "win_rate": report.win_rate,
+            "total_pnl": float(report.total_pnl),
+            "avg_win": float(report.avg_win),
+            "avg_loss": float(report.avg_loss),
+            "profit_factor": report.profit_factor,
+            "best_trade": float(report.best_trade),
+            "worst_trade": float(report.worst_trade),
+            "return_pct": report.return_pct,
+            "by_symbol": {k: {
+                "trades": v["trades"],
+                "wins": v["wins"],
+                "losses": v["losses"],
+                "pnl": float(v["pnl"]),
+            } for k, v in report.by_symbol.items()},
+        }
+
+    @app.get("/api/analytics/drawdown")
+    async def get_analytics_drawdown(currency: str = "usd"):
+        """Get drawdown analysis"""
+        from src.analytics import DrawdownAnalyzer
+
+        analyzer = DrawdownAnalyzer(dashboard_state.equity_history)
+        analysis = analyzer.analyze(currency)
+
+        return {
+            "current_equity": float(analysis.current_equity),
+            "peak_equity": float(analysis.peak_equity),
+            "current_drawdown": float(analysis.current_drawdown),
+            "current_drawdown_pct": analysis.current_drawdown_pct,
+            "mdd": float(analysis.mdd),
+            "mdd_pct": analysis.mdd_pct,
+            "mdd_start": analysis.mdd_start.isoformat() if analysis.mdd_start else None,
+            "mdd_bottom": analysis.mdd_bottom.isoformat() if analysis.mdd_bottom else None,
+            "avg_drawdown_pct": analysis.avg_drawdown_pct,
+            "max_drawdown_duration_days": analysis.max_drawdown_duration_days,
+            "current_drawdown_duration_days": analysis.current_drawdown_duration_days,
+            "alert_triggered": analysis.alert_triggered,
+            "alert_level": analysis.alert_level,
+            "history": analysis.drawdown_history[-100:],  # Last 100 points
+        }
+
+    @app.get("/api/analytics/statistics")
+    async def get_analytics_statistics():
+        """Get trade statistics"""
+        from src.analytics import TradeStatistics
+
+        calc = TradeStatistics(dashboard_state.fills)
+        stats = calc.calculate()
+
+        return {
+            "total_trades": stats.total_trades,
+            "winning_trades": stats.winning_trades,
+            "losing_trades": stats.losing_trades,
+            "win_rate": stats.win_rate,
+            "total_pnl": float(stats.total_pnl),
+            "avg_pnl": float(stats.avg_pnl),
+            "avg_win": float(stats.avg_win),
+            "avg_loss": float(stats.avg_loss),
+            "best_trade": float(stats.best_trade),
+            "worst_trade": float(stats.worst_trade),
+            "profit_factor": stats.profit_factor,
+            "current_streak": stats.current_streak,
+            "max_win_streak": stats.max_win_streak,
+            "max_loss_streak": stats.max_loss_streak,
+            "last_7_days_win_rate": stats.last_7_days_win_rate,
+            "last_30_days_win_rate": stats.last_30_days_win_rate,
+            "by_symbol": [{
+                "symbol": s.symbol,
+                "total_trades": s.total_trades,
+                "win_rate": s.win_rate,
+                "total_pnl": float(s.total_pnl),
+                "profit_factor": s.profit_factor,
+            } for s in stats.by_symbol],
+            "by_hour": [{
+                "label": t.label,
+                "total_trades": t.total_trades,
+                "win_rate": t.win_rate,
+                "total_pnl": float(t.total_pnl),
+            } for t in stats.by_hour],
+            "by_day_of_week": [{
+                "label": t.label,
+                "total_trades": t.total_trades,
+                "win_rate": t.win_rate,
+                "total_pnl": float(t.total_pnl),
+            } for t in stats.by_day_of_week],
+        }
+
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         """WebSocket endpoint for real-time updates"""
