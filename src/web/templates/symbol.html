@@ -249,7 +249,7 @@
         // Fetch and display data
         async function loadChartData() {
             try {
-                const response = await fetch(`/api/symbol/${symbol}/history?limit=200`);
+                const response = await fetch(`/api/symbol/${symbol}/history?limit=2000`);
                 const data = await response.json();
 
                 if (data.prices && data.prices.length > 0) {

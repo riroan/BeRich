@@ -156,8 +156,8 @@ class TradingBot:
             notifier=self.notifier,
         )
 
-        # Initialize scheduler (1 minute interval)
-        self.scheduler = TradingScheduler(interval_seconds=60)
+        # Initialize scheduler (1 minute interval, US market only)
+        self.scheduler = TradingScheduler(interval_seconds=60, us_only=True)
         self.scheduler.add_callback(self._on_tick)
 
         logger.info("Trading Bot initialized successfully")
@@ -642,7 +642,7 @@ class TradingBot:
             logger.info(f"Loading chart history for {len(symbols)} symbols...")
 
             for symbol in symbols:
-                history = await self.storage.get_price_rsi_history(symbol, limit=200)
+                history = await self.storage.get_price_rsi_history(symbol, limit=2000)
 
                 for record in history:
                     # Add price point
