@@ -7,7 +7,7 @@ from sqlalchemy import select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market
-from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol
+from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol, StrategyParams
 
 logger = logging.getLogger(__name__)
 
@@ -507,4 +507,87 @@ class Storage:
                     await session.commit()
                     count += 1
 
+        return count
+
+    # ==================== Strategy Params ====================
+
+    async def get_strategy_params(
+        self, strategy_name: str,
+    ) -> Optional[dict]:
+        """Get strategy params from DB (JSON parsed)"""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyParams).where(
+                StrategyParams.strategy_name == strategy_name,
+            )
+            result = await session.execute(query)
+            row = result.scalar_one_or_none()
+            if not row:
+                return None
+            return json.loads(row.params_json)
+
+    async def get_all_strategy_params(self) -> List[dict]:
+        """Get all strategy params"""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyParams).order_by(
+                StrategyParams.strategy_name,
+            )
+            result = await session.execute(query)
+            rows = result.scalars().all()
+            return [
+                {
+                    "strategy_name": row.strategy_name,
+                    "params": json.loads(row.params_json),
+                    "updated_at": (
+                        row.updated_at.strftime("%Y-%m-%d %H:%M")
+                        if row.updated_at else None
+                    ),
+                }
+                for row in rows
+            ]
+
+    async def save_strategy_params(
+        self, strategy_name: str, params: dict,
+    ) -> None:
+        """Save or update strategy params"""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyParams).where(
+                StrategyParams.strategy_name == strategy_name,
+            )
+            result = await session.execute(query)
+            existing = result.scalar_one_or_none()
+
+            params_json = json.dumps(params)
+
+            if existing:
+                existing.params_json = params_json
+                existing.updated_at = datetime.now()
+            else:
+                record = StrategyParams(
+                    strategy_name=strategy_name,
+                    params_json=params_json,
+                )
+                session.add(record)
+
+            await session.commit()
+
+    async def seed_strategy_params(
+        self, strategies_config: list,
+    ) -> int:
+        """Seed strategy params from YAML config"""
+        count = 0
+        for strategy in strategies_config:
+            if not strategy.get("enabled"):
+                continue
+            name = strategy["name"]
+            params = strategy.get("params", {})
+            if not params:
+                continue
+
+            existing = await self.get_strategy_params(name)
+            if existing is None:
+                await self.save_strategy_params(name, params)
+                count += 1
         return count

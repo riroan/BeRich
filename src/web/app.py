@@ -242,6 +242,9 @@ class DashboardState:
         # KIS auth token (shared from bot's broker)
         self.kis_auth_token: Optional[str] = None
 
+        # Live strategy instances (set by bot)
+        self.strategy_instances: Optional[List[Any]] = None
+
     def update_position(
         self,
         symbol: str,
@@ -1236,6 +1239,123 @@ def create_app() -> FastAPI:
             return result
         finally:
             await storage.close()
+
+    # ==================== Strategy Settings Routes ====================
+
+    class StrategyParamsUpdate(BaseModel):
+        strategy_name: str
+        params: Dict[str, Any]
+
+    @app.get("/settings", response_class=HTMLResponse)
+    async def settings_page(request: Request):
+        """Strategy settings page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        # Get params from DB
+        all_params = []
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                all_params = (
+                    await storage.get_all_strategy_params()
+                )
+            finally:
+                await storage.close()
+
+        # Get current live params from strategies
+        live_params = {}
+        for strategy in (
+            dashboard_state.strategy_instances or []
+        ):
+            live_params[strategy.name_with_market] = (
+                dict(strategy.params)
+            )
+
+        context = {
+            "request": request,
+            "all_params": all_params,
+            "live_params": live_params,
+            "strategy_names": dashboard_state.strategy_names,
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="settings.html",
+            context=context,
+        )
+
+    @app.get("/api/settings")
+    async def get_settings():
+        """Get all strategy params"""
+        storage = await _get_web_storage()
+        if not storage:
+            return {"params": []}
+        try:
+            params = await storage.get_all_strategy_params()
+            return {"params": params}
+        finally:
+            await storage.close()
+
+    @app.get("/api/settings/{strategy_name}")
+    async def get_strategy_settings(strategy_name: str):
+        """Get params for a strategy"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503,
+                detail="Storage not available",
+            )
+        try:
+            params = await storage.get_strategy_params(
+                strategy_name,
+            )
+            if params is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Strategy not found",
+                )
+            return {"strategy_name": strategy_name, "params": params}
+        finally:
+            await storage.close()
+
+    @app.post("/api/settings")
+    async def update_settings(body: StrategyParamsUpdate):
+        """Update strategy params (saves to DB + live update)"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503,
+                detail="Storage not available",
+            )
+
+        try:
+            await storage.save_strategy_params(
+                body.strategy_name, body.params,
+            )
+        finally:
+            await storage.close()
+
+        # Live update: apply to running strategy
+        applied = False
+        for strategy in (
+            dashboard_state.strategy_instances or []
+        ):
+            if strategy.name_with_market == body.strategy_name:
+                strategy.params.update(body.params)
+                applied = True
+                logger.info(
+                    f"Live params updated: {body.strategy_name}"
+                )
+                break
+
+        return {
+            "success": True,
+            "applied_live": applied,
+            "strategy_name": body.strategy_name,
+            "params": body.params,
+        }
 
     # ==================== Analytics Routes ====================
 

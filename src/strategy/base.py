@@ -35,6 +35,11 @@ class BaseStrategy(ABC):
         """Minimum number of bars required"""
         return 100
 
+    @property
+    def name_with_market(self) -> str:
+        """Unique name including market (matches config name)"""
+        return f"{self.market.value.upper()}_{self.name}"
+
     def initialize(self, historical_bars: Dict[str, List[Bar]]) -> None:
         """Initialize strategy with historical data"""
         for symbol, bars in historical_bars.items():

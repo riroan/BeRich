@@ -1835,3 +1835,94 @@ a.rsi-item {
 .symbols-section {
     margin-bottom: 16px;
 }
+
+/* ==================== Strategy Settings ==================== */
+
+.settings-section {
+    margin-bottom: 16px;
+}
+
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.param-group {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.param-group label {
+    min-width: 140px;
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.param-input {
+    width: 100px;
+}
+
+.param-hint {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+
+.levels-group {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.levels-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 100%;
+}
+
+.level-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.level-label {
+    min-width: 30px;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.level-input {
+    width: 70px;
+}
+
+.level-sep {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.level-unit {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+.form-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-top: 8px;
+}
+
+.save-status {
+    font-size: 0.85rem;
+}
+
+.save-status.success {
+    color: var(--positive);
+}
+
+.save-status.error {
+    color: var(--negative);
+}

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Enum as SQLEnum, Index
+from sqlalchemy import Column, Integer, String, DateTime, Numeric, Text, Enum as SQLEnum, Index
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -131,3 +131,14 @@ class WatchedSymbol(Base):
     __table_args__ = (
         Index("idx_watched_symbol_strategy", "symbol", "strategy_name", unique=True),
     )
+
+
+class StrategyParams(Base):
+    """Strategy parameters (overrides YAML defaults)"""
+
+    __tablename__ = "strategy_params"
+
+    id = Column(Integer, primary_key=True)
+    strategy_name = Column(String(100), unique=True, nullable=False)
+    params_json = Column(Text, nullable=False)  # JSON string
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

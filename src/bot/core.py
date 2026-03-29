@@ -116,6 +116,11 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         )
         await self._load_strategies()
 
+        # Share strategy instances for live param updates
+        self.dashboard.strategy_instances = (
+            self.strategy_engine.get_strategies()
+        )
+
         # Initialize order manager
         self.order_manager = OrderManager(
             event_bus=self.event_bus,
@@ -217,6 +222,25 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             if s.get("enabled")
         ]
 
+        # Seed strategy params on first run
+        all_db_params = await self.storage.get_all_strategy_params()
+        if not all_db_params:
+            count = await self.storage.seed_strategy_params(
+                self.config.strategies,
+            )
+            logger.info(
+                f"Seeded {count} strategy params to DB"
+            )
+            all_db_params = (
+                await self.storage.get_all_strategy_params()
+            )
+
+        # Build params lookup by strategy name
+        db_params_map = {
+            p["strategy_name"]: p["params"]
+            for p in all_db_params
+        }
+
         for strategy_config in self.config.strategies:
             if not strategy_config.get("enabled"):
                 continue
@@ -244,13 +268,21 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                 )
 
                 if not symbols:
-                    logger.warning(f"No symbols for {name}, skipping")
+                    logger.warning(
+                        f"No symbols for {name}, skipping"
+                    )
                     continue
+
+                # Use DB params if available, fallback to config
+                params = db_params_map.get(
+                    name,
+                    strategy_config.get("params", {}),
+                )
 
                 strategy = strategy_class(
                     symbols=symbols,
                     market=market,
-                    params=strategy_config.get("params", {}),
+                    params=params,
                 )
 
                 self.strategy_engine.register_strategy(strategy)
