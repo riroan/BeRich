@@ -113,3 +113,21 @@ class EquitySnapshot(Base):
     __table_args__ = (
         Index("idx_equity_timestamp", "timestamp"),
     )
+
+
+class WatchedSymbol(Base):
+    """Tracked symbols for trading strategies"""
+
+    __tablename__ = "watched_symbols"
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(20), nullable=False)
+    market = Column(SQLEnum(Market), nullable=False)
+    strategy_name = Column(String(100), nullable=False)
+    enabled = Column(Integer, default=1)  # 1=True, 0=False
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        Index("idx_watched_symbol_strategy", "symbol", "strategy_name", unique=True),
+    )

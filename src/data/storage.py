@@ -7,7 +7,7 @@ from sqlalchemy import select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market
-from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot
+from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol
 
 logger = logging.getLogger(__name__)
 
@@ -357,3 +357,154 @@ class Storage:
                 }
                 for row in rows
             ]
+
+    # ==================== Watched Symbols ====================
+
+    async def get_watched_symbols(
+        self,
+        strategy_name: Optional[str] = None,
+        enabled_only: bool = True,
+    ) -> List[dict]:
+        """Get all watched symbols"""
+        async with self.async_session() as session:
+            query = select(WatchedSymbol)
+
+            if strategy_name:
+                query = query.where(WatchedSymbol.strategy_name == strategy_name)
+            if enabled_only:
+                query = query.where(WatchedSymbol.enabled == 1)
+
+            query = query.order_by(WatchedSymbol.strategy_name, WatchedSymbol.symbol)
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "id": row.id,
+                    "symbol": row.symbol,
+                    "market": row.market.value if row.market else None,
+                    "strategy_name": row.strategy_name,
+                    "enabled": bool(row.enabled),
+                    "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else None,
+                    "updated_at": row.updated_at.strftime("%Y-%m-%d %H:%M") if row.updated_at else None,
+                }
+                for row in rows
+            ]
+
+    async def add_watched_symbol(
+        self,
+        symbol: str,
+        market: Market,
+        strategy_name: str,
+    ) -> dict:
+        """Add a new watched symbol"""
+        async with self.async_session() as session:
+            # Check for duplicate
+            query = select(WatchedSymbol).where(
+                WatchedSymbol.symbol == symbol,
+                WatchedSymbol.strategy_name == strategy_name,
+            )
+            result = await session.execute(query)
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                return {
+                    "id": existing.id,
+                    "symbol": existing.symbol,
+                    "market": existing.market.value,
+                    "strategy_name": existing.strategy_name,
+                    "enabled": bool(existing.enabled),
+                    "duplicate": True,
+                }
+
+            record = WatchedSymbol(
+                symbol=symbol.upper(),
+                market=market,
+                strategy_name=strategy_name,
+                enabled=1,
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+
+            return {
+                "id": record.id,
+                "symbol": record.symbol,
+                "market": record.market.value,
+                "strategy_name": record.strategy_name,
+                "enabled": True,
+                "duplicate": False,
+            }
+
+    async def remove_watched_symbol(self, symbol_id: int) -> bool:
+        """Remove a watched symbol by ID"""
+        async with self.async_session() as session:
+            query = select(WatchedSymbol).where(WatchedSymbol.id == symbol_id)
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+
+            if not record:
+                return False
+
+            await session.delete(record)
+            await session.commit()
+            return True
+
+    async def toggle_watched_symbol(self, symbol_id: int) -> Optional[dict]:
+        """Toggle enabled/disabled for a watched symbol"""
+        async with self.async_session() as session:
+            query = select(WatchedSymbol).where(WatchedSymbol.id == symbol_id)
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+
+            if not record:
+                return None
+
+            record.enabled = 0 if record.enabled else 1
+            record.updated_at = datetime.now()
+            await session.commit()
+
+            return {
+                "id": record.id,
+                "symbol": record.symbol,
+                "market": record.market.value,
+                "strategy_name": record.strategy_name,
+                "enabled": bool(record.enabled),
+            }
+
+    async def seed_watched_symbols(self, strategies_config: list) -> int:
+        """Seed watched symbols from YAML config (only if not already in DB)"""
+        count = 0
+        market_map = {
+            "krx": Market.KRX,
+            "nyse": Market.NYSE,
+            "nasdaq": Market.NASDAQ,
+            "amex": Market.AMEX,
+        }
+
+        for strategy in strategies_config:
+            strategy_name = strategy["name"]
+            market = market_map.get(strategy["market"].lower(), Market.KRX)
+
+            for symbol in strategy.get("symbols", []):
+                async with self.async_session() as session:
+                    # Check if already exists
+                    query = select(WatchedSymbol).where(
+                        WatchedSymbol.symbol == symbol,
+                        WatchedSymbol.strategy_name == strategy_name,
+                    )
+                    result = await session.execute(query)
+                    if result.scalar_one_or_none():
+                        continue
+
+                    record = WatchedSymbol(
+                        symbol=symbol,
+                        market=market,
+                        strategy_name=strategy_name,
+                        enabled=1 if strategy.get("enabled", True) else 0,
+                    )
+                    session.add(record)
+                    await session.commit()
+                    count += 1
+
+        return count

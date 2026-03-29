@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symbol Management - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Dashboard</a>
+                <h1>Symbol Management</h1>
+            </div>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                {% endif %}
+                <span class="update-time">
+                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Info Banner -->
+        <div class="info-banner">
+            Changes take effect on next bot restart.
+        </div>
+
+        <!-- Add Symbol Form -->
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Add Symbol</h2>
+                <div class="add-symbol-form">
+                    <input type="text" id="symbol-input" placeholder="Symbol (e.g. AAPL)" class="form-input" />
+                    <select id="market-select" class="form-select">
+                        {% for market in markets %}
+                        <option value="{{ market }}">{{ market | upper }}</option>
+                        {% endfor %}
+                    </select>
+                    <select id="strategy-select" class="form-select">
+                        {% for name in strategy_names %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                    <button onclick="addSymbol()" class="btn-add">Add</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Symbols Table -->
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Tracked Symbols ({{ symbols|length }})</h2>
+
+                <!-- Filters -->
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    {% for name in strategy_names %}
+                    <button class="filter-btn" data-filter="{{ name }}">{{ name.split('_')[0] }}</button>
+                    {% endfor %}
+                </div>
+
+                <table class="trades-table full symbols-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Market</th>
+                            <th>Strategy</th>
+                            <th>Enabled</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in symbols %}
+                        <tr data-strategy="{{ s.strategy_name }}" data-id="{{ s.id }}">
+                            <td class="symbol">
+                                <a href="/symbol/{{ s.symbol }}">{{ s.symbol }}</a>
+                            </td>
+                            <td>{{ s.market | upper }}</td>
+                            <td>{{ s.strategy_name }}</td>
+                            <td>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" {{ 'checked' if s.enabled else '' }}
+                                           onchange="toggleSymbol({{ s.id }})" />
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </td>
+                            <td class="time">{{ s.created_at or '-' }}</td>
+                            <td>
+                                <button class="btn-delete" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">Delete</button>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="6" class="empty">No symbols tracked. Add a symbol above or restart the bot to seed from config.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Summary Stats -->
+        <section class="trade-stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Symbols</h3>
+                    <p class="value">{{ symbols|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Enabled</h3>
+                    <p class="value positive">{{ symbols|selectattr('enabled')|list|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Disabled</h3>
+                    <p class="value negative">{{ symbols|rejectattr('enabled')|list|length }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Strategies</h3>
+                    <p class="value">{{ strategy_names|length }}</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot - Symbol Management</p>
+        </footer>
+    </div>
+
+    <script>
+        async function addSymbol() {
+            const symbol = document.getElementById('symbol-input').value.trim();
+            const market = document.getElementById('market-select').value;
+            const strategyName = document.getElementById('strategy-select').value;
+            const btn = document.querySelector('.btn-add');
+
+            if (!symbol) {
+                alert('Symbol is required');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = 'Validating...';
+
+            try {
+                const resp = await fetch('/api/symbols', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({symbol, market, strategy_name: strategyName}),
+                });
+                const data = await resp.json();
+
+                if (!resp.ok) {
+                    alert(data.detail || 'Failed to add symbol');
+                    return;
+                }
+
+                if (data.duplicate) {
+                    alert(`${symbol} already exists in ${strategyName}`);
+                } else {
+                    location.reload();
+                }
+            } catch (e) {
+                alert('Failed to add symbol: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Add';
+            }
+        }
+
+        async function toggleSymbol(id) {
+            try {
+                await fetch(`/api/symbols/${id}/toggle`, {method: 'POST'});
+            } catch (e) {
+                alert('Failed to toggle: ' + e.message);
+                location.reload();
+            }
+        }
+
+        async function removeSymbol(id, symbol) {
+            if (!confirm(`Delete ${symbol}?`)) return;
+
+            try {
+                const resp = await fetch(`/api/symbols/${id}`, {method: 'DELETE'});
+                if (resp.ok) {
+                    document.querySelector(`tr[data-id="${id}"]`).remove();
+                }
+            } catch (e) {
+                alert('Failed to delete: ' + e.message);
+            }
+        }
+
+        // Filter functionality
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const filter = this.dataset.filter;
+
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+
+                document.querySelectorAll('.symbols-table tbody tr').forEach(row => {
+                    if (filter === 'all') {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = row.dataset.strategy === filter ? '' : 'none';
+                    }
+                });
+            });
+        });
+
+        // Enter key to add
+        document.getElementById('symbol-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') addSymbol();
+        });
+    </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="/">
+            <span class="icon">📊</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="/symbols" class="active">
+            <span class="icon">🔍</span>
+            <span>Symbols</span>
+        </a>
+        <a href="/trades">
+            <span class="icon">📝</span>
+            <span>Trades</span>
+        </a>
+        <a href="/performance">
+            <span class="icon">📈</span>
+            <span>Performance</span>
+        </a>
+    </nav>
+</body>
+</html>

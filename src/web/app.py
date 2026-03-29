@@ -227,6 +227,21 @@ class DashboardState:
         # Fills for performance calculation
         self.fills: List[Dict[str, Any]] = []
 
+        # Storage reference (set by bot on init - NOT usable from web thread)
+        self.storage = None
+
+        # Database URL for web-local storage
+        self.db_url: Optional[str] = None
+
+        # Strategy names from config
+        self.strategy_names: List[str] = []
+
+        # KIS API config for symbol validation
+        self.kis_config: Optional[Dict[str, Any]] = None
+
+        # KIS auth token (shared from bot's broker)
+        self.kis_auth_token: Optional[str] = None
+
     def update_position(
         self,
         symbol: str,
@@ -992,6 +1007,235 @@ def create_app() -> FastAPI:
     async def get_equity_history():
         """Get equity curve data"""
         return {"data": dashboard_state.equity_history}
+
+    # ==================== Symbol Management Routes ====================
+
+    class WatchedSymbolCreate(BaseModel):
+        symbol: str
+        market: str
+        strategy_name: str
+
+    async def _get_web_storage():
+        """Get a storage instance for web requests (own event loop)"""
+        if not dashboard_state.db_url:
+            return None
+        from src.data.storage import Storage
+        storage = Storage(dashboard_state.db_url)
+        await storage.initialize()
+        return storage
+
+    @app.get("/symbols", response_class=HTMLResponse)
+    async def symbols_page(request: Request):
+        """Symbol management page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        symbols = []
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                symbols = await storage.get_watched_symbols(
+                    enabled_only=False,
+                )
+            finally:
+                await storage.close()
+
+        context = {
+            "request": request,
+            "symbols": symbols,
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+            "markets": ["krx", "nasdaq", "nyse", "amex"],
+            "strategy_names": dashboard_state.strategy_names,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="symbols.html",
+            context=context,
+        )
+
+    @app.get("/api/symbols")
+    async def get_symbols(
+        strategy_name: str = None,
+        enabled_only: bool = False,
+    ):
+        """Get watched symbols"""
+        storage = await _get_web_storage()
+        if not storage:
+            return {"error": "Storage not available", "symbols": []}
+        try:
+            symbols = await storage.get_watched_symbols(
+                strategy_name=strategy_name,
+                enabled_only=enabled_only,
+            )
+            return {"symbols": symbols}
+        finally:
+            await storage.close()
+
+    async def _validate_symbol_kis(
+        symbol: str, market_code: str, kis_config: dict,
+        auth_token: str,
+    ) -> dict:
+        """Validate symbol via KIS API using shared token"""
+        import aiohttp
+
+        base_url = (
+            "https://openapivts.koreainvestment.com:29443"
+            if kis_config.get("paper_trading")
+            else "https://openapi.koreainvestment.com:9443"
+        )
+
+        headers = {
+            "content-type": "application/json; charset=utf-8",
+            "authorization": f"Bearer {auth_token}",
+            "appkey": kis_config["app_key"],
+            "appsecret": kis_config["app_secret"],
+            "custtype": "P",
+        }
+
+        if market_code == "krx":
+            headers["tr_id"] = "FHKST01010100"
+            endpoint = (
+                "/uapi/domestic-stock/v1"
+                "/quotations/inquire-price"
+            )
+            params = {
+                "FID_COND_MRKT_DIV_CODE": "J",
+                "FID_INPUT_ISCD": symbol,
+            }
+        else:
+            headers["tr_id"] = "HHDFS00000300"
+            endpoint = (
+                "/uapi/overseas-price/v1"
+                "/quotations/price"
+            )
+            excd_map = {
+                "nyse": "NYS",
+                "nasdaq": "NAS",
+                "amex": "AMS",
+            }
+            params = {
+                "AUTH": "",
+                "EXCD": excd_map.get(market_code, "NAS"),
+                "SYMB": symbol,
+            }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{base_url}{endpoint}",
+                headers=headers,
+                params=params,
+            ) as resp:
+                data = await resp.json()
+
+        if data.get("rt_cd") != "0":
+            return {
+                "valid": False,
+                "error": data.get("msg1", "Unknown error"),
+            }
+
+        # Check price exists
+        output = data.get("output", {})
+        if market_code == "krx":
+            price = output.get("stck_prpr", "0")
+        else:
+            price = output.get("last", "0")
+
+        if not price or price == "0":
+            return {
+                "valid": False,
+                "error": f"No price data for {symbol}",
+            }
+
+        return {"valid": True, "price": price}
+
+    @app.post("/api/symbols")
+    async def add_symbol(body: WatchedSymbolCreate):
+        """Add a watched symbol"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        from src.core.types import Market
+        market_map = {
+            "krx": Market.KRX,
+            "nyse": Market.NYSE,
+            "nasdaq": Market.NASDAQ,
+            "amex": Market.AMEX,
+        }
+        market = market_map.get(body.market.lower())
+        if not market:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid market: {body.market}",
+            )
+
+        # Validate symbol via KIS API
+        if dashboard_state.kis_config and dashboard_state.kis_auth_token:
+            validation = await _validate_symbol_kis(
+                symbol=body.symbol.upper(),
+                market_code=body.market.lower(),
+                kis_config=dashboard_state.kis_config,
+                auth_token=dashboard_state.kis_auth_token,
+            )
+            if not validation["valid"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Invalid symbol '{body.symbol}': "
+                        f"{validation['error']}"
+                    ),
+                )
+
+        try:
+            result = await storage.add_watched_symbol(
+                symbol=body.symbol.upper(),
+                market=market,
+                strategy_name=body.strategy_name,
+            )
+            return result
+        finally:
+            await storage.close()
+
+    @app.delete("/api/symbols/{symbol_id}")
+    async def delete_symbol(symbol_id: int):
+        """Remove a watched symbol"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        try:
+            deleted = await storage.remove_watched_symbol(symbol_id)
+            if not deleted:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+            return {"success": True}
+        finally:
+            await storage.close()
+
+    @app.post("/api/symbols/{symbol_id}/toggle")
+    async def toggle_symbol(symbol_id: int):
+        """Toggle symbol enabled/disabled"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        try:
+            result = await storage.toggle_watched_symbol(symbol_id)
+            if not result:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+            return result
+        finally:
+            await storage.close()
 
     # ==================== Analytics Routes ====================
 

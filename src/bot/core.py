@@ -78,6 +78,18 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self.storage = Storage(db_url)
         await self.storage.initialize()
 
+        # Wire storage and config to dashboard for web API access
+        self.dashboard.storage = self.storage
+        self.dashboard.db_url = db_url
+
+        # Share KIS config and auth token for symbol validation
+        kis_config = self.config.get_kis_config()
+        self.dashboard.kis_config = {
+            "app_key": kis_config["app_key"],
+            "app_secret": kis_config["app_secret"],
+            "paper_trading": kis_config["paper_trading"],
+        }
+
         # Initialize risk manager
         risk_config = self.config.get_risk_config()
         limits = RiskLimits.from_config(risk_config)
@@ -86,8 +98,12 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             account_value=Decimal("100000000"),
         )
 
-        # Initialize broker
+        # Initialize broker and share auth token
         await self._initialize_broker()
+        if self.broker and self.broker._auth._access_token:
+            self.dashboard.kis_auth_token = (
+                self.broker._auth._access_token
+            )
 
         # Initialize notifier
         self._initialize_notifier()
@@ -169,7 +185,38 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             logger.info("Discord notifications disabled")
 
     async def _load_strategies(self) -> None:
-        """Load strategies from config"""
+        """Load strategies from config, using DB symbols if available"""
+        from collections import defaultdict
+
+        # Check if DB has watched symbols
+        db_symbols = await self.storage.get_watched_symbols(
+            enabled_only=True,
+        )
+
+        if not db_symbols:
+            # Seed DB from config on first run
+            count = await self.storage.seed_watched_symbols(
+                self.config.strategies,
+            )
+            logger.info(f"Seeded {count} symbols from config to DB")
+            db_symbols = await self.storage.get_watched_symbols(
+                enabled_only=True,
+            )
+
+        # Group DB symbols by strategy_name
+        symbols_by_strategy = defaultdict(list)
+        for s in db_symbols:
+            symbols_by_strategy[s["strategy_name"]].append(
+                s["symbol"]
+            )
+
+        # Store strategy names for web UI
+        self.dashboard.strategy_names = [
+            s["name"]
+            for s in self.config.strategies
+            if s.get("enabled")
+        ]
+
         for strategy_config in self.config.strategies:
             if not strategy_config.get("enabled"):
                 continue
@@ -186,19 +233,37 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                     "nasdaq": Market.NASDAQ,
                     "amex": Market.AMEX,
                 }
-                market = market_map.get(strategy_config["market"].lower(), Market.KRX)
+                market = market_map.get(
+                    strategy_config["market"].lower(), Market.KRX,
+                )
+
+                # Use DB symbols if available, fallback to config
+                name = strategy_config["name"]
+                symbols = symbols_by_strategy.get(
+                    name, strategy_config["symbols"],
+                )
+
+                if not symbols:
+                    logger.warning(f"No symbols for {name}, skipping")
+                    continue
 
                 strategy = strategy_class(
-                    symbols=strategy_config["symbols"],
+                    symbols=symbols,
                     market=market,
                     params=strategy_config.get("params", {}),
                 )
 
                 self.strategy_engine.register_strategy(strategy)
-                logger.info(f"Strategy loaded: {strategy_config['name']}")
+                logger.info(
+                    f"Strategy loaded: {name} "
+                    f"({len(symbols)} symbols)"
+                )
 
             except Exception as e:
-                logger.error(f"Failed to load strategy {strategy_config['name']}: {e}")
+                logger.error(
+                    f"Failed to load strategy "
+                    f"{strategy_config['name']}: {e}"
+                )
 
     async def start(self) -> None:
         """Start the bot"""
