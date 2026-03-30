@@ -39,6 +39,7 @@ class StrategyEngine:
 
             for symbol in strategy.symbols:
                 try:
+                    await asyncio.sleep(0.5)
                     bars = await self.broker.get_historical_bars(
                         symbol=symbol,
                         market=strategy.market,
@@ -159,6 +160,7 @@ class StrategyEngine:
         all_positions: Dict[str, Position] = {}
         for market in markets:
             try:
+                await asyncio.sleep(0.5)
                 positions = await self.broker.get_positions(market)
                 for pos in positions:
                     all_positions[pos.symbol] = pos
