@@ -66,7 +66,12 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self.config.load()
 
         # Load warmup hours from config if not set via CLI
-        if self._warmup.warmup_hours == 0:
+        # Paper mode skips warmup
+        kis_config = self.config.get_kis_config()
+        if kis_config.get("paper_trading"):
+            self._warmup.warmup_hours = 0
+            logger.info("Paper mode: warmup disabled")
+        elif self._warmup.warmup_hours == 0:
             self._warmup.warmup_hours = self.config.get("trading.warmup_hours", 0)
             logger.info(f"Warmup hours loaded from config: {self._warmup.warmup_hours}")
 
@@ -100,9 +105,12 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Initialize broker and share auth token
         await self._initialize_broker()
-        if self.broker and self.broker._auth._access_token:
+        real_broker = getattr(
+            self.broker, "_real_broker", self.broker,
+        )
+        if hasattr(real_broker, "_auth") and real_broker._auth._access_token:
             self.dashboard.kis_auth_token = (
-                self.broker._auth._access_token
+                real_broker._auth._access_token
             )
 
         # Initialize notifier
@@ -140,13 +148,37 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
     async def _initialize_broker(self) -> None:
         """Initialize broker connection"""
         kis_config = self.config.get_kis_config()
-        self.broker = KISBroker(
+        real_broker = KISBroker(
             event_bus=self.event_bus,
             app_key=kis_config["app_key"],
             app_secret=kis_config["app_secret"],
             account_no=kis_config["account_no"],
             paper_trading=kis_config["paper_trading"],
         )
+
+        # Use PaperBroker if KIS_PAPER_TRADING=true
+        if kis_config["paper_trading"]:
+            from src.broker.paper import PaperBroker
+            initial_cash_usd = Decimal(
+                str(self.config.get("trading.paper_cash_usd", 10000))
+            )
+            initial_cash_krw = Decimal(
+                str(self.config.get("trading.paper_cash_krw", 0))
+            )
+            self.broker = PaperBroker(
+                event_bus=self.event_bus,
+                real_broker=real_broker,
+                initial_cash_usd=initial_cash_usd,
+                initial_cash_krw=initial_cash_krw,
+            )
+            logger.info(
+                f"Paper trading mode | "
+                f"USD: ${initial_cash_usd:,.0f}, "
+                f"KRW: {initial_cash_krw:,.0f}"
+            )
+        else:
+            self.broker = real_broker
+
         await self.broker.connect()
 
         # Get account balances

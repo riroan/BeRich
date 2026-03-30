@@ -397,12 +397,16 @@ header h1 {
     width: 100%;
     border-collapse: collapse;
     font-size: 0.85rem;
+    table-layout: fixed;
 }
 
 .positions-table th,
 .positions-table td {
     padding: 10px 8px;
-    text-align: left;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .positions-table th {
@@ -411,6 +415,19 @@ header h1 {
     text-transform: uppercase;
     color: var(--text-secondary);
 }
+
+/* Column widths */
+.positions-table th:nth-child(1) { width: 8%; }   /* Symbol */
+.positions-table th:nth-child(2) { width: 7%; }   /* Market */
+.positions-table th:nth-child(3) { width: 6%; }   /* Qty */
+.positions-table th:nth-child(4) { width: 11%; }  /* Avg Price */
+.positions-table th:nth-child(5) { width: 11%; }  /* Current */
+.positions-table th:nth-child(6) { width: 11%; }  /* P&L */
+.positions-table th:nth-child(7) { width: 8%; }   /* P&L % */
+.positions-table th:nth-child(8) { width: 7%; }   /* RSI */
+.positions-table th:nth-child(9) { width: 11%; }  /* Buy Stage */
+.positions-table th:nth-child(10) { width: 11%; } /* Last Buy */
+.positions-table th:nth-child(11) { width: 9%; }  /* SL Dist */
 
 .positions-table tr:nth-child(even) {
     background: rgba(15, 52, 96, 0.3);
@@ -427,12 +444,7 @@ header h1 {
 }
 
 .positions-table .number {
-    text-align: right;
     font-family: 'Consolas', monospace;
-}
-
-.positions-table .stage {
-    text-align: center;
 }
 
 .stage-indicator {

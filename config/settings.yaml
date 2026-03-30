@@ -13,6 +13,8 @@ discord:
 trading:
   warmup_hours: 168    # Hours to collect data before trading starts
   check_interval: 120  # Price check interval in seconds
+  paper_cash_usd: 10000  # Initial paper trading cash (USD)
+  paper_cash_krw: 0      # Initial paper trading cash (KRW)
 
 # Database
 database:
