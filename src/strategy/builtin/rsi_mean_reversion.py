@@ -35,6 +35,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._sell_stages: dict[str, int] = {}
         # Track last buy time for cooldown reset
         self._last_buy_time: dict[str, datetime] = {}
+        # Track whether RSI recovered since last full buy cycle
+        self._rsi_recovered: dict[str, bool] = {}
         # Store daily bars separately for RSI calculation
         self._daily_bars: dict[str, pd.DataFrame] = {}
 
@@ -147,12 +149,25 @@ class RSIMeanReversionStrategy(BaseStrategy):
         current_buy_stage = self._buy_stages.get(symbol, 0)
         current_sell_stage = self._sell_stages.get(symbol, 0)
 
+        # Track RSI recovery (RSI >= 50 after completing all buy stages)
+        recovery_rsi = self.params.get("recovery_rsi", 50)
+        if current_buy_stage >= len(avg_down_levels):
+            if current_rsi >= recovery_rsi:
+                self._rsi_recovered[symbol] = True
+
         # Check cooldown reset for buy stages
+        # Requires: cooldown elapsed AND RSI recovered once
         if symbol in self._last_buy_time:
             time_since_last_buy = datetime.now() - self._last_buy_time[symbol]
-            if time_since_last_buy >= timedelta(days=cooldown_days):
+            rsi_recovered = self._rsi_recovered.get(symbol, False)
+            if time_since_last_buy >= timedelta(days=cooldown_days) and rsi_recovered:
                 self._buy_stages[symbol] = 0
+                self._rsi_recovered[symbol] = False
                 current_buy_stage = 0
+                logger.info(
+                    f"[{symbol}] Buy stages reset "
+                    f"(cooldown + RSI recovery)"
+                )
 
         # Check stop loss first (if in position)
         if current_position > 0 and symbol in self._entry_prices:
@@ -345,6 +360,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._sell_stages[symbol]
         if symbol in self._last_buy_time:
             del self._last_buy_time[symbol]
+        if symbol in self._rsi_recovered:
+            del self._rsi_recovered[symbol]
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI indicator using Wilder's smoothing method"""
