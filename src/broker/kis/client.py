@@ -102,9 +102,13 @@ class KISBroker:
         await self._auth.ensure_authenticated(self._session)
 
         if market == Market.KRX:
-            return await self._get_domestic_balance()
+            return await self._retry_on_token_expiry(
+                self._get_domestic_balance,
+            )
         else:
-            return await self._get_overseas_balance()
+            return await self._retry_on_token_expiry(
+                self._get_overseas_balance,
+            )
 
     async def _get_domestic_balance(self) -> dict:
         """Get domestic stock balance"""
@@ -248,9 +252,13 @@ class KISBroker:
         await self._auth.ensure_authenticated(self._session)
 
         if market == Market.KRX:
-            return await self._get_domestic_positions()
+            return await self._retry_on_token_expiry(
+                self._get_domestic_positions,
+            )
         else:
-            return await self._get_overseas_positions(market)
+            return await self._retry_on_token_expiry(
+                self._get_overseas_positions, market,
+            )
 
     async def _get_domestic_positions(self) -> list[Position]:
         """Get domestic stock positions"""
@@ -331,9 +339,13 @@ class KISBroker:
         await self._auth.ensure_authenticated(self._session)
 
         if order.market == Market.KRX:
-            return await self._submit_domestic_order(order)
+            return await self._retry_on_token_expiry(
+                self._submit_domestic_order, order,
+            )
         else:
-            return await self._submit_overseas_order(order)
+            return await self._retry_on_token_expiry(
+                self._submit_overseas_order, order,
+            )
 
     async def _submit_domestic_order(self, order: Order) -> str:
         """Submit domestic stock order"""
@@ -502,14 +514,30 @@ class KISBroker:
 
     # ==================== Market Data ====================
 
+    async def _retry_on_token_expiry(self, func, *args, **kwargs):
+        """Retry API call once if token expired"""
+        try:
+            return await func(*args, **kwargs)
+        except BrokerError as e:
+            if "만료" in str(e):
+                logger.info("Token expired, re-authenticating...")
+                self._auth.invalidate()
+                await self._auth.ensure_authenticated(self._session)
+                return await func(*args, **kwargs)
+            raise
+
     async def get_current_price(self, symbol: str, market: Market = Market.KRX) -> Decimal:
         """Get current price for a symbol"""
         await self._auth.ensure_authenticated(self._session)
 
         if market == Market.KRX:
-            return await self._get_domestic_price(symbol)
+            return await self._retry_on_token_expiry(
+                self._get_domestic_price, symbol,
+            )
         else:
-            return await self._get_overseas_price(symbol, market)
+            return await self._retry_on_token_expiry(
+                self._get_overseas_price, symbol, market,
+            )
 
     async def _get_domestic_price(self, symbol: str) -> Decimal:
         """Get domestic stock current price"""
@@ -575,9 +603,13 @@ class KISBroker:
         await self._auth.ensure_authenticated(self._session)
 
         if market == Market.KRX:
-            return await self._get_domestic_bars(symbol, days)
+            return await self._retry_on_token_expiry(
+                self._get_domestic_bars, symbol, days,
+            )
         else:
-            return await self._get_overseas_bars(symbol, market, days)
+            return await self._retry_on_token_expiry(
+                self._get_overseas_bars, symbol, market, days,
+            )
 
     async def _get_domestic_bars(self, symbol: str, days: int) -> list[Bar]:
         """Get domestic stock historical bars"""

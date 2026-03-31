@@ -83,6 +83,11 @@ class KISAuth:
         if not self.is_authenticated:
             await self.authenticate(session)
 
+    def invalidate(self) -> None:
+        """Force token invalidation (triggers re-auth on next call)"""
+        self._access_token = None
+        self._token_expires_at = None
+
     def get_headers(self, tr_id: str) -> dict:
         """Get API request headers"""
         return {
