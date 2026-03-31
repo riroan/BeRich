@@ -72,6 +72,7 @@
                             <th>Market</th>
                             <th>Strategy</th>
                             <th>Enabled</th>
+                            <th>Max Weight</th>
                             <th>Created</th>
                             <th>Actions</th>
                         </tr>
@@ -91,6 +92,14 @@
                                     <span class="toggle-slider"></span>
                                 </label>
                             </td>
+                            <td>
+                                <div class="weight-input-group">
+                                    <input type="number" class="form-input weight-input"
+                                           value="{{ s.max_weight }}" min="1" max="100" step="1"
+                                           onchange="updateWeight({{ s.id }}, this.value)" />
+                                    <span class="level-unit">%</span>
+                                </div>
+                            </td>
                             <td class="time">{{ s.created_at or '-' }}</td>
                             <td>
                                 <button class="btn-delete" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">Delete</button>
@@ -98,7 +107,7 @@
                         </tr>
                         {% else %}
                         <tr>
-                            <td colspan="6" class="empty">No symbols tracked. Add a symbol above or restart the bot to seed from config.</td>
+                            <td colspan="7" class="empty">No symbols tracked. Add a symbol above or restart the bot to seed from config.</td>
                         </tr>
                         {% endfor %}
                     </tbody>
@@ -180,6 +189,19 @@
             } catch (e) {
                 alert('Failed to toggle: ' + e.message);
                 location.reload();
+            }
+        }
+
+        async function updateWeight(id, weight) {
+            try {
+                const resp = await fetch(`/api/symbols/${id}/weight`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({max_weight: parseFloat(weight)}),
+                });
+                if (!resp.ok) alert('Failed to update weight');
+            } catch (e) {
+                alert('Failed to update weight: ' + e.message);
             }
         }
 

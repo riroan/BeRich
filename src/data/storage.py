@@ -28,10 +28,30 @@ class Storage:
         )
 
     async def initialize(self) -> None:
-        """Create tables"""
+        """Create tables and run migrations"""
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await self._migrate(conn)
         logger.info("Database initialized")
+
+    async def _migrate(self, conn) -> None:
+        """Run schema migrations for existing tables"""
+        from sqlalchemy import text, inspect
+
+        def _check_and_migrate(sync_conn):
+            insp = inspect(sync_conn)
+            # Add max_weight to watched_symbols if missing
+            if "watched_symbols" in insp.get_table_names():
+                cols = [c["name"] for c in insp.get_columns("watched_symbols")]
+                if "max_weight" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE watched_symbols "
+                        "ADD COLUMN max_weight DECIMAL(5,2) "
+                        "DEFAULT 20.0"
+                    ))
+                    logger.info("Migrated: added max_weight column")
+
+        await conn.run_sync(_check_and_migrate)
 
     async def close(self) -> None:
         """Close database connection"""
@@ -385,6 +405,7 @@ class Storage:
                     "market": row.market.value if row.market else None,
                     "strategy_name": row.strategy_name,
                     "enabled": bool(row.enabled),
+                    "max_weight": float(row.max_weight) if row.max_weight else 20.0,
                     "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else None,
                     "updated_at": row.updated_at.strftime("%Y-%m-%d %H:%M") if row.updated_at else None,
                 }
@@ -470,6 +491,30 @@ class Storage:
                 "market": record.market.value,
                 "strategy_name": record.strategy_name,
                 "enabled": bool(record.enabled),
+            }
+
+    async def update_watched_symbol_weight(
+        self, symbol_id: int, max_weight: float,
+    ) -> Optional[dict]:
+        """Update max portfolio weight for a symbol"""
+        async with self.async_session() as session:
+            query = select(WatchedSymbol).where(
+                WatchedSymbol.id == symbol_id,
+            )
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+
+            if not record:
+                return None
+
+            record.max_weight = max_weight
+            record.updated_at = datetime.now()
+            await session.commit()
+
+            return {
+                "id": record.id,
+                "symbol": record.symbol,
+                "max_weight": float(record.max_weight),
             }
 
     async def seed_watched_symbols(self, strategies_config: list) -> int:

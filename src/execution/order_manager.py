@@ -103,26 +103,13 @@ class OrderManager:
             logger.error(f"Failed to get price for {signal.symbol}: {e}")
             return None
 
-        # Update available cash before calculating position size (for buy orders)
+        # Calculate buy quantity based on portfolio weight
         if signal.signal_type == SignalType.ENTRY_LONG:
-            try:
-                balance = await self.broker.get_account_balance(signal.market)
-                self.risk_manager.update_available_cash(balance["cash"])
-                logger.debug(f"Available cash: {balance['cash']:,}")
-            except Exception as e:
-                logger.error(f"Failed to get account balance: {e}")
+            quantity = await self._calculate_buy_quantity(
+                signal.symbol, price, signal.strength,
+            )
+            if quantity <= 0:
                 return None
-
-        # Calculate position size
-        quantity = self.risk_manager.calculate_position_size(
-            symbol=signal.symbol,
-            price=price,
-            signal_strength=signal.strength,
-        )
-
-        if quantity <= 0:
-            logger.debug(f"Position size is 0 for {signal.symbol}")
-            return None
 
         # For exit signals, use current position (with portion support)
         if signal.signal_type == SignalType.EXIT_LONG:
@@ -151,6 +138,80 @@ class OrderManager:
             quantity=quantity,
             price=price,
         )
+
+    async def _calculate_buy_quantity(
+        self, symbol: str, price, stage_portion: float,
+    ) -> int:
+        """Calculate buy quantity: total_value × max_weight × stage_portion / price
+
+        Example: $10,000 total × 20% weight × 30% stage = $600 → 3 shares at $200
+        """
+        dashboard = get_dashboard_state()
+        total_value = float(
+            dashboard.balance_usd + dashboard.balance_krw
+        )
+        if total_value <= 0:
+            logger.debug(f"[{symbol}] No portfolio value")
+            return 0
+
+        # Get max_weight from DB
+        max_weight = 20.0  # default
+        if dashboard.storage:
+            try:
+                symbols = await dashboard.storage.get_watched_symbols(
+                    enabled_only=True,
+                )
+                for s in symbols:
+                    if s["symbol"] == symbol:
+                        max_weight = s.get("max_weight", 20.0)
+                        break
+            except Exception:
+                pass
+
+        # Check current position value
+        current_value = 0.0
+        pos = dashboard.positions.get(symbol)
+        if pos:
+            current_value = pos.current_price * pos.quantity
+
+        # Max allowed value for this symbol
+        max_symbol_value = total_value * max_weight / 100
+
+        # Already at or over limit
+        if current_value >= max_symbol_value:
+            logger.info(
+                f"[{symbol}] Skipping buy: weight "
+                f"{current_value / total_value * 100:.1f}% >= "
+                f"limit {max_weight:.0f}%"
+            )
+            return 0
+
+        # Target buy amount = total × weight × stage portion
+        buy_amount = total_value * (max_weight / 100) * stage_portion
+
+        # Check available cash
+        cash = float(dashboard.cash_usd + dashboard.cash_krw)
+
+        # Don't exceed available cash
+        buy_amount = min(buy_amount, cash)
+
+        # Don't exceed remaining weight room
+        remaining_room = max_symbol_value - current_value
+        buy_amount = min(buy_amount, remaining_room)
+
+        if buy_amount <= 0:
+            return 0
+
+        quantity = int(buy_amount / float(price))
+
+        logger.info(
+            f"[{symbol}] Buy calc: "
+            f"${total_value:,.0f} × {max_weight:.0f}% × "
+            f"{stage_portion * 100:.0f}% = ${buy_amount:,.0f} "
+            f"→ {quantity} shares @ ${float(price):,.2f}"
+        )
+
+        return quantity
 
     async def _submit_order(self, order: Order, signal_metadata: dict = None) -> None:
         """Submit order to broker"""

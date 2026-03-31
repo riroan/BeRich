@@ -1938,3 +1938,44 @@ a.rsi-item {
 .save-status.error {
     color: var(--negative);
 }
+
+/* ==================== Portfolio ==================== */
+
+.portfolio-charts {
+    margin-bottom: 16px;
+}
+
+.chart-center {
+    display: flex;
+    justify-content: center;
+    padding: 16px 0;
+}
+
+.cash-row td {
+    color: var(--text-secondary);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.over-limit {
+    color: var(--negative) !important;
+}
+
+.weight-input-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.weight-input {
+    width: 55px;
+    text-align: center;
+    padding: 3px 4px;
+    font-size: 0.85rem;
+}
+
+@media (max-width: 768px) {
+    .chart-center canvas {
+        width: 200px !important;
+        height: 200px !important;
+    }
+}

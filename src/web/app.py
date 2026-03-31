@@ -1240,6 +1240,160 @@ def create_app() -> FastAPI:
         finally:
             await storage.close()
 
+    class WeightUpdate(BaseModel):
+        max_weight: float
+
+    @app.post("/api/symbols/{symbol_id}/weight")
+    async def update_symbol_weight(
+        symbol_id: int, body: WeightUpdate,
+    ):
+        """Update max portfolio weight for a symbol"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        if body.max_weight < 1 or body.max_weight > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Weight must be between 1 and 100",
+            )
+
+        try:
+            result = await storage.update_watched_symbol_weight(
+                symbol_id, body.max_weight,
+            )
+            if not result:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+            return result
+        finally:
+            await storage.close()
+
+    # ==================== Portfolio Routes ====================
+
+    @app.get("/portfolio", response_class=HTMLResponse)
+    async def portfolio_page(request: Request):
+        """Portfolio overview page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        # Get symbol weights from DB
+        symbol_weights = {}
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                symbols = await storage.get_watched_symbols(
+                    enabled_only=False,
+                )
+                for s in symbols:
+                    symbol_weights[s["symbol"]] = s["max_weight"]
+            finally:
+                await storage.close()
+
+        # Build portfolio data from positions
+        positions = list(dashboard_state.positions.values())
+        total_value = float(
+            dashboard_state.balance_usd
+            + dashboard_state.balance_krw
+        )
+
+        portfolio = []
+        for pos in positions:
+            value = pos.current_price * pos.quantity
+            weight = (value / total_value * 100) if total_value > 0 else 0
+            max_weight = symbol_weights.get(pos.symbol, 20.0)
+            portfolio.append({
+                "symbol": pos.symbol,
+                "market": pos.market,
+                "quantity": pos.quantity,
+                "avg_price": pos.avg_price,
+                "current_price": pos.current_price,
+                "value": value,
+                "weight": weight,
+                "max_weight": max_weight,
+                "over_limit": weight > max_weight,
+                "pnl": pos.pnl,
+                "pnl_pct": pos.pnl_pct,
+            })
+
+        # Cash weight
+        cash_total = float(
+            dashboard_state.cash_usd + dashboard_state.cash_krw
+        )
+        cash_weight = (
+            (cash_total / total_value * 100)
+            if total_value > 0 else 100
+        )
+
+        context = {
+            "request": request,
+            "portfolio": portfolio,
+            "total_value": total_value,
+            "cash_total": cash_total,
+            "cash_weight": cash_weight,
+            "bot_status": dashboard_state.bot_status,
+            "last_update": dashboard_state.last_update,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="portfolio.html",
+            context=context,
+        )
+
+    @app.get("/api/portfolio")
+    async def get_portfolio():
+        """Get portfolio data"""
+        symbol_weights = {}
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                symbols = await storage.get_watched_symbols(
+                    enabled_only=False,
+                )
+                for s in symbols:
+                    symbol_weights[s["symbol"]] = s["max_weight"]
+            finally:
+                await storage.close()
+
+        positions = list(dashboard_state.positions.values())
+        total_value = float(
+            dashboard_state.balance_usd
+            + dashboard_state.balance_krw
+        )
+
+        portfolio = []
+        for pos in positions:
+            value = pos.current_price * pos.quantity
+            weight = (value / total_value * 100) if total_value > 0 else 0
+            max_weight = symbol_weights.get(pos.symbol, 20.0)
+            portfolio.append({
+                "symbol": pos.symbol,
+                "market": pos.market,
+                "value": value,
+                "weight": round(weight, 2),
+                "max_weight": max_weight,
+                "over_limit": weight > max_weight,
+                "pnl_pct": round(pos.pnl_pct, 2),
+            })
+
+        cash_total = float(
+            dashboard_state.cash_usd + dashboard_state.cash_krw
+        )
+        cash_weight = (
+            (cash_total / total_value * 100)
+            if total_value > 0 else 100
+        )
+
+        return {
+            "total_value": round(total_value, 2),
+            "cash": round(cash_total, 2),
+            "cash_weight": round(cash_weight, 2),
+            "positions": portfolio,
+        }
+
     # ==================== Strategy Settings Routes ====================
 
     class StrategyParamsUpdate(BaseModel):

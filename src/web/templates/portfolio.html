@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio - BeRich Dashboard</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <meta http-equiv="refresh" content="60">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-left">
+                <a href="/" class="back-link">&larr; Dashboard</a>
+                <h1>Portfolio</h1>
+            </div>
+            <div class="status-bar">
+                {% if bot_status %}
+                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
+                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
+                </span>
+                {% endif %}
+                <span class="update-time">
+                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
+                </span>
+                <a href="/logout" class="logout-btn">Logout</a>
+            </div>
+        </header>
+
+        <!-- Portfolio Summary -->
+        <section class="trade-stats">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h3>Total Value</h3>
+                    <p class="value">${{ "{:,.2f}".format(total_value) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Cash</h3>
+                    <p class="value">${{ "{:,.2f}".format(cash_total) }} ({{ "{:.1f}".format(cash_weight) }}%)</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Invested</h3>
+                    <p class="value">${{ "{:,.2f}".format(total_value - cash_total) }}</p>
+                </div>
+                <div class="stat-card">
+                    <h3>Positions</h3>
+                    <p class="value">{{ portfolio|length }}</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Chart Section -->
+        <section class="portfolio-charts">
+            <div class="panel">
+                <h2>Allocation</h2>
+                <div class="chart-center">
+                    <canvas id="pieChart" width="300" height="300"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- Holdings Table -->
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Holdings</h2>
+                <table class="positions-table">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th>
+                            <th>Market</th>
+                            <th>Qty</th>
+                            <th>Avg Price</th>
+                            <th>Current</th>
+                            <th>Value</th>
+                            <th>Weight</th>
+                            <th>Limit</th>
+                            <th>P&L %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pos in portfolio %}
+                        <tr onclick="location.href='/symbol/{{ pos.symbol }}'" style="cursor: pointer;">
+                            <td class="symbol">{{ pos.symbol }}</td>
+                            <td>{{ pos.market }}</td>
+                            <td>{{ pos.quantity }}</td>
+                            <td>${{ "{:,.2f}".format(pos.avg_price) }}</td>
+                            <td>${{ "{:,.2f}".format(pos.current_price) }}</td>
+                            <td>${{ "{:,.2f}".format(pos.value) }}</td>
+                            <td class="{{ 'over-limit' if pos.over_limit else '' }}">
+                                {{ "{:.1f}".format(pos.weight) }}%
+                            </td>
+                            <td>{{ "{:.0f}".format(pos.max_weight) }}%</td>
+                            <td class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">
+                                {{ "{:+.1f}".format(pos.pnl_pct) }}%
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        <!-- Cash row -->
+                        <tr class="cash-row">
+                            <td class="symbol">Cash</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>-</td>
+                            <td>${{ "{:,.2f}".format(cash_total) }}</td>
+                            <td>{{ "{:.1f}".format(cash_weight) }}%</td>
+                            <td>-</td>
+                            <td>-</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <footer>
+            <p>BeRich Trading Bot - Portfolio</p>
+        </footer>
+    </div>
+
+    <script>
+        // Pie Chart (pure canvas, no library needed)
+        const canvas = document.getElementById('pieChart');
+        const ctx = canvas.getContext('2d');
+
+        const data = [
+            {% for pos in portfolio %}
+            {label: '{{ pos.symbol }}', value: {{ pos.weight }}, color: getColor({{ loop.index0 }})},
+            {% endfor %}
+            {label: 'Cash', value: {{ cash_weight }}, color: '#555'},
+        ];
+
+        function getColor(i) {
+            const colors = [
+                '#e94560', '#3498db', '#2ecc71', '#e67e22', '#9b59b6',
+                '#1abc9c', '#f39c12', '#e74c3c', '#2980b9', '#27ae60',
+                '#d35400', '#8e44ad', '#16a085', '#c0392b',
+            ];
+            return colors[i % colors.length];
+        }
+
+        function drawPieChart() {
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) - 30;
+            let startAngle = -Math.PI / 2;
+
+            const total = data.reduce((s, d) => s + d.value, 0);
+            if (total <= 0) return;
+
+            data.forEach(item => {
+                const sliceAngle = (item.value / total) * 2 * Math.PI;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+                ctx.closePath();
+                ctx.fillStyle = item.color;
+                ctx.fill();
+
+                // Label
+                if (item.value >= 3) {
+                    const midAngle = startAngle + sliceAngle / 2;
+                    const labelX = centerX + (radius * 0.65) * Math.cos(midAngle);
+                    const labelY = centerY + (radius * 0.65) * Math.sin(midAngle);
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '11px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(`${item.label}`, labelX, labelY - 7);
+                    ctx.fillText(`${item.value.toFixed(1)}%`, labelX, labelY + 7);
+                }
+
+                startAngle += sliceAngle;
+            });
+        }
+
+        drawPieChart();
+    </script>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="bottom-nav">
+        <a href="/">
+            <span class="icon">📊</span>
+            <span>Dashboard</span>
+        </a>
+        <a href="/symbols">
+            <span class="icon">🔍</span>
+            <span>Symbols</span>
+        </a>
+        <a href="/settings">
+            <span class="icon">⚙️</span>
+            <span>Settings</span>
+        </a>
+        <a href="/portfolio" class="active">
+            <span class="icon">📦</span>
+            <span>Portfolio</span>
+        </a>
+        <a href="/analytics">
+            <span class="icon">🔬</span>
+            <span>Analytics</span>
+        </a>
+    </nav>
+</body>
+</html>

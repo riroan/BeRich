@@ -125,6 +125,7 @@ class WatchedSymbol(Base):
     market = Column(SQLEnum(Market), nullable=False)
     strategy_name = Column(String(100), nullable=False)
     enabled = Column(Integer, default=1)  # 1=True, 0=False
+    max_weight = Column(Numeric(5, 2), default=20.0)  # Max portfolio weight %
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
