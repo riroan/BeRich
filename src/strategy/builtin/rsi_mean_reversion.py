@@ -162,10 +162,11 @@ class RSIMeanReversionStrategy(BaseStrategy):
             rsi_recovered = self._rsi_recovered.get(symbol, False)
             if time_since_last_buy >= timedelta(days=cooldown_days) and rsi_recovered:
                 self._buy_stages[symbol] = 0
+                self._sell_stages[symbol] = 0
                 self._rsi_recovered[symbol] = False
                 current_buy_stage = 0
                 logger.info(
-                    f"[{symbol}] Buy stages reset "
+                    f"[{symbol}] Buy/sell stages reset "
                     f"(cooldown + RSI recovery)"
                 )
 
@@ -233,8 +234,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     # Check if this is the last sell stage
                     is_final_sell = (stage + 1) >= len(sell_levels)
 
-                    # Calculate actual PnL
-                    pnl = (current_price - avg_price) * current_position
+                    # Calculate PnL for the sold portion
+                    sell_qty = int(current_position * Decimal(str(portion)))
+                    pnl = (current_price - avg_price) * sell_qty
 
                     logger.info(
                         f"[{symbol}] *** SELL SIGNAL GENERATED *** | "

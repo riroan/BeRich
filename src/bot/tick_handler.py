@@ -79,6 +79,10 @@ class TickHandlerMixin:
 
             price = await self.broker.get_current_price(symbol, strategy.market)
 
+            if not price or price <= 0:
+                logger.warning(f"[{symbol}] Invalid price: {price}")
+                return
+
             if hasattr(strategy, "update_daily_close"):
                 strategy.update_daily_close(symbol, float(price))
 

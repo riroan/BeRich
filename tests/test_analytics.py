@@ -14,8 +14,8 @@ class TestReportGenerator:
 
     @pytest.fixture
     def sample_fills(self):
-        """Create sample fills data"""
-        now = datetime.now()
+        """Create sample fills data (all within today)"""
+        today = datetime.now().replace(hour=12, minute=0, second=0)
         return [
             {
                 "symbol": "AAPL",
@@ -23,7 +23,7 @@ class TestReportGenerator:
                 "price": 150,
                 "quantity": 10,
                 "pnl": 100,
-                "timestamp": (now - timedelta(hours=2)).isoformat(),
+                "timestamp": today.replace(hour=10).isoformat(),
             },
             {
                 "symbol": "AAPL",
@@ -31,7 +31,7 @@ class TestReportGenerator:
                 "price": 155,
                 "quantity": 5,
                 "pnl": -50,
-                "timestamp": (now - timedelta(hours=1)).isoformat(),
+                "timestamp": today.replace(hour=11).isoformat(),
             },
             {
                 "symbol": "MSFT",
@@ -39,7 +39,7 @@ class TestReportGenerator:
                 "price": 300,
                 "quantity": 3,
                 "pnl": 75,
-                "timestamp": now.isoformat(),
+                "timestamp": today.replace(hour=12).isoformat(),
             },
         ]
 

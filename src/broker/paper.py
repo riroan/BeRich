@@ -132,10 +132,13 @@ class PaperBroker:
                 old_qty = pos["quantity"]
                 old_avg = pos["avg_price"]
                 new_qty = old_qty + order.quantity
-                new_avg = (
-                    (old_avg * old_qty + fill_price * order.quantity)
-                    / new_qty
-                )
+                if new_qty > 0:
+                    new_avg = (
+                        (old_avg * old_qty + fill_price * order.quantity)
+                        / new_qty
+                    )
+                else:
+                    new_avg = fill_price
                 pos["quantity"] = new_qty
                 pos["avg_price"] = new_avg
             else:

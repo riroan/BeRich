@@ -113,14 +113,13 @@ class OrderManager:
 
         # For exit signals, use current position (with portion support)
         if signal.signal_type == SignalType.EXIT_LONG:
+            quantity = 0
             positions = await self.broker.get_positions(signal.market)
             for pos in positions:
                 if pos.symbol == signal.symbol:
-                    # Use signal strength as sell portion (default: 100%)
                     sell_portion = signal.strength if signal.strength else 1.0
                     quantity = int(pos.quantity * Decimal(str(sell_portion)))
 
-                    # Ensure at least 1 share if we have position
                     if quantity == 0 and pos.quantity > 0:
                         quantity = 1
 
@@ -129,6 +128,10 @@ class OrderManager:
                         f"{quantity}/{pos.quantity} shares"
                     )
                     break
+
+            if quantity <= 0:
+                logger.debug(f"No position to sell for {signal.symbol}")
+                return None
 
         return Order(
             symbol=signal.symbol,
