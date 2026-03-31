@@ -38,9 +38,16 @@ class DataLoaderMixin:
                     logger.error(f"Failed to calculate RSI for {symbol}: {e}")
 
     async def load_chart_history(self: "TradingBot") -> None:
-        """Load price/RSI history from database on startup"""
+        """Load price/RSI history from database on startup (enabled only)"""
         try:
-            symbols = await self.storage.get_all_symbols_with_history()
+            # Only load history for enabled symbols
+            enabled = await self.storage.get_watched_symbols(
+                enabled_only=True,
+            )
+            enabled_symbols = {s["symbol"] for s in enabled}
+
+            all_symbols = await self.storage.get_all_symbols_with_history()
+            symbols = [s for s in all_symbols if s in enabled_symbols]
             logger.info(f"Loading chart history for {len(symbols)} symbols...")
 
             for symbol in symbols:

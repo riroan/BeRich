@@ -22,6 +22,7 @@ class TickHandlerMixin:
         self._warmup.log_status()
         self.update_dashboard_status()
         await self.update_dashboard_positions()
+        await self._sync_enabled_symbols()
 
         logger.debug(f"Tick: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -37,6 +38,38 @@ class TickHandlerMixin:
         )
 
         await self.broadcast_tick_update()
+
+    async def _sync_enabled_symbols(self: "TradingBot") -> None:
+        """Sync strategy symbols with DB enabled state"""
+        try:
+            from collections import defaultdict
+
+            db_symbols = await self.storage.get_watched_symbols(
+                enabled_only=True,
+            )
+            symbols_by_strategy = defaultdict(set)
+            for s in db_symbols:
+                symbols_by_strategy[s["strategy_name"]].add(
+                    s["symbol"]
+                )
+
+            for strategy in self.strategy_engine.get_strategies():
+                name = strategy.name_with_market
+                enabled = symbols_by_strategy.get(name, set())
+                current = set(strategy.symbols)
+
+                if enabled != current:
+                    strategy.symbols = list(enabled)
+                    # Clean RSI monitor for removed symbols
+                    for removed in current - enabled:
+                        self.dashboard.rsi_values.pop(removed, None)
+                        self.dashboard.rsi_prices.pop(removed, None)
+                    logger.info(
+                        f"[{name}] Symbols synced: "
+                        f"{sorted(enabled)}"
+                    )
+        except Exception as e:
+            logger.debug(f"Symbol sync error: {e}")
 
     async def _process_symbol_tick(self: "TradingBot", strategy, symbol: str) -> None:
         """Process tick for a single symbol"""
