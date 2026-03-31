@@ -59,11 +59,37 @@ class TickHandlerMixin:
                 current = set(strategy.symbols)
 
                 if enabled != current:
+                    added = enabled - current
+                    removed = current - enabled
                     strategy.symbols = list(enabled)
+
+                    # Load history for newly added symbols
+                    for symbol in added:
+                        try:
+                            import asyncio
+                            await asyncio.sleep(0.5)
+                            bars = await self.broker.get_historical_bars(
+                                symbol=symbol,
+                                market=strategy.market,
+                                days=strategy.required_history,
+                            )
+                            if bars and hasattr(strategy, "initialize"):
+                                strategy.initialize({symbol: bars})
+                            logger.info(
+                                f"[{symbol}] Loaded {len(bars)} "
+                                f"bars (newly enabled)"
+                            )
+                        except Exception as e:
+                            logger.error(
+                                f"[{symbol}] Failed to load "
+                                f"history: {e}"
+                            )
+
                     # Clean RSI monitor for removed symbols
-                    for removed in current - enabled:
-                        self.dashboard.rsi_values.pop(removed, None)
-                        self.dashboard.rsi_prices.pop(removed, None)
+                    for symbol in removed:
+                        self.dashboard.rsi_values.pop(symbol, None)
+                        self.dashboard.rsi_prices.pop(symbol, None)
+
                     logger.info(
                         f"[{name}] Symbols synced: "
                         f"{sorted(enabled)}"
