@@ -152,14 +152,6 @@
                 params.sell_levels.push([rsi, portion]);
             });
 
-            // Validate portions sum
-            const buySum = params.avg_down_levels.reduce((s, l) => s + l[1], 0);
-            if (Math.abs(buySum - 1.0) > 0.05) {
-                statusEl.textContent = `Buy portions sum: ${(buySum*100).toFixed(0)}% (should be ~100%)`;
-                statusEl.className = 'save-status error';
-                return;
-            }
-
             statusEl.textContent = 'Saving...';
             statusEl.className = 'save-status';
 
