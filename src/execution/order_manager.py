@@ -64,6 +64,12 @@ class OrderManager:
             logger.info(f"[WARMUP] Signal ignored: {signal.signal_type.name} {signal.symbol}")
             return
 
+        # Check if trading is paused
+        dashboard = get_dashboard_state()
+        if dashboard.trading_paused:
+            logger.info(f"[PAUSED] Signal ignored: {signal.signal_type.name} {signal.symbol}")
+            return
+
         logger.info(f"Processing signal from {strategy_name}: {signal.signal_type.name} {signal.symbol}")
 
         # Convert signal to order

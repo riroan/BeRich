@@ -245,6 +245,9 @@ class DashboardState:
         # Live strategy instances (set by bot)
         self.strategy_instances: Optional[List[Any]] = None
 
+        # Trading pause flag (data collection continues)
+        self.trading_paused: bool = False
+
     def update_position(
         self,
         symbol: str,
@@ -836,6 +839,8 @@ def create_app() -> FastAPI:
             "risk_alerts": dashboard_state.risk_alerts,
             # Performance
             "performance": dashboard_state.performance.model_dump(),
+            # Trading control
+            "trading_paused": dashboard_state.trading_paused,
         }
         return templates.TemplateResponse(
             request=request,
@@ -1010,6 +1015,27 @@ def create_app() -> FastAPI:
     async def get_equity_history():
         """Get equity curve data"""
         return {"data": dashboard_state.equity_history}
+
+    # ==================== Trading Control ====================
+
+    @app.post("/api/trading/pause")
+    async def pause_trading():
+        """Pause trading (data collection continues)"""
+        dashboard_state.trading_paused = True
+        logger.info("Trading PAUSED by user")
+        return {"paused": True}
+
+    @app.post("/api/trading/resume")
+    async def resume_trading():
+        """Resume trading"""
+        dashboard_state.trading_paused = False
+        logger.info("Trading RESUMED by user")
+        return {"paused": False}
+
+    @app.get("/api/trading/status")
+    async def trading_status():
+        """Get trading pause status"""
+        return {"paused": dashboard_state.trading_paused}
 
     # ==================== Symbol Management Routes ====================
 

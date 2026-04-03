@@ -1848,6 +1848,28 @@ a.rsi-item {
     margin-bottom: 16px;
 }
 
+/* Trading Pause Button */
+.pause-btn {
+    background: var(--positive);
+    color: #fff;
+    border: none;
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.pause-btn.paused {
+    background: var(--negative);
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
 /* ==================== Strategy Settings ==================== */
 
 .settings-section {
