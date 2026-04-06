@@ -173,6 +173,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # Check stop loss first (if in position)
         if current_position > 0 and symbol in self._entry_prices:
             avg_price = self._entry_prices[symbol]
+            if not avg_price:
+                avg_price = current_price
             pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
             if pnl_pct <= stop_loss_pct:

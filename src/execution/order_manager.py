@@ -226,6 +226,11 @@ class OrderManager:
         """Submit order to broker"""
         try:
             order_id = await self.broker.submit_order(order)
+            # Attach realized PnL from signal for risk tracking
+            if signal_metadata and order.side == OrderSide.SELL:
+                pnl = signal_metadata.get("pnl")
+                if pnl is not None:
+                    order.realized_pnl = pnl
             self._active_orders[order_id] = order
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
@@ -378,8 +383,12 @@ class OrderManager:
             del self._active_orders[order.order_id]
 
         # Record PnL
-        if order.filled_avg_price:
-            self.risk_manager.record_trade(Decimal("0"))  # TODO: Calculate actual PnL
+        if order.filled_avg_price and order.side == OrderSide.SELL:
+            pnl = getattr(order, "realized_pnl", None)
+            if pnl is not None:
+                self.risk_manager.record_trade(Decimal(str(pnl)))
+            else:
+                self.risk_manager.record_trade(Decimal("0"))
 
         await self.storage.save_order(order)
 

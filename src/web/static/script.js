@@ -131,7 +131,7 @@ class DashboardWebSocket {
     }
 
     updatePositionsTable(positions) {
-        const tbody = document.querySelector('.positions-panel tbody');
+        const tbody = document.querySelector('.positions-section tbody');
         if (!tbody) return;
 
         if (positions.length === 0) {
