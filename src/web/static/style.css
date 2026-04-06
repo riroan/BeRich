@@ -446,6 +446,7 @@ header h1 {
 
 .positions-table .number {
     font-family: 'Consolas', monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 .stage-indicator {
@@ -719,6 +720,7 @@ header h1 {
 .trades-table .number {
     text-align: right;
     font-family: 'Consolas', monospace;
+    font-variant-numeric: tabular-nums;
 }
 
 /* Activity List */
@@ -898,6 +900,7 @@ header h1 {
 .stat-card .value {
     font-size: 1.5rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
 
 .stat-card .sub-value {
@@ -939,6 +942,10 @@ header h1 {
 .metric-card .value {
     font-size: 2rem;
     font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Trade Statistics */
