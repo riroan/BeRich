@@ -601,10 +601,11 @@ class DashboardState:
                 days = (last_time - first_time).days
                 if days > 0:
                     years = days / 365.0
-                    if years > 0 and current_value > 0:
-                        self.performance.cagr = (
+                    if years >= 0.01 and current_value > 0:
+                        cagr = (
                             (pow(current_value / initial_value, 1 / years) - 1) * 100
                         )
+                        self.performance.cagr = max(min(cagr, 9999.99), -9999.99)
 
             # Calculate Sharpe Ratio (simplified - daily returns)
             if len(self.equity_history) > 2:
@@ -622,9 +623,8 @@ class DashboardState:
                     std_dev = math.sqrt(variance) if variance > 0 else 0
                     if std_dev > 0:
                         # Annualized Sharpe (assuming ~252 trading days)
-                        self.performance.sharpe_ratio = (
-                            avg_return / std_dev * math.sqrt(252)
-                        )
+                        sharpe = avg_return / std_dev * math.sqrt(252)
+                        self.performance.sharpe_ratio = max(min(sharpe, 99.99), -99.99)
 
         # Calculate from fills/trades
         if self.fills:
