@@ -1,7 +1,7 @@
 """Scheduler for periodic strategy execution"""
 
 import asyncio
-from datetime import datetime, time, date
+from datetime import datetime, time
 from typing import Callable, Optional, List, Tuple
 from zoneinfo import ZoneInfo
 import logging
@@ -135,7 +135,7 @@ class TradingScheduler:
                 if self.is_market_open():
                     await self._execute_callbacks()
                 else:
-                    logger.debug(f"Markets closed, skipping...")
+                    logger.debug("Markets closed, skipping...")
 
                 await asyncio.sleep(self.interval)
 

@@ -1,6 +1,6 @@
 """Drawdown analysis - MDD tracking and alerts"""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 from dataclasses import dataclass
@@ -78,7 +78,6 @@ class DrawdownAnalyzer:
         mdd = Decimal("0")
         mdd_pct = 0.0
         mdd_start = None
-        mdd_bottom = None
         mdd_bottom_time = None
 
         drawdown_points = []

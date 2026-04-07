@@ -7,7 +7,7 @@ from decimal import Decimal
 import logging
 
 from src.core.types import Market, Quote
-from src.core.events import EventBus, Event, EventType
+from src.core.events import EventBus
 from .auth import KISAuth
 
 logger = logging.getLogger(__name__)
@@ -197,7 +197,6 @@ class KISWebSocket:
                 return None
 
             tr_id = parts[1]
-            data_count = int(parts[2])
             data = parts[3]
 
             if tr_id == "H0STCNT0":

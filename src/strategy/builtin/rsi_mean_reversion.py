@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 import logging
 
-from src.core.types import Signal, SignalType, Market
+from src.core.types import Signal, SignalType
 from src.strategy.base import BaseStrategy
 
 logger = logging.getLogger(__name__)

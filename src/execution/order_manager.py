@@ -75,7 +75,7 @@ class OrderManager:
         # Convert signal to order
         order = await self._signal_to_order(signal)
         if not order:
-            logger.debug(f"No order generated for signal")
+            logger.debug("No order generated for signal")
             return
 
         # Validate with risk manager

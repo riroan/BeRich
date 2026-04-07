@@ -57,3 +57,4 @@ Thumbs.db
 htmlcov/
 .pytest_cache/
 .mypy_cache/
+.gstack/

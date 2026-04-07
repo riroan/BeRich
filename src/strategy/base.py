@@ -3,7 +3,7 @@ from typing import Optional, Dict, Any, List
 from decimal import Decimal
 import pandas as pd
 
-from src.core.types import Bar, Quote, Signal, SignalType, Market, Fill
+from src.core.types import Bar, Quote, Signal, Market, Fill
 
 
 class BaseStrategy(ABC):

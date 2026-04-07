@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Tuple, List
 from decimal import Decimal
-from datetime import datetime, date
+from datetime import date
 import logging
 
 from src.core.types import Order, Position, OrderSide

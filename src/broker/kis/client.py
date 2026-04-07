@@ -1,6 +1,6 @@
 import aiohttp
 from typing import Optional, AsyncIterator
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 import logging
 

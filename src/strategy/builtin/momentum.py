@@ -2,7 +2,7 @@ from typing import Optional
 from decimal import Decimal
 import pandas as pd
 
-from src.core.types import Signal, SignalType, Market
+from src.core.types import Signal, SignalType
 from src.strategy.base import BaseStrategy
 
 

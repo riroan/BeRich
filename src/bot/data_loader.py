@@ -1,6 +1,5 @@
 """Data loading utilities for trading bot"""
 
-from datetime import datetime
 from typing import TYPE_CHECKING
 import logging
 

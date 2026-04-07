@@ -1,10 +1,9 @@
 """Discord notification system"""
 
-import asyncio
 import aiohttp
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional, List
+from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -452,10 +451,10 @@ class DiscordNotifier:
     async def notify_auth_expired(self) -> bool:
         """Notify API authentication expired - HIGH PRIORITY"""
         message = (
-            f"🚨 **[API 오류] 인증 토큰 만료**\n"
-            f"```\n"
-            f"API 재인증이 필요합니다.\n"
-            f"```"
+            "🚨 **[API 오류] 인증 토큰 만료**\n"
+            "```\n"
+            "API 재인증이 필요합니다.\n"
+            "```"
         )
         return await self.send(message, color=COLOR_RED)
 

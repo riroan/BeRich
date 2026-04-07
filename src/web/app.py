@@ -1,6 +1,5 @@
 """Web dashboard for trading bot monitoring"""
 
-import asyncio
 import hashlib
 import secrets
 import os
@@ -8,9 +7,8 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Optional, Dict, Any, List
 from pathlib import Path
-from enum import Enum
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates

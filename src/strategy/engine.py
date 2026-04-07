@@ -113,7 +113,7 @@ class StrategyEngine:
         for strategy in self._strategies:
             if hasattr(order, "symbol") and order.symbol in strategy.symbols:
                 # Create a simple fill-like object for the strategy
-                from src.core.types import Fill, OrderSide
+                from src.core.types import Fill
                 from decimal import Decimal
 
                 fill = Fill(
