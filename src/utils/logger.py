@@ -38,9 +38,14 @@ def setup_logger(
     log_path = Path(log_dir)
     log_path.mkdir(exist_ok=True)
 
+    # Configure root logger so all modules' logs are captured
+    root = logging.getLogger()
+    root.setLevel(level)
+
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.handlers.clear()
+    root.handlers.clear()
 
     # Console handler
     if console:
@@ -50,6 +55,7 @@ def setup_logger(
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         )
         logger.addHandler(console_handler)
+        root.addHandler(console_handler)
 
     # File handler (daily rotation)
     file_handler = logging.handlers.TimedRotatingFileHandler(
