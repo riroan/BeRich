@@ -143,3 +143,14 @@ class StrategyParams(Base):
     strategy_name = Column(String(100), unique=True, nullable=False)
     params_json = Column(Text, nullable=False)  # JSON string
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
+class BotStateModel(Base):
+    """Bot persistent state (warmup time, etc.)"""
+
+    __tablename__ = "bot_state"
+
+    id = Column(Integer, primary_key=True)
+    key = Column(String(100), unique=True, nullable=False)
+    value = Column(Text, nullable=False)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

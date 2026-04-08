@@ -52,7 +52,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self._data_dir = self._project_root / "data"
 
         # Warmup management
-        self._warmup = WarmupManager(warmup_hours, self._data_dir)
+        self._warmup = WarmupManager(warmup_hours)
 
         # Equity snapshot settings
         self._equity_save_interval = 5  # Every 5 ticks (5 minutes)
@@ -81,6 +81,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         db_url = self.config.get("database.url", "sqlite+aiosqlite:///data/trading.db")
         self.storage = Storage(db_url)
         await self.storage.initialize()
+
+        # Wire storage to warmup manager
+        self._warmup.set_storage(self.storage)
 
         # Wire storage and config to dashboard for web API access
         self.dashboard.storage = self.storage
@@ -333,7 +336,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         logger.info("Starting Trading Bot...")
         self._running = True
 
-        self._warmup.start()
+        await self._warmup.start()
 
         # Start components
         await self.event_bus.start()

@@ -1,18 +1,22 @@
 """Warmup period management for trading bot"""
 
 from datetime import datetime, timedelta
-from pathlib import Path
+from typing import Optional
 import logging
 
+from src.data.storage import Storage
+
 logger = logging.getLogger(__name__)
+
+WARMUP_KEY = "warmup_start_time"
 
 
 class WarmupManager:
     """Manages warmup period before trading starts"""
 
-    def __init__(self, warmup_hours: int, data_dir: Path):
+    def __init__(self, warmup_hours: int, storage: Optional[Storage] = None):
         self._warmup_hours = warmup_hours
-        self._warmup_file = data_dir / "warmup_start.txt"
+        self._storage = storage
         self._start_time: datetime | None = None
 
     @property
@@ -23,6 +27,10 @@ class WarmupManager:
     def warmup_hours(self, value: int) -> None:
         self._warmup_hours = value
 
+    def set_storage(self, storage: Storage) -> None:
+        """Set storage after initialization"""
+        self._storage = storage
+
     def is_complete(self) -> bool:
         """Check if warmup period is complete"""
         if self._warmup_hours <= 0:
@@ -31,13 +39,7 @@ class WarmupManager:
             return False
 
         elapsed = datetime.now() - self._start_time
-        complete = elapsed >= timedelta(hours=self._warmup_hours)
-
-        if complete and self._warmup_file.exists():
-            self._warmup_file.unlink()
-            logger.info("Warmup complete - auto trading enabled")
-
-        return complete
+        return elapsed >= timedelta(hours=self._warmup_hours)
 
     def get_remaining(self) -> timedelta:
         """Get remaining warmup time"""
@@ -56,24 +58,28 @@ class WarmupManager:
         minutes = remainder // 60
         return f"{hours}h {minutes}m"
 
-    def save(self) -> None:
-        """Save warmup start time to file for persistence"""
-        if self._start_time and self._warmup_hours > 0:
-            self._warmup_file.write_text(self._start_time.isoformat())
+    async def save(self) -> None:
+        """Save warmup start time to DB"""
+        if self._start_time and self._warmup_hours > 0 and self._storage:
+            await self._storage.set_bot_state(
+                WARMUP_KEY, self._start_time.isoformat()
+            )
             logger.info(f"Warmup start time saved: {self._start_time}")
 
-    def load(self) -> None:
-        """Load warmup start time from file if exists"""
-        logger.debug(
-            f"Warmup check: hours={self._warmup_hours}, "
-            f"file={self._warmup_file}, exists={self._warmup_file.exists()}"
-        )
+    async def load(self) -> None:
+        """Load warmup start time from DB if exists"""
+        if not self._storage:
+            logger.debug("No storage available for warmup load")
+            return
 
-        if self._warmup_hours > 0 and self._warmup_file.exists():
-            try:
-                saved_time = datetime.fromisoformat(
-                    self._warmup_file.read_text().strip()
-                )
+        if self._warmup_hours <= 0:
+            logger.debug("Warmup disabled (warmup_hours <= 0)")
+            return
+
+        try:
+            saved = await self._storage.get_bot_state(WARMUP_KEY)
+            if saved:
+                saved_time = datetime.fromisoformat(saved)
                 elapsed = datetime.now() - saved_time
                 if elapsed < timedelta(hours=self._warmup_hours):
                     self._start_time = saved_time
@@ -85,21 +91,25 @@ class WarmupManager:
                         f"({hours}h {minutes}m remaining)"
                     )
                 else:
-                    self._warmup_file.unlink()
+                    await self._storage.delete_bot_state(WARMUP_KEY)
                     logger.info("Previous warmup already completed")
-            except Exception as e:
-                logger.warning(f"Failed to load warmup start time: {e}")
-        elif self._warmup_hours <= 0:
-            logger.debug("Warmup disabled (warmup_hours <= 0)")
-        elif not self._warmup_file.exists():
-            logger.debug(f"Warmup file not found: {self._warmup_file}")
+            else:
+                logger.debug("No warmup state found in DB")
+        except Exception as e:
+            logger.warning(f"Failed to load warmup start time: {e}")
 
-    def start(self) -> None:
+    async def start(self) -> None:
         """Start warmup period (load existing or create new)"""
-        self.load()
+        await self.load()
         if self._start_time is None:
             self._start_time = datetime.now()
-            self.save()
+            await self.save()
+
+    async def cleanup(self) -> None:
+        """Clean up warmup state from DB when complete"""
+        if self._storage and self.is_complete():
+            await self._storage.delete_bot_state(WARMUP_KEY)
+            logger.info("Warmup complete - auto trading enabled")
 
     def log_status(self) -> None:
         """Log warmup status"""

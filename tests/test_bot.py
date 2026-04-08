@@ -43,7 +43,7 @@ class TestTradingBot:
             MockConfig.return_value = MagicMock()
             bot = TradingBot(config_dir=str(tmp_path))
             bot._data_dir = tmp_path
-            bot._warmup = WarmupManager(warmup_hours=0, data_dir=tmp_path)
+            bot._warmup = WarmupManager(warmup_hours=0)
             return bot
 
     def test_init(self, bot):
@@ -58,7 +58,7 @@ class TestTradingBot:
         with patch("src.bot.core.Config"):
             bot = TradingBot(config_dir=str(tmp_path), warmup_hours=2)
             bot._data_dir = tmp_path
-            bot._warmup = WarmupManager(warmup_hours=2, data_dir=tmp_path)
+            bot._warmup = WarmupManager(warmup_hours=2)
 
             assert bot._warmup.warmup_hours == 2
 
@@ -154,7 +154,7 @@ class TestDashboardSyncMixin:
 
             bot = TradingBot(config_dir=str(tmp_path))
             bot._data_dir = tmp_path
-            bot._warmup = WarmupManager(warmup_hours=0, data_dir=tmp_path)
+            bot._warmup = WarmupManager(warmup_hours=0)
             bot.dashboard = dashboard
             return bot
 
@@ -220,7 +220,7 @@ class TestTickHandlerMixin:
 
             bot = TradingBot(config_dir=str(tmp_path))
             bot._data_dir = tmp_path
-            bot._warmup = WarmupManager(warmup_hours=0, data_dir=tmp_path)
+            bot._warmup = WarmupManager(warmup_hours=0)
             bot.dashboard = dashboard
             return bot
 
@@ -267,7 +267,7 @@ class TestDataLoaderMixin:
 
             bot = TradingBot(config_dir=str(tmp_path))
             bot._data_dir = tmp_path
-            bot._warmup = WarmupManager(warmup_hours=0, data_dir=tmp_path)
+            bot._warmup = WarmupManager(warmup_hours=0)
             bot.dashboard = dashboard
             return bot
 

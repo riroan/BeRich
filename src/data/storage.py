@@ -7,7 +7,7 @@ from sqlalchemy import select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market
-from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol, StrategyParams
+from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol, StrategyParams, BotStateModel
 
 logger = logging.getLogger(__name__)
 
@@ -636,3 +636,39 @@ class Storage:
                 await self.save_strategy_params(name, params)
                 count += 1
         return count
+
+    # ==================== Bot State ====================
+
+    async def get_bot_state(self, key: str) -> Optional[str]:
+        """Get a bot state value by key"""
+        async with self.async_session() as session:
+            query = select(BotStateModel).where(BotStateModel.key == key)
+            result = await session.execute(query)
+            row = result.scalar_one_or_none()
+            return row.value if row else None
+
+    async def set_bot_state(self, key: str, value: str) -> None:
+        """Set a bot state value"""
+        async with self.async_session() as session:
+            query = select(BotStateModel).where(BotStateModel.key == key)
+            result = await session.execute(query)
+            existing = result.scalar_one_or_none()
+
+            if existing:
+                existing.value = value
+                existing.updated_at = datetime.now()
+            else:
+                record = BotStateModel(key=key, value=value)
+                session.add(record)
+
+            await session.commit()
+
+    async def delete_bot_state(self, key: str) -> None:
+        """Delete a bot state value"""
+        async with self.async_session() as session:
+            query = select(BotStateModel).where(BotStateModel.key == key)
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+            if record:
+                await session.delete(record)
+                await session.commit()
