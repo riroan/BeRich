@@ -1,5 +1,6 @@
 """Dashboard synchronization for trading bot"""
 
+import asyncio
 from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -24,6 +25,7 @@ class DashboardSyncMixin:
 
             for market in [Market.KRX, Market.NASDAQ, Market.NYSE, Market.AMEX]:
                 await self._update_market_positions(market, strategy_states)
+                await asyncio.sleep(1)
 
             await self._update_balances()
 
@@ -124,6 +126,8 @@ class DashboardSyncMixin:
             self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
             self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
+
+            await asyncio.sleep(1)
 
             usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
             self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))

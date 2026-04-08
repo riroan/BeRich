@@ -41,20 +41,19 @@ def setup_logger(
     # Configure root logger so all modules' logs are captured
     root = logging.getLogger()
     root.setLevel(level)
+    root.handlers.clear()
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
     logger.handlers.clear()
-    root.handlers.clear()
 
-    # Console handler
+    # Console handler (root only — child loggers propagate up)
     if console:
         console_handler = logging.StreamHandler()
         console_handler.setLevel(level)
         console_handler.setFormatter(
             logging.Formatter("%(asctime)s [%(levelname)s] %(name)s: %(message)s")
         )
-        logger.addHandler(console_handler)
         root.addHandler(console_handler)
 
     # File handler (daily rotation)
@@ -67,7 +66,7 @@ def setup_logger(
     )
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(JSONFormatter())
-    logger.addHandler(file_handler)
+    root.addHandler(file_handler)
 
     # Error file handler
     error_handler = logging.handlers.RotatingFileHandler(
@@ -78,7 +77,7 @@ def setup_logger(
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(JSONFormatter())
-    logger.addHandler(error_handler)
+    root.addHandler(error_handler)
 
     return logger
 
