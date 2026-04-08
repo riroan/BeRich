@@ -199,12 +199,12 @@ class DashboardSyncMixin:
             if hasattr(self, "_low_cash_alert"):
                 delattr(self, "_low_cash_alert")
 
-    def update_dashboard_status(self: "TradingBot") -> None:
+    async def update_dashboard_status(self: "TradingBot") -> None:
         """Update dashboard with current bot status"""
         strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
 
         # Calculate uptime
-        if self._warmup.is_complete() or self._warmup._start_time:
+        if await self._warmup.is_complete() or self._warmup._start_time:
             start = self._warmup._start_time or datetime.now()
             uptime = datetime.now() - start
             hours, remainder = divmod(int(uptime.total_seconds()), 3600)
@@ -218,13 +218,13 @@ class DashboardSyncMixin:
             paper_trading=self.broker.paper_trading,
             strategies=strategy_names,
             uptime=uptime_str,
-            warmup_remaining=self._warmup.get_remaining_str(),
+            warmup_remaining=await self._warmup.get_remaining_str(),
         )
 
         self.dashboard.account_value = self.risk_manager.account_value
         self.dashboard.last_strategy_run = datetime.now()
         self.dashboard.update_system_status(
-            auto_trading=self._warmup.is_complete(),
+            auto_trading=await self._warmup.is_complete(),
             api_connected=True,
             account_tradable=True,
             data_ok=True,

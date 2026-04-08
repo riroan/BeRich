@@ -103,21 +103,22 @@ class TestOrderManagerInit:
         assert order_manager._pending_orders == {}
         assert order_manager._active_orders == {}
 
-    def test_init_default_trading_enabled(self, order_manager):
-        assert order_manager._is_trading_enabled() is True
+    @pytest.mark.asyncio
+    async def test_init_default_trading_enabled(self, order_manager):
+        assert await order_manager._is_trading_enabled() is True
 
-    def test_init_custom_trading_enabled(
+    @pytest.mark.asyncio
+    async def test_init_custom_trading_enabled(
         self, event_bus, broker, risk_manager, storage,
     ):
-        flag = False
         om = OrderManager(
             event_bus=event_bus,
             broker=broker,
             risk_manager=risk_manager,
             storage=storage,
-            is_trading_enabled=lambda: flag,
+            is_trading_enabled=AsyncMock(return_value=False),
         )
-        assert om._is_trading_enabled() is False
+        assert await om._is_trading_enabled() is False
 
     def test_init_notifier_none_by_default(self, order_manager):
         assert order_manager.notifier is None
@@ -324,7 +325,7 @@ class TestWarmupCheck:
             broker=broker,
             risk_manager=risk_manager,
             storage=storage,
-            is_trading_enabled=lambda: False,
+            is_trading_enabled=AsyncMock(return_value=False),
         )
 
         signal = _make_signal()
@@ -344,7 +345,7 @@ class TestWarmupCheck:
             broker=broker,
             risk_manager=risk_manager,
             storage=storage,
-            is_trading_enabled=lambda: True,
+            is_trading_enabled=AsyncMock(return_value=True),
         )
 
         dashboard_mock = MagicMock()

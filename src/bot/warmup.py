@@ -31,15 +31,36 @@ class WarmupManager:
         """Set storage after initialization"""
         self._storage = storage
 
-    def is_complete(self) -> bool:
-        """Check if warmup period is complete"""
+    async def _sync_from_db(self) -> None:
+        """Sync warmup start time from DB"""
+        if not self._storage:
+            return
+        try:
+            saved = await self._storage.get_bot_state(WARMUP_KEY)
+            if saved:
+                self._start_time = datetime.fromisoformat(saved)
+            else:
+                self._start_time = None
+        except Exception as e:
+            logger.warning(f"Failed to sync warmup from DB: {e}")
+
+    async def is_complete(self) -> bool:
+        """Check if warmup period is complete (reads from DB every call)"""
         if self._warmup_hours <= 0:
             return True
+
+        await self._sync_from_db()
+
         if self._start_time is None:
             return False
 
         elapsed = datetime.now() - self._start_time
-        return elapsed >= timedelta(hours=self._warmup_hours)
+        complete = elapsed >= timedelta(hours=self._warmup_hours)
+
+        if complete:
+            await self._storage.delete_bot_state(WARMUP_KEY)
+
+        return complete
 
     def get_remaining(self) -> timedelta:
         """Get remaining warmup time"""
@@ -49,71 +70,45 @@ class WarmupManager:
         remaining = timedelta(hours=self._warmup_hours) - elapsed
         return max(remaining, timedelta(0))
 
-    def get_remaining_str(self) -> str | None:
+    async def get_remaining_str(self) -> str | None:
         """Get remaining warmup time as string"""
-        if self.is_complete():
+        if await self.is_complete():
             return None
         remaining = self.get_remaining()
         hours, remainder = divmod(int(remaining.total_seconds()), 3600)
         minutes = remainder // 60
         return f"{hours}h {minutes}m"
 
-    async def save(self) -> None:
-        """Save warmup start time to DB"""
-        if self._start_time and self._warmup_hours > 0 and self._storage:
-            await self._storage.set_bot_state(
-                WARMUP_KEY, self._start_time.isoformat()
-            )
-            logger.info(f"Warmup start time saved: {self._start_time}")
-
-    async def load(self) -> None:
-        """Load warmup start time from DB if exists"""
-        if not self._storage:
-            logger.debug("No storage available for warmup load")
-            return
-
+    async def start(self) -> None:
+        """Start warmup period (insert only if not exists in DB)"""
         if self._warmup_hours <= 0:
             logger.debug("Warmup disabled (warmup_hours <= 0)")
             return
 
-        try:
-            saved = await self._storage.get_bot_state(WARMUP_KEY)
-            if saved:
-                saved_time = datetime.fromisoformat(saved)
-                elapsed = datetime.now() - saved_time
-                if elapsed < timedelta(hours=self._warmup_hours):
-                    self._start_time = saved_time
-                    remaining = timedelta(hours=self._warmup_hours) - elapsed
-                    hours, remainder = divmod(int(remaining.total_seconds()), 3600)
-                    minutes = remainder // 60
-                    logger.info(
-                        f"Warmup resumed from {saved_time.strftime('%Y-%m-%d %H:%M:%S')} "
-                        f"({hours}h {minutes}m remaining)"
-                    )
-                else:
-                    await self._storage.delete_bot_state(WARMUP_KEY)
-                    logger.info("Previous warmup already completed")
-            else:
-                logger.debug("No warmup state found in DB")
-        except Exception as e:
-            logger.warning(f"Failed to load warmup start time: {e}")
+        if not self._storage:
+            logger.debug("No storage available for warmup")
+            return
 
-    async def start(self) -> None:
-        """Start warmup period (load existing or create new)"""
-        await self.load()
-        if self._start_time is None:
+        await self._sync_from_db()
+
+        if self._start_time is not None:
+            remaining = self.get_remaining()
+            hours, remainder = divmod(int(remaining.total_seconds()), 3600)
+            minutes = remainder // 60
+            logger.info(
+                f"Warmup resumed from {self._start_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                f"({hours}h {minutes}m remaining)"
+            )
+        else:
             self._start_time = datetime.now()
-            await self.save()
+            await self._storage.set_bot_state(
+                WARMUP_KEY, self._start_time.isoformat()
+            )
+            logger.info(f"Warmup started: {self._start_time}")
 
-    async def cleanup(self) -> None:
-        """Clean up warmup state from DB when complete"""
-        if self._storage and self.is_complete():
-            await self._storage.delete_bot_state(WARMUP_KEY)
-            logger.info("Warmup complete - auto trading enabled")
-
-    def log_status(self) -> None:
+    async def log_status(self) -> None:
         """Log warmup status"""
-        if not self.is_complete():
+        if not await self.is_complete():
             remaining = self.get_remaining()
             hours, remainder = divmod(int(remaining.total_seconds()), 3600)
             minutes = remainder // 60

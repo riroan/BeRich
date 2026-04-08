@@ -1,7 +1,6 @@
 """Tests for WarmupManager"""
 
 import pytest
-import pytest_asyncio
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
@@ -32,24 +31,33 @@ class TestWarmupManager:
         assert warmup_manager.warmup_hours == 2
         assert warmup_manager._start_time is None
 
-    def test_is_complete_no_warmup(self):
+    @pytest.mark.asyncio
+    async def test_is_complete_no_warmup(self, mock_storage):
         """Test is_complete when warmup is disabled"""
         manager = WarmupManager(warmup_hours=0)
-        assert manager.is_complete() is True
+        manager.set_storage(mock_storage)
+        assert await manager.is_complete() is True
 
-    def test_is_complete_not_started(self, warmup_manager):
+    @pytest.mark.asyncio
+    async def test_is_complete_not_started(self, warmup_manager, mock_storage):
         """Test is_complete when warmup not started"""
-        assert warmup_manager.is_complete() is False
+        mock_storage.get_bot_state.return_value = None
+        assert await warmup_manager.is_complete() is False
 
-    def test_is_complete_in_progress(self, warmup_manager):
+    @pytest.mark.asyncio
+    async def test_is_complete_in_progress(self, warmup_manager, mock_storage):
         """Test is_complete during warmup period"""
-        warmup_manager._start_time = datetime.now() - timedelta(hours=1)
-        assert warmup_manager.is_complete() is False
+        start_time = datetime.now() - timedelta(hours=1)
+        mock_storage.get_bot_state.return_value = start_time.isoformat()
+        assert await warmup_manager.is_complete() is False
 
-    def test_is_complete_finished(self, warmup_manager):
+    @pytest.mark.asyncio
+    async def test_is_complete_finished(self, warmup_manager, mock_storage):
         """Test is_complete after warmup period"""
-        warmup_manager._start_time = datetime.now() - timedelta(hours=3)
-        assert warmup_manager.is_complete() is True
+        start_time = datetime.now() - timedelta(hours=3)
+        mock_storage.get_bot_state.return_value = start_time.isoformat()
+        assert await warmup_manager.is_complete() is True
+        mock_storage.delete_bot_state.assert_called_once_with(WARMUP_KEY)
 
     def test_get_remaining_not_started(self, warmup_manager):
         """Test get_remaining when not started"""
@@ -68,69 +76,57 @@ class TestWarmupManager:
         remaining = warmup_manager.get_remaining()
         assert remaining == timedelta(0)
 
-    def test_get_remaining_str_complete(self):
+    @pytest.mark.asyncio
+    async def test_get_remaining_str_complete(self, mock_storage):
         """Test get_remaining_str when complete"""
         manager = WarmupManager(warmup_hours=0)
-        assert manager.get_remaining_str() is None
+        manager.set_storage(mock_storage)
+        assert await manager.get_remaining_str() is None
 
-    def test_get_remaining_str_in_progress(self, warmup_manager):
+    @pytest.mark.asyncio
+    async def test_get_remaining_str_in_progress(
+        self, warmup_manager, mock_storage,
+    ):
         """Test get_remaining_str during warmup"""
-        warmup_manager._start_time = datetime.now() - timedelta(hours=1, minutes=30)
-        result = warmup_manager.get_remaining_str()
+        start_time = datetime.now() - timedelta(hours=1, minutes=30)
+        mock_storage.get_bot_state.return_value = start_time.isoformat()
+        result = await warmup_manager.get_remaining_str()
         assert result in ("0h 29m", "0h 30m")
 
     @pytest.mark.asyncio
-    async def test_save(self, warmup_manager, mock_storage):
-        """Test saving warmup state to DB"""
-        warmup_manager._start_time = datetime.now() - timedelta(minutes=30)
-        await warmup_manager.save()
-
-        mock_storage.set_bot_state.assert_called_once_with(
-            WARMUP_KEY, warmup_manager._start_time.isoformat()
-        )
-
-    @pytest.mark.asyncio
-    async def test_load_existing(self, warmup_manager, mock_storage):
-        """Test loading existing warmup from DB"""
-        saved_time = datetime.now() - timedelta(minutes=30)
-        mock_storage.get_bot_state.return_value = saved_time.isoformat()
-
-        await warmup_manager.load()
-
-        assert warmup_manager._start_time is not None
-        time_diff = abs((saved_time - warmup_manager._start_time).total_seconds())
-        assert time_diff < 2
-
-    @pytest.mark.asyncio
-    async def test_load_expired(self, warmup_manager, mock_storage):
-        """Test loading expired warmup from DB"""
-        saved_time = datetime.now() - timedelta(hours=5)
-        mock_storage.get_bot_state.return_value = saved_time.isoformat()
-
-        await warmup_manager.load()
-
-        assert warmup_manager._start_time is None
-        mock_storage.delete_bot_state.assert_called_once_with(WARMUP_KEY)
-
-    @pytest.mark.asyncio
     async def test_start_new(self, warmup_manager, mock_storage):
-        """Test starting new warmup"""
+        """Test starting new warmup (no existing state in DB)"""
+        mock_storage.get_bot_state.return_value = None
         await warmup_manager.start()
         assert warmup_manager._start_time is not None
         mock_storage.set_bot_state.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_start_resume(self, warmup_manager, mock_storage):
-        """Test resuming existing warmup"""
+    async def test_start_existing(self, warmup_manager, mock_storage):
+        """Test starting with existing state in DB (should not overwrite)"""
         original_time = datetime.now() - timedelta(minutes=30)
         mock_storage.get_bot_state.return_value = original_time.isoformat()
 
         await warmup_manager.start()
 
-        time_diff = abs((original_time - warmup_manager._start_time).total_seconds())
+        time_diff = abs(
+            (original_time - warmup_manager._start_time).total_seconds()
+        )
         assert time_diff < 2
-        # Should not save again since it loaded existing
         mock_storage.set_bot_state.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_is_complete_syncs_from_db(
+        self, warmup_manager, mock_storage,
+    ):
+        """Test that is_complete reads from DB every time"""
+        mock_storage.get_bot_state.return_value = None
+        assert await warmup_manager.is_complete() is False
+
+        # Simulate external DB update
+        start_time = datetime.now() - timedelta(hours=3)
+        mock_storage.get_bot_state.return_value = start_time.isoformat()
+        assert await warmup_manager.is_complete() is True
 
     def test_warmup_hours_setter(self, warmup_manager):
         """Test setting warmup_hours"""

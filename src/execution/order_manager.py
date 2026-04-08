@@ -29,14 +29,16 @@ class OrderManager:
         broker: KISBroker,
         risk_manager: RiskManager,
         storage: Storage,
-        is_trading_enabled: Callable[[], bool] = None,
+        is_trading_enabled: Callable = None,
         notifier: Optional[DiscordNotifier] = None,
     ):
         self.event_bus = event_bus
         self.broker = broker
         self.risk_manager = risk_manager
         self.storage = storage
-        self._is_trading_enabled = is_trading_enabled or (lambda: True)
+        async def _default_enabled():
+            return True
+        self._is_trading_enabled = is_trading_enabled or _default_enabled
         self.notifier = notifier
 
         self._pending_orders: Dict[str, Order] = {}
@@ -60,7 +62,7 @@ class OrderManager:
         strategy_name: str = event.data["strategy"]
 
         # Check if trading is enabled (warmup check)
-        if not self._is_trading_enabled():
+        if not await self._is_trading_enabled():
             logger.info(f"[WARMUP] Signal ignored: {signal.signal_type.name} {signal.symbol}")
             return
 

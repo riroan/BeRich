@@ -2,6 +2,7 @@
 
 import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -179,7 +180,8 @@ class TestDashboardSyncMixin:
         assert "AAPL" in states
         assert states["AAPL"]["buy_stage"] == 1
 
-    def test_update_dashboard_status(self, bot_with_dashboard):
+    @pytest.mark.asyncio
+    async def test_update_dashboard_status(self, bot_with_dashboard):
         """Test dashboard status update"""
         bot = bot_with_dashboard
 
@@ -197,9 +199,11 @@ class TestDashboardSyncMixin:
         bot.risk_manager = MagicMock()
         bot.risk_manager.account_value = Decimal("1000000")
 
-        bot._warmup._start_time = None
+        bot._warmup.is_complete = AsyncMock(return_value=True)
+        bot._warmup.get_remaining_str = AsyncMock(return_value=None)
+        bot._warmup._start_time = datetime.now()
 
-        bot.update_dashboard_status()
+        await bot.update_dashboard_status()
 
         bot.dashboard.set_bot_status.assert_called_once()
 

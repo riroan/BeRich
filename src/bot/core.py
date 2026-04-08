@@ -377,7 +377,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                 paper_trading=self.broker.paper_trading,
             )
 
-        self.update_dashboard_status()
+        await self.update_dashboard_status()
 
     async def stop(self) -> None:
         """Stop the bot"""

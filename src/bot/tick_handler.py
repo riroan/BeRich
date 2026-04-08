@@ -19,8 +19,8 @@ class TickHandlerMixin:
 
     async def on_tick(self: "TradingBot") -> None:
         """Called every minute - fetch prices and check strategies"""
-        self._warmup.log_status()
-        self.update_dashboard_status()
+        await self._warmup.log_status()
+        await self.update_dashboard_status()
         await self.update_dashboard_positions()
         await self._sync_enabled_symbols()
 
@@ -31,7 +31,7 @@ class TickHandlerMixin:
                 await self._process_symbol_tick(strategy, symbol)
 
         self.dashboard.update_system_status(
-            auto_trading=self._warmup.is_complete(),
+            auto_trading=await self._warmup.is_complete(),
             api_connected=True,
             account_tradable=True,
             data_ok=True,
@@ -149,7 +149,8 @@ class TickHandlerMixin:
 
             if rsi is not None:
                 self.dashboard.update_rsi(
-                    symbol, rsi, price=float(price), market=strategy.market.value.upper()
+                    symbol, rsi, price=float(price),
+                    market=strategy.market.value.upper(),
                 )
                 self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
                 self.dashboard.add_price_point(
