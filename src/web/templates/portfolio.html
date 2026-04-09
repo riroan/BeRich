@@ -8,56 +8,68 @@
     <meta http-equiv="refresh" content="60">
 </head>
 <body>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            {% endif %}
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio" class="active">Portfolio</a>
+        <a href="/symbols">Symbols</a>
+        <a href="/trades">Trades</a>
+        <a href="/performance">Performance</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/settings">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>Portfolio</h1>
-            </div>
-            <div class="status-bar">
-                {% if bot_status %}
-                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
-                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
-                </span>
-                {% endif %}
-                <span class="update-time">
-                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
-            </div>
-        </header>
 
         <!-- Portfolio Summary -->
-        <section class="trade-stats">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total Value</h3>
-                    <p class="value">${{ "{:,.2f}".format(total_value) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Cash</h3>
-                    <p class="value">${{ "{:,.2f}".format(cash_total) }} ({{ "{:.1f}".format(cash_weight) }}%)</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Invested</h3>
-                    <p class="value">${{ "{:,.2f}".format(total_value - cash_total) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Positions</h3>
-                    <p class="value">{{ portfolio|length }}</p>
-                </div>
+        <div class="cards-row">
+            <div class="card">
+                <div class="label">Total Value</div>
+                <div class="value small">${{ "{:,.2f}".format(total_value) }}</div>
             </div>
-        </section>
+            <div class="card">
+                <div class="label">Cash</div>
+                <div class="value small">${{ "{:,.2f}".format(cash_total) }}</div>
+                <div class="delta dim">{{ "{:.1f}".format(cash_weight) }}% of portfolio</div>
+            </div>
+            <div class="card">
+                <div class="label">Invested</div>
+                <div class="value small">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Positions</div>
+                <div class="value small">{{ portfolio|length }}</div>
+            </div>
+        </div>
 
         <!-- Chart Section -->
-        <section class="portfolio-charts">
-            <div class="panel">
-                <h2>Allocation</h2>
-                <div class="chart-center">
-                    <canvas id="pieChart" width="300" height="300"></canvas>
-                </div>
+        <div class="card">
+            <div class="section-title">Allocation</div>
+            <div class="alloc-wrap">
+                <canvas id="pieChart" width="240" height="240"></canvas>
+                <div class="alloc-legend" id="allocLegend"></div>
             </div>
-        </section>
+        </div>
 
         <!-- Holdings Table -->
         <section class="symbols-section">
@@ -112,92 +124,139 @@
             </div>
         </section>
 
-        <footer>
-            <p>BeRich Trading Bot - Portfolio</p>
-        </footer>
     </div>
 
     <script>
-        // Pie Chart (pure canvas, no library needed)
         const canvas = document.getElementById('pieChart');
         const ctx = canvas.getContext('2d');
+        const legendEl = document.getElementById('allocLegend');
+
+        const colors = [
+            '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#a855f7',
+            '#0ea5e9', '#84cc16', '#e11d48', '#6366f1', '#d946ef',
+            '#22d3ee', '#facc15', '#fb923c', '#34d399', '#c084fc',
+        ];
 
         const data = [
             {% for pos in portfolio %}
-            {label: '{{ pos.symbol }}', value: {{ pos.weight }}, color: getColor({{ loop.index0 }})},
+            {label: '{{ pos.symbol }}', value: {{ pos.weight }}, color: colors[{{ loop.index0 }} % colors.length]},
             {% endfor %}
-            {label: 'Cash', value: {{ cash_weight }}, color: '#555'},
+            {label: 'Cash', value: {{ cash_weight }}, color: '#475569'},
         ];
 
-        function getColor(i) {
-            const colors = [
-                '#e94560', '#3498db', '#2ecc71', '#e67e22', '#9b59b6',
-                '#1abc9c', '#f39c12', '#e74c3c', '#2980b9', '#27ae60',
-                '#d35400', '#8e44ad', '#16a085', '#c0392b',
-            ];
-            return colors[i % colors.length];
-        }
+        // Store slice angles for hit detection
+        const slices = [];
 
-        function drawPieChart() {
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const radius = Math.min(centerX, centerY) - 30;
-            let startAngle = -Math.PI / 2;
-
+        function drawDonut(highlightIdx) {
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const outer = Math.min(cx, cy) - 10;
+            const inner = outer * 0.6;
+            let angle = -Math.PI / 2;
             const total = data.reduce((s, d) => s + d.value, 0);
             if (total <= 0) return;
 
-            data.forEach(item => {
-                const sliceAngle = (item.value / total) * 2 * Math.PI;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            slices.length = 0;
+
+            data.forEach((item, i) => {
+                const slice = (item.value / total) * 2 * Math.PI;
+                const r = (i === highlightIdx) ? outer + 6 : outer;
                 ctx.beginPath();
-                ctx.moveTo(centerX, centerY);
-                ctx.arc(centerX, centerY, radius, startAngle, startAngle + sliceAngle);
+                ctx.arc(cx, cy, r, angle, angle + slice);
+                ctx.arc(cx, cy, inner, angle + slice, angle, true);
                 ctx.closePath();
                 ctx.fillStyle = item.color;
+                ctx.globalAlpha = (highlightIdx !== undefined && i !== highlightIdx) ? 0.4 : 1;
                 ctx.fill();
-
-                // Label
-                if (item.value >= 3) {
-                    const midAngle = startAngle + sliceAngle / 2;
-                    const labelX = centerX + (radius * 0.65) * Math.cos(midAngle);
-                    const labelY = centerY + (radius * 0.65) * Math.sin(midAngle);
-                    ctx.fillStyle = '#fff';
-                    ctx.font = '11px sans-serif';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(`${item.label}`, labelX, labelY - 7);
-                    ctx.fillText(`${item.value.toFixed(1)}%`, labelX, labelY + 7);
-                }
-
-                startAngle += sliceAngle;
+                ctx.globalAlpha = 1;
+                slices.push({ start: angle, end: angle + slice, item, index: i });
+                angle += slice;
             });
+
+            // Center label on hover
+            if (highlightIdx !== undefined) {
+                const h = data[highlightIdx];
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 18px Inter, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(h.label, cx, cy - 10);
+                ctx.font = '14px Inter, sans-serif';
+                ctx.fillStyle = '#94a3b8';
+                ctx.fillText(h.value.toFixed(1) + '%', cx, cy + 12);
+            }
         }
 
-        drawPieChart();
+        // Hit detection
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            const dx = x - cx, dy = y - cy;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const outer = Math.min(cx, cy) - 10;
+            const inner = outer * 0.6;
+
+            if (dist < inner || dist > outer + 10) {
+                drawDonut();
+                canvas.style.cursor = 'default';
+                return;
+            }
+
+            let angle = Math.atan2(dy, dx);
+            if (angle < -Math.PI / 2) angle += 2 * Math.PI;
+
+            let hit = -1;
+            for (const s of slices) {
+                let start = s.start, end = s.end;
+                if (start < -Math.PI / 2) start += 2 * Math.PI;
+                if (end < -Math.PI / 2) end += 2 * Math.PI;
+                if (angle >= s.start && angle < s.end) { hit = s.index; break; }
+            }
+
+            if (hit >= 0) {
+                drawDonut(hit);
+                canvas.style.cursor = 'pointer';
+            } else {
+                drawDonut();
+                canvas.style.cursor = 'default';
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            drawDonut();
+        });
+
+        function buildLegend() {
+            legendEl.innerHTML = data
+                .filter(d => d.value > 0)
+                .map(d => `
+                    <div class="alloc-item">
+                        <span class="alloc-dot" style="background:${d.color}"></span>
+                        <span class="alloc-name">${d.label}</span>
+                        <span class="alloc-pct">${d.value.toFixed(1)}%</span>
+                    </div>
+                `).join('');
+        }
+
+        drawDonut();
+        buildLegend();
     </script>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/portfolio" class="active">
-            <span class="icon">📦</span>
-            <span>Portfolio</span>
-        </a>
-        <a href="/analytics">
-            <span class="icon">🔬</span>
-            <span>Analytics</span>
-        </a>
-    </nav>
+    <script>
+    async function togglePause() {
+        const btn = document.getElementById("pause-btn");
+        const isPaused = btn.classList.contains("paused");
+        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
+        const resp = await fetch(endpoint, {method: "POST"});
+        const data = await resp.json();
+        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
+        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
+    }
+    </script>
 </body>
 </html>

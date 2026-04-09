@@ -8,198 +8,195 @@
     <meta http-equiv="refresh" content="60">
 </head>
 <body>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            {% endif %}
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio">Portfolio</a>
+        <a href="/symbols">Symbols</a>
+        <a href="/trades" class="active">Trades</a>
+        <a href="/performance">Performance</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/settings">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>Trade Log</h1>
+
+        <!-- Summary Cards (top) -->
+        <div class="cards-row">
+            <div class="card">
+                <div class="label">Total Trades</div>
+                <div class="value small">{{ trade_logs|length }}</div>
             </div>
-            <div class="status-bar">
-                {% if bot_status %}
-                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
-                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
-                </span>
-                {% endif %}
-                <span class="update-time">
-                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
+            <div class="card">
+                <div class="label">Buy Orders</div>
+                <div class="value small">{{ trade_logs|selectattr('action', 'equalto', 'buy')|list|length }}</div>
             </div>
-        </header>
-
-        <section class="trades-section">
-            <div class="panel">
-                <h2>All Trades ({{ trade_logs|length }})</h2>
-
-                <!-- Filters -->
-                <div class="filters">
-                    <button class="filter-btn active" data-filter="all">All</button>
-                    <button class="filter-btn" data-filter="buy">Buy</button>
-                    <button class="filter-btn" data-filter="sell">Sell</button>
-                    <button class="filter-btn" data-filter="stop_loss">Stop Loss</button>
-                </div>
-
-                <table class="trades-table full">
-                    <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>Symbol</th>
-                            <th>Market</th>
-                            <th>Action</th>
-                            <th>Price</th>
-                            <th>Quantity</th>
-                            <th>RSI</th>
-                            <th>Trigger Rule</th>
-                            <th>Result</th>
-                            <th>P&L</th>
-                            <th>P&L %</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in trade_logs %}
-                        <tr class="{{ log.action }}" data-action="{{ log.action }}">
-                            <td class="time">{{ log.timestamp }}</td>
-                            <td class="symbol">
-                                <a href="/symbol/{{ log.symbol }}">{{ log.symbol }}</a>
-                            </td>
-                            <td>{{ log.market }}</td>
-                            <td class="action {{ log.action }}">
-                                {% if log.action == 'buy' %}
-                                BUY
-                                {% elif log.action == 'sell' %}
-                                SELL
-                                {% elif log.action == 'partial_sell' %}
-                                PARTIAL SELL
-                                {% elif log.action == 'stop_loss' %}
-                                STOP LOSS
-                                {% else %}
-                                {{ log.action | upper }}
-                                {% endif %}
-                            </td>
-                            <td class="number">
-                                {% if log.market == 'KRX' %}
-                                {{ "{:,.0f}".format(log.price) }}
-                                {% else %}
-                                ${{ "{:,.2f}".format(log.price) }}
-                                {% endif %}
-                            </td>
-                            <td class="number">{{ log.quantity }}</td>
-                            <td class="number rsi {{ 'oversold' if log.rsi and log.rsi <= 30 else ('overbought' if log.rsi and log.rsi >= 70 else '') }}">
-                                {{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}
-                            </td>
-                            <td class="trigger">{{ log.trigger_rule }}</td>
-                            <td class="result {{ log.result }}">
-                                {% if log.result == 'success' %}
-                                <span class="success">Success</span>
-                                {% elif log.result == 'failed' %}
-                                <span class="failed">Failed</span>
-                                {% else %}
-                                {{ log.result }}
-                                {% endif %}
-                            </td>
-                            <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}">
-                                {% if log.pnl %}
-                                    {% if log.market == 'KRX' %}
-                                    {{ "{:+,.0f}".format(log.pnl) }}
-                                    {% else %}
-                                    ${{ "{:+,.2f}".format(log.pnl) }}
-                                    {% endif %}
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
-                            <td class="number {{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else 'negative' }}">
-                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="11" class="empty">No trades recorded</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <div class="card">
+                <div class="label">Sell Orders</div>
+                <div class="value small">{{ trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length }}</div>
             </div>
-        </section>
-
-        <!-- Trade Summary Stats -->
-        <section class="trade-stats">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Total Trades</h3>
-                    <p class="value">{{ trade_logs|length }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Buy Orders</h3>
-                    <p class="value">{{ trade_logs|selectattr('action', 'equalto', 'buy')|list|length }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Sell Orders</h3>
-                    <p class="value">{{ trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Stop Losses</h3>
-                    <p class="value negative">{{ trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length }}</p>
-                </div>
+            <div class="card">
+                <div class="label">Stop Losses</div>
+                <div class="value small negative">{{ trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length }}</div>
             </div>
-        </section>
+        </div>
 
-        <footer>
-            <p>BeRich Trading Bot - Trade Log</p>
-        </footer>
+        <!-- Trade Table -->
+        <div class="card">
+            <div class="section-title">All Trades <span class="count">{{ trade_logs|length }}</span></div>
+
+            <div class="filter-bar">
+                <button class="filter-pill active" data-filter="all">All</button>
+                <button class="filter-pill" data-filter="buy">Buy</button>
+                <button class="filter-pill" data-filter="sell">Sell</button>
+                <button class="filter-pill" data-filter="stop_loss">Stop Loss</button>
+            </div>
+
+            <table class="trades-table center-table">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Market</th>
+                        <th>Action</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>RSI</th>
+                        <th>Result</th>
+                        <th>P&L</th>
+                        <th>P&L %</th>
+                    </tr>
+                </thead>
+                <tbody id="trades-body">
+                    {% for log in trade_logs %}
+                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}">
+                        <td>{{ log.timestamp }}</td>
+                        <td><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
+                        <td><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
+                        <td>
+                            <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">
+                                {% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}
+                            </span>
+                        </td>
+                        <td>{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</td>
+                        <td>{{ log.quantity }}</td>
+                        <td>{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
+                        <td class="{{ 'positive' if log.result == 'success' else 'negative' }}">{{ log.result }}</td>
+                        <td class="{{ 'positive' if log.pnl and log.pnl >= 0 else ('negative' if log.pnl else '') }}">
+                            {% if log.pnl %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}
+                        </td>
+                        <td class="{{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else ('negative' if log.pnl_pct else '') }}">
+                            {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="empty">No trades recorded</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination"></div>
+        </div>
+
     </div>
 
     <script>
+        const ROWS_PER_PAGE = 20;
+        let currentPage = 1;
+        const rows = Array.from(document.querySelectorAll('.trade-row'));
+        const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
+
+        function showPage(page) {
+            currentPage = page;
+            const start = (page - 1) * ROWS_PER_PAGE;
+            const end = start + ROWS_PER_PAGE;
+
+            rows.forEach((row, i) => {
+                if (row.style.display === 'none' && row.dataset.filtered === 'true') return;
+                row.style.display = (i >= start && i < end) ? '' : 'none';
+            });
+
+            renderPagination();
+        }
+
+        function renderPagination() {
+            const container = document.getElementById('pagination');
+            const visibleRows = rows.filter(r => r.dataset.filtered !== 'true');
+            const pages = Math.ceil(visibleRows.length / ROWS_PER_PAGE);
+            if (pages <= 1) { container.innerHTML = ''; return; }
+
+            let html = '';
+            html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="showPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>&lt;</button>`;
+            for (let i = 1; i <= pages; i++) {
+                if (i === 1 || i === pages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+                    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="showPage(${i})">${i}</button>`;
+                } else if (i === currentPage - 3 || i === currentPage + 3) {
+                    html += '<span class="page-dots">...</span>';
+                }
+            }
+            html += `<button class="page-btn ${currentPage === pages ? 'disabled' : ''}" onclick="showPage(${currentPage + 1})" ${currentPage === pages ? 'disabled' : ''}>&gt;</button>`;
+            container.innerHTML = html;
+        }
+
         // Filter functionality
-        document.querySelectorAll('.filter-btn').forEach(btn => {
+        document.querySelectorAll('.filter-pill').forEach(btn => {
             btn.addEventListener('click', function() {
                 const filter = this.dataset.filter;
-
-                // Update active button
-                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
                 this.classList.add('active');
 
-                // Filter rows
-                document.querySelectorAll('.trades-table tbody tr').forEach(row => {
-                    if (filter === 'all') {
-                        row.style.display = '';
-                    } else {
-                        const action = row.dataset.action;
-                        if (filter === 'sell' && (action === 'sell' || action === 'partial_sell')) {
-                            row.style.display = '';
-                        } else if (action === filter) {
-                            row.style.display = '';
-                        } else {
-                            row.style.display = 'none';
-                        }
+                rows.forEach(row => {
+                    const action = row.dataset.action;
+                    let show = filter === 'all';
+                    if (!show) {
+                        if (filter === 'sell' && (action === 'sell' || action === 'partial_sell')) show = true;
+                        else if (action === filter) show = true;
                     }
+                    row.dataset.filtered = show ? 'false' : 'true';
+                    row.style.display = show ? '' : 'none';
                 });
+
+                currentPage = 1;
+                showPage(1);
             });
         });
-    </script>
 
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/trades" class="active">
-            <span class="icon">📝</span>
-            <span>Trades</span>
-        </a>
-        <a href="/analytics">
-            <span class="icon">🔬</span>
-            <span>Analytics</span>
-        </a>
-    </nav>
+        // Init
+        if (rows.length > 0) showPage(1);
+    </script>
+    <script>
+    async function togglePause() {
+        const btn = document.getElementById("pause-btn");
+        const isPaused = btn.classList.contains("paused");
+        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
+        const resp = await fetch(endpoint, {method: "POST"});
+        const data = await resp.json();
+        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
+        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
+    }
+    </script>
 </body>
 </html>

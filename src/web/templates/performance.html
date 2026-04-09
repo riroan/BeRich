@@ -9,173 +9,154 @@
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            {% endif %}
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio">Portfolio</a>
+        <a href="/symbols">Symbols</a>
+        <a href="/trades">Trades</a>
+        <a href="/performance" class="active">Performance</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/settings">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>Performance Analysis</h1>
-            </div>
-            <div class="status-bar">
-                {% if bot_status %}
-                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
-                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
-                </span>
-                {% endif %}
-                <span class="update-time">
-                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
-            </div>
-        </header>
 
         <!-- Performance Metrics -->
-        <section class="performance-metrics">
-            <div class="metrics-grid">
-                <div class="metric-card primary">
-                    <h3>Total Return</h3>
-                    <p class="value {{ 'positive' if performance.total_return_pct >= 0 else 'negative' }}">
-                        {{ "{:+.2f}%".format(performance.total_return_pct) }}
-                    </p>
-                </div>
-                <div class="metric-card">
-                    <h3>CAGR</h3>
-                    <p class="value {{ 'positive' if performance.cagr >= 0 else 'negative' }}">
-                        {{ "{:+.2f}%".format(performance.cagr) }}
-                    </p>
-                </div>
-                <div class="metric-card">
-                    <h3>MDD</h3>
-                    <p class="value negative">
-                        {{ "{:.2f}%".format(performance.mdd) }}
-                    </p>
-                </div>
-                <div class="metric-card">
-                    <h3>Sharpe Ratio</h3>
-                    <p class="value">
-                        {{ "{:.2f}".format(performance.sharpe_ratio) }}
-                    </p>
-                </div>
+        <div class="cards-row">
+            <div class="card">
+                <div class="label">Balance (USD)</div>
+                <div class="value small">${{ "{:,.2f}".format(balance_usd) }}</div>
             </div>
-        </section>
+            <div class="card">
+                <div class="label">Total Return</div>
+                <div class="value small {{ 'positive' if performance.total_return_pct > 0 else ('negative' if performance.total_return_pct < 0 else '') }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">CAGR</div>
+                <div class="value small {{ 'positive' if performance.cagr > 0 else ('negative' if performance.cagr < 0 else '') }}">{{ "{:+.2f}%".format(performance.cagr) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">MDD</div>
+                <div class="value small {{ 'negative' if performance.mdd > 3 else ('rsi-warning' if performance.mdd > 1 else 'positive') }}">{{ "{:.2f}%".format(performance.mdd) }}</div>
+            </div>
+        </div>
 
         <!-- Trade Statistics -->
-        <section class="trade-statistics">
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <h3>Win Rate</h3>
-                    <p class="value {{ 'positive' if performance.win_rate >= 50 else 'negative' }}">
-                        {{ "{:.1f}%".format(performance.win_rate) }}
-                    </p>
-                    <p class="sub-value">{{ performance.winning_trades }}W / {{ performance.losing_trades }}L</p>
+        <div class="cards-row">
+            <div class="card">
+                <div class="label">Sharpe Ratio</div>
+                <div class="value small {{ 'positive' if performance.sharpe_ratio >= 3 else ('negative' if performance.sharpe_ratio < 1 else '') }}">{{ "{:.2f}".format(performance.sharpe_ratio) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Win Rate</div>
+                <div class="value small {{ 'positive' if performance.win_rate >= 50 else 'negative' }}">{{ "{:.1f}%".format(performance.win_rate) }}</div>
+                <div class="delta dim">{{ performance.winning_trades }}W / {{ performance.losing_trades }}L</div>
+            </div>
+            <div class="card">
+                <div class="label">Total P&L</div>
+                <div class="value small {{ 'positive' if performance.total_pnl > 0 else ('negative' if performance.total_pnl < 0 else '') }}">${{ "{:,.2f}".format(performance.total_pnl) }}</div>
+                <div class="delta dim">{{ performance.total_trades }} trades</div>
+            </div>
+            <div class="card">
+                <div class="label">Profit Factor</div>
+                <div class="value small">{{ "{:.2f}".format(performance.profit_factor) }}</div>
+            </div>
+        </div>
+
+        <!-- Win/Loss Visual Bar -->
+        <div class="card">
+            <div class="section-title">Win / Loss</div>
+            <div class="wl-bar-wrap">
+                <div class="wl-bar">
+                    {% set win_pct = (performance.winning_trades / performance.total_trades * 100) if performance.total_trades > 0 else 0 %}
+                    <div class="wl-fill win" style="width:{{ win_pct }}%"></div>
+                    <div class="wl-fill loss" style="width:{{ 100 - win_pct }}%"></div>
                 </div>
-                <div class="stat-card">
-                    <h3>Total Trades</h3>
-                    <p class="value">{{ performance.total_trades }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Total P&L</h3>
-                    <p class="value {{ 'positive' if performance.total_pnl >= 0 else 'negative' }}">
-                        ${{ "{:,.2f}".format(performance.total_pnl) }}
-                    </p>
-                </div>
-                <div class="stat-card">
-                    <h3>Avg Profit</h3>
-                    <p class="value positive">${{ "{:,.2f}".format(performance.avg_profit) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Avg Loss</h3>
-                    <p class="value negative">${{ "{:,.2f}".format(performance.avg_loss) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Profit Factor</h3>
-                    <p class="value">{{ "{:.2f}".format(performance.profit_factor) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Best Trade</h3>
-                    <p class="value positive">${{ "{:,.2f}".format(performance.best_trade) }}</p>
-                </div>
-                <div class="stat-card">
-                    <h3>Worst Trade</h3>
-                    <p class="value negative">${{ "{:,.2f}".format(performance.worst_trade) }}</p>
+                <div class="wl-labels">
+                    <span class="positive">Win {{ "{:.0f}".format(win_pct) }}%</span>
+                    <span class="negative">Loss {{ "{:.0f}".format(100 - win_pct) }}%</span>
                 </div>
             </div>
-        </section>
+            <div class="wl-details">
+                <div class="wl-col">
+                    <div class="wl-stat">
+                        <span class="dim">Avg Win</span>
+                        <span class="positive">${{ "{:,.2f}".format(performance.avg_profit) }}</span>
+                    </div>
+                    <div class="wl-stat">
+                        <span class="dim">Best Trade</span>
+                        <span class="positive">${{ "{:,.2f}".format(performance.best_trade) }}</span>
+                    </div>
+                    <div class="wl-stat">
+                        <span class="dim">Wins</span>
+                        <span class="positive">{{ performance.winning_trades }}</span>
+                    </div>
+                </div>
+                <div class="wl-col">
+                    <div class="wl-stat">
+                        <span class="dim">Avg Loss</span>
+                        <span class="negative">${{ "{:,.2f}".format(performance.avg_loss) }}</span>
+                    </div>
+                    <div class="wl-stat">
+                        <span class="dim">Worst Trade</span>
+                        <span class="negative">${{ "{:,.2f}".format(performance.worst_trade) }}</span>
+                    </div>
+                    <div class="wl-stat">
+                        <span class="dim">Losses</span>
+                        <span class="negative">{{ performance.losing_trades }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <!-- Equity Curve Chart -->
-        <section class="chart-section">
-            <div class="panel">
-                <h2>Equity Curve</h2>
-                <div class="chart-legend">
-                    <span class="legend-item"><span class="legend-color" style="background: #e94560;"></span> KRW</span>
-                    <span class="legend-item"><span class="legend-color" style="background: #3498db;"></span> USD</span>
-                </div>
-                <div id="equity-chart" class="chart-container"></div>
-            </div>
-        </section>
+        <div class="card">
+            <div class="section-title">Equity Curve</div>
+            <div id="equity-chart" class="chart-container-small"></div>
+        </div>
 
         <!-- Monthly Returns -->
         <section class="monthly-section">
             <div class="panel">
                 <h2>Monthly Returns</h2>
                 <div class="monthly-grid" id="monthly-returns">
-                    <p class="empty">Not enough data for monthly analysis</p>
+                    <p class="empty" style="grid-column:1/-1;">Loading...</p>
                 </div>
             </div>
         </section>
 
-        <!-- Recent Trades Performance -->
-        <section class="recent-performance">
-            <div class="panel">
-                <h2>Recent Trade Performance</h2>
-                <table class="performance-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Symbol</th>
-                            <th>Action</th>
-                            <th>Entry RSI</th>
-                            <th>P&L</th>
-                            <th>P&L %</th>
-                            <th>Trigger</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for log in trade_logs %}
-                        {% if log.pnl is not none %}
-                        <tr class="{{ 'win' if log.pnl >= 0 else 'loss' }}">
-                            <td class="time">{{ log.timestamp }}</td>
-                            <td class="symbol">{{ log.symbol }}</td>
-                            <td class="action {{ log.action }}">{{ log.action | upper }}</td>
-                            <td class="number">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
-                            <td class="number {{ 'positive' if log.pnl >= 0 else 'negative' }}">
-                                {{ "{:+,.0f}".format(log.pnl) if log.pnl else '-' }}
-                            </td>
-                            <td class="number {{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else 'negative' }}">
-                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
-                            </td>
-                            <td class="trigger">{{ log.trigger_rule }}</td>
-                        </tr>
-                        {% endif %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <footer>
-            <p>BeRich Trading Bot - Performance Analysis</p>
-        </footer>
     </div>
 
     <script>
         // Chart colors
         const colors = {
-            bg: '#1a1a2e',
+            bg: '#0f172a',
             text: '#eaeaea',
-            grid: '#16213e',
-            up: '#00d26a',
-            down: '#ff4757',
-            line: '#e94560',
+            grid: '#1e293b',
+            up: '#10b981',
+            down: '#ef4444',
+            line: '#3b82f6',
         };
 
         // Create equity chart
@@ -198,18 +179,10 @@
                 },
             });
 
-            // KRW equity line (red)
-            const krwSeries = chart.addLineSeries({
+            // USD equity line
+            const usdSeries = chart.addLineSeries({
                 color: colors.line,
                 lineWidth: 2,
-                title: 'KRW',
-            });
-
-            // USD equity line (blue)
-            const usdSeries = chart.addLineSeries({
-                color: '#3498db',
-                lineWidth: 2,
-                title: 'USD',
             });
 
             // Fetch real equity data from API
@@ -223,37 +196,20 @@
                         return;
                     }
 
-                    const krwData = [];
                     const usdData = [];
 
-                    // Parse time as KST (server sends KST time)
                     function parseKST(timeStr) {
-                        // Parse as local time, add 9 hours offset for chart display
                         const date = new Date(timeStr.replace(' ', 'T'));
                         return Math.floor(date.getTime() / 1000) + 32400;
                     }
 
                     data.forEach(point => {
                         const time = parseKST(point.timestamp);
-
-                        if (point.total_krw > 0) {
-                            krwData.push({
-                                time: time,
-                                value: point.total_krw,
-                            });
-                        }
-
                         if (point.total_usd > 0) {
-                            usdData.push({
-                                time: time,
-                                value: point.total_usd,
-                            });
+                            usdData.push({ time, value: point.total_usd });
                         }
                     });
 
-                    if (krwData.length > 0) {
-                        krwSeries.setData(krwData);
-                    }
                     if (usdData.length > 0) {
                         usdSeries.setData(usdData);
                     }
@@ -269,31 +225,59 @@
             window.addEventListener('resize', () => {
                 chart.applyOptions({ width: equityChartContainer.clientWidth });
             });
+
+            // Monthly Returns calculation
+            fetch('/api/equity-history')
+                .then(res => res.json())
+                .then(result => {
+                    const data = result.data || [];
+                    if (data.length < 2) return;
+
+                    // Group by month
+                    const months = {};
+                    data.forEach(p => {
+                        const d = new Date(p.timestamp);
+                        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                        if (!months[key]) months[key] = [];
+                        months[key].push(p.total_usd);
+                    });
+
+                    const keys = Object.keys(months).sort();
+                    if (keys.length < 2) return;
+
+                    const container = document.getElementById('monthly-returns');
+                    container.innerHTML = keys.map((key, i) => {
+                        const vals = months[key];
+                        const first = vals[0];
+                        const last = vals[vals.length - 1];
+                        let prevLast = first;
+                        if (i > 0) {
+                            const prevVals = months[keys[i - 1]];
+                            prevLast = prevVals[prevVals.length - 1];
+                        }
+                        const ret = prevLast > 0 ? ((last - prevLast) / prevLast * 100) : 0;
+                        const color = ret > 0 ? 'var(--emerald)' : (ret < 0 ? 'var(--red)' : 'var(--white)');
+                        const names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                        const month = names[parseInt(key.split('-')[1]) - 1];
+                        const year = key.split('-')[0];
+                        return '<div class="monthly-card" style="background:var(--bg);border-radius:8px;padding:14px;text-align:center;">' +
+                            '<div style="font-size:12px;color:var(--dim);">' + month + ' ' + year + '</div>' +
+                            '<div style="font-size:18px;font-weight:700;color:' + color + ';margin-top:4px;">' + (ret >= 0 ? '+' : '') + ret.toFixed(1) + '%</div>' +
+                            '</div>';
+                    }).join('');
+                });
         }
     </script>
-
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/trades">
-            <span class="icon">📝</span>
-            <span>Trades</span>
-        </a>
-        <a href="/analytics">
-            <span class="icon">🔬</span>
-            <span>Analytics</span>
-        </a>
-    </nav>
+    <script>
+    async function togglePause() {
+        const btn = document.getElementById("pause-btn");
+        const isPaused = btn.classList.contains("paused");
+        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
+        const resp = await fetch(endpoint, {method: "POST"});
+        const data = await resp.json();
+        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
+        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
+    }
+    </script>
 </body>
 </html>

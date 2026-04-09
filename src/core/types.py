@@ -119,3 +119,4 @@ class Fill:
     commission: Decimal
     timestamp: datetime
     pnl: Optional[Decimal] = None
+    rsi: Optional[float] = None

@@ -245,6 +245,7 @@ class DashboardState:
 
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
+        self.debug_freeze: bool = False
 
     def update_position(
         self,
@@ -828,6 +829,7 @@ def create_app() -> FastAPI:
             "stop_loss_alerts": [c.model_dump() for c in stop_loss_alerts],
             # Status
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "system_status": dashboard_state.system_status.model_dump(),
             "last_update": dashboard_state.last_update,
             # Market status
@@ -856,6 +858,7 @@ def create_app() -> FastAPI:
             "request": request,
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -878,7 +881,9 @@ def create_app() -> FastAPI:
             "performance": dashboard_state.performance.model_dump(),
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
+            "balance_usd": float(dashboard_state.balance_usd),
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -892,6 +897,7 @@ def create_app() -> FastAPI:
         """Get current bot status"""
         return {
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "system_status": dashboard_state.system_status.model_dump(),
             "balance_krw": float(dashboard_state.balance_krw),
             "balance_usd": float(dashboard_state.balance_usd),
@@ -1035,6 +1041,48 @@ def create_app() -> FastAPI:
         """Get trading pause status"""
         return {"paused": dashboard_state.trading_paused}
 
+    # ==================== Debug: Seed Test Positions ====================
+
+    @app.post("/api/debug/seed-positions")
+    async def seed_test_positions():
+        """Inject test positions into dashboard (dev only)"""
+        import random
+        dashboard_state.debug_freeze = True
+        test_positions = [
+            ("AAPL", "NASDAQ", 15, 245.30, 258.90),
+            ("GOOG", "NASDAQ", 8, 158.20, 165.80),
+            ("NVDA", "NASDAQ", 10, 170.50, 182.08),
+            ("QQQ", "NASDAQ", 5, 460.00, 478.20),
+            ("KO", "NYSE", 25, 74.50, 77.29),
+            ("VZ", "NYSE", 30, 43.20, 41.80),
+            ("XLE", "AMEX", 20, 84.00, 80.10),
+            ("SOXX", "NASDAQ", 12, 355.00, 370.40),
+            ("IAU", "AMEX", 40, 44.50, 47.85),
+            ("SPY", "AMEX", 5, 505.00, 520.10),
+        ]
+        for symbol, market, qty, avg, curr in test_positions:
+            rsi = random.uniform(25, 75)
+            stage = random.randint(0, 2)
+            dashboard_state.update_position(
+                symbol=symbol, market=market, quantity=qty,
+                avg_price=avg, current_price=curr, rsi=round(rsi, 1),
+                buy_stage=stage, max_buy_stages=3,
+            )
+        # Seed RSI values near buy/sell thresholds to trigger signal candidates
+        signal_rsi = [
+            ("WMT", "NASDAQ", 127.26, 28.5),   # buy candidate
+            ("JNJ", "NYSE", 152.30, 32.1),      # buy candidate
+            ("O", "NYSE", 55.40, 33.2),          # buy candidate
+            ("SOXX", "NASDAQ", 370.40, 74.5),    # sell candidate
+            ("IAU", "AMEX", 47.85, 71.2),        # sell candidate
+            ("SPY", "AMEX", 520.10, 76.8),       # sell candidate
+        ]
+        for symbol, market, price, rsi in signal_rsi:
+            dashboard_state.update_rsi(symbol, rsi, price=price, market=market)
+
+        dashboard_state.update_signal_candidates()
+        return {"seeded": len(test_positions), "signals": len(signal_rsi)}
+
     # ==================== Symbol Management Routes ====================
 
     class WatchedSymbolCreate(BaseModel):
@@ -1071,6 +1119,7 @@ def create_app() -> FastAPI:
             "request": request,
             "symbols": symbols,
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
             "markets": ["krx", "nasdaq", "nyse", "amex"],
             "strategy_names": dashboard_state.strategy_names,
@@ -1359,6 +1408,7 @@ def create_app() -> FastAPI:
             "cash_total": cash_total,
             "cash_weight": cash_weight,
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -1456,6 +1506,7 @@ def create_app() -> FastAPI:
             "live_params": live_params,
             "strategy_names": dashboard_state.strategy_names,
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -1570,6 +1621,7 @@ def create_app() -> FastAPI:
             "drawdown": drawdown,
             "statistics": statistics,
             "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(

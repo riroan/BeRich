@@ -8,99 +8,127 @@
     <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>{{ symbol }}</h1>
-            </div>
-            <div class="status-bar">
-                <span class="update-time">
-                    Last update: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
-            </div>
-        </header>
-
-        <section class="symbol-info">
-            {% if position %}
-            <div class="info-cards">
-                <div class="card">
-                    <h3>Market</h3>
-                    <p class="value">{{ position.market }}</p>
-                </div>
-                <div class="card">
-                    <h3>Quantity</h3>
-                    <p class="value">{{ position.quantity }}</p>
-                </div>
-                <div class="card">
-                    <h3>Avg Price</h3>
-                    <p class="value">
-                        {% if position.market == 'KRX' %}
-                        {{ "{:,.0f}".format(position.avg_price) }}
-                        {% else %}
-                        ${{ "{:,.2f}".format(position.avg_price) }}
-                        {% endif %}
-                    </p>
-                </div>
-                <div class="card">
-                    <h3>Current</h3>
-                    <p class="value">
-                        {% if position.market == 'KRX' %}
-                        {{ "{:,.0f}".format(position.current_price) }}
-                        {% else %}
-                        ${{ "{:,.2f}".format(position.current_price) }}
-                        {% endif %}
-                    </p>
-                </div>
-                <div class="card">
-                    <h3>P&L</h3>
-                    <p class="value {{ 'positive' if position.pnl >= 0 else 'negative' }}">
-                        {% if position.market == 'KRX' %}
-                        {{ "{:+,.0f}".format(position.pnl) }}
-                        {% else %}
-                        ${{ "{:+,.2f}".format(position.pnl) }}
-                        {% endif %}
-                        ({{ "{:+.1f}%".format(position.pnl_pct) }})
-                    </p>
-                </div>
-                <div class="card">
-                    <h3>RSI</h3>
-                    <p class="value rsi-value {{ 'oversold' if rsi and rsi <= 30 else ('overbought' if rsi and rsi >= 70 else '') }}">
-                        {{ "{:.1f}".format(rsi) if rsi else '-' }}
-                    </p>
-                </div>
-                <div class="card">
-                    <h3>Buy Stage</h3>
-                    <p class="value">{{ position.buy_stage }}/{{ position.max_buy_stages }}</p>
-                </div>
-                <div class="card">
-                    <h3>Stop Loss Dist</h3>
-                    <p class="value {{ 'danger' if position.stop_loss_distance <= 2 else ('warning' if position.stop_loss_distance <= 5 else '') }}">
-                        {{ "{:.1f}%".format(position.stop_loss_distance) }}
-                    </p>
-                </div>
-            </div>
-            {% else %}
-            <div class="info-cards">
-                <div class="card">
-                    <h3>RSI</h3>
-                    <p class="value rsi-value {{ 'oversold' if rsi and rsi <= 30 else ('overbought' if rsi and rsi >= 70 else '') }}">
-                        {{ "{:.1f}".format(rsi) if rsi else '-' }}
-                    </p>
-                </div>
-                <div class="card">
-                    <h3>Position</h3>
-                    <p class="value">No position</p>
-                </div>
-            </div>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
             {% endif %}
-        </section>
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio">Portfolio</a>
+        <a href="/symbols" class="active">Symbols</a>
+        <a href="/trades">Trades</a>
+        <a href="/performance">Performance</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/settings">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
+    <div class="container">
+        <div class="section-title" style="font-size:20px;gap:8px;">
+            <span style="margin-left:8px;">{{ symbol }}</span>
+            {% if position %}
+            <span class="market-badge market-{{ position.market|lower }}">{{ position.market }}</span>
+            {% endif %}
+        </div>
+
+        {% if position %}
+        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+            <div class="card">
+                <div class="label">Current Price</div>
+                <div class="value small">{% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.current_price) }}{% else %}${{ "{:,.2f}".format(position.current_price) }}{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">P&L</div>
+                <div class="value small {{ 'positive' if position.pnl >= 0 else 'negative' }}">{{ "{:+.1f}%".format(position.pnl_pct) }}</div>
+                <div class="delta {{ 'positive' if position.pnl >= 0 else 'negative' }}">{% if position.market == 'KRX' %}{{ "{:+,.0f}".format(position.pnl) }}{% else %}${{ "{:+,.2f}".format(position.pnl) }}{% endif %}</div>
+            </div>
+            <div class="card">
+                <div class="label">RSI</div>
+                <div class="value small {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Quantity</div>
+                <div class="value small">{{ position.quantity }}</div>
+                <div class="delta dim">Avg {% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.avg_price) }}{% else %}${{ "{:,.2f}".format(position.avg_price) }}{% endif %}</div>
+            </div>
+        </div>
+        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+            <div class="card">
+                <div class="label">Buy Stage</div>
+                <div class="value small">{{ position.buy_stage }}/{{ position.max_buy_stages }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Stop Loss Dist</div>
+                <div class="value small {{ 'danger' if position.stop_loss_distance <= 2 else ('warning' if position.stop_loss_distance <= 5 else '') }}">{{ "{:.1f}%".format(position.stop_loss_distance) }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Today Change</div>
+                <div class="value" id="today-change">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Last Trade</div>
+                <div class="value small dim" >{% if symbol_trades %}{{ symbol_trades[0].timestamp }}{% else %}-{% endif %}</div>
+            </div>
+        </div>
+        {% else %}
+        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+            <div class="card">
+                <div class="label">Current Price</div>
+                <div class="value small dim">-</div>
+            </div>
+            <div class="card">
+                <div class="label">P&L</div>
+                <div class="value small dim">-</div>
+            </div>
+            <div class="card">
+                <div class="label">RSI</div>
+                <div class="value small {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Quantity</div>
+                <div class="value small dim">0</div>
+            </div>
+        </div>
+        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+            <div class="card">
+                <div class="label">Buy Stage</div>
+                <div class="value small dim">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Stop Loss Dist</div>
+                <div class="value small dim">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Today Change</div>
+                <div class="value" id="today-change">-</div>
+            </div>
+            <div class="card">
+                <div class="label">Last Trade</div>
+                <div class="value small dim" >{% if symbol_trades %}{{ symbol_trades[0].timestamp }}{% else %}-{% endif %}</div>
+            </div>
+        </div>
+        {% endif %}
 
         <section class="chart-section">
             <div class="panel">
                 <h2>Price Chart</h2>
-                <div id="price-chart" class="chart-container"></div>
+                <div id="price-chart" class="chart-container-small"></div>
             </div>
         </section>
 
@@ -116,7 +144,7 @@
         <section class="trades-section">
             <div class="panel">
                 <h2>Trade History</h2>
-                <table class="trades-table">
+                <table class="trades-table center-table">
                     <thead>
                         <tr>
                             <th>Time</th>
@@ -124,7 +152,6 @@
                             <th>Price</th>
                             <th>Qty</th>
                             <th>RSI</th>
-                            <th>Trigger</th>
                             <th>P&L</th>
                         </tr>
                     </thead>
@@ -136,7 +163,6 @@
                             <td class="number">{{ "{:,.2f}".format(log.price) }}</td>
                             <td class="number">{{ log.quantity }}</td>
                             <td class="number">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
-                            <td class="trigger">{{ log.trigger_rule }}</td>
                             <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}">
                                 {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
                             </td>
@@ -147,10 +173,6 @@
             </div>
         </section>
         {% endif %}
-
-        <footer>
-            <p>BeRich Trading Bot - {{ symbol }}</p>
-        </footer>
     </div>
 
     <script>
@@ -159,16 +181,16 @@
 
         // Chart colors
         const colors = {
-            bg: '#1a1a2e',
+            bg: '#0f172a',
             text: '#eaeaea',
-            grid: '#16213e',
-            up: '#00d26a',
-            down: '#ff4757',
-            rsi: '#e94560',
-            oversold: '#00d26a',
-            overbought: '#ff4757',
-            buyMarker: '#00d26a',
-            sellMarker: '#ff4757',
+            grid: '#1e293b',
+            up: '#10b981',
+            down: '#ef4444',
+            rsi: '#3b82f6',
+            oversold: '#10b981',
+            overbought: '#ef4444',
+            buyMarker: '#10b981',
+            sellMarker: '#ef4444',
         };
 
         // Create price chart
@@ -176,17 +198,23 @@
         const priceChart = LightweightCharts.createChart(priceChartContainer, {
             layout: {
                 background: { color: colors.bg },
-                textColor: colors.text,
+                textColor: '#94a3b8',
+                fontSize: 12,
             },
             grid: {
                 vertLines: { color: colors.grid },
                 horzLines: { color: colors.grid },
+            },
+            rightPriceScale: {
+                borderColor: colors.grid,
+                minimumWidth: 80,
             },
             width: priceChartContainer.clientWidth,
             height: 400,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
+                borderColor: colors.grid,
             },
         });
 
@@ -204,17 +232,23 @@
         const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
             layout: {
                 background: { color: colors.bg },
-                textColor: colors.text,
+                textColor: '#94a3b8',
+                fontSize: 12,
             },
             grid: {
                 vertLines: { color: colors.grid },
                 horzLines: { color: colors.grid },
+            },
+            rightPriceScale: {
+                borderColor: colors.grid,
+                minimumWidth: 80,
             },
             width: rsiChartContainer.clientWidth,
             height: 200,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
+                borderColor: colors.grid,
             },
         });
 
@@ -275,6 +309,18 @@
                     }
 
                     priceChart.timeScale().fitContent();
+
+                    // Calculate today change
+                    if (candleData.length >= 2) {
+                        const today = candleData[candleData.length - 1].close;
+                        const yesterday = candleData[candleData.length - 2].close;
+                        const change = ((today - yesterday) / yesterday * 100).toFixed(2);
+                        const el = document.getElementById('today-change');
+                        if (el) {
+                            el.textContent = (change >= 0 ? '+' : '') + change + '%';
+                            el.className = 'value small ' + (change >= 0 ? 'positive' : 'negative');
+                        }
+                    }
                 }
 
                 if (data.rsi && data.rsi.length > 0) {
@@ -358,29 +404,5 @@
         // Refresh every 60 seconds
         setInterval(loadChartData, 60000);
     </script>
-
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/trades">
-            <span class="icon">📝</span>
-            <span>Trades</span>
-        </a>
-        <a href="/analytics">
-            <span class="icon">🔬</span>
-            <span>Analytics</span>
-        </a>
-    </nav>
 </body>
 </html>

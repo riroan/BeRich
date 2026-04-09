@@ -109,7 +109,7 @@ class DashboardWebSocket {
         const krwPnl = document.getElementById('pnl-krw');
         if (krwPnl && data.pnl_krw !== undefined) {
             krwPnl.textContent = this.formatKRW(data.pnl_krw, true);
-            krwPnl.className = `value ${data.pnl_krw >= 0 ? 'positive' : 'negative'}`;
+            krwPnl.className = `value small ${data.pnl_krw >= 0 ? 'positive' : 'negative'}`;
         }
 
         // USD Balance
@@ -126,7 +126,7 @@ class DashboardWebSocket {
         const usdPnl = document.getElementById('pnl-usd');
         if (usdPnl && data.pnl_usd !== undefined) {
             usdPnl.textContent = this.formatUSD(data.pnl_usd, true);
-            usdPnl.className = `value ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
+            usdPnl.className = `value small ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
     }
 
@@ -176,16 +176,13 @@ class DashboardWebSocket {
             const market = priceInfo.market;
 
             return `
-                <a href="/symbol/${symbol}" class="rsi-item ${this.getRSIClass(rsi)}">
-                    <div class="rsi-header">
-                        <span class="rsi-symbol">${symbol}</span>
-                        ${price ? `<span class="rsi-price">${this.formatPrice(price, market)}</span>` : ''}
+                <div class="rsi-item" onclick="location.href='/symbol/${symbol}'">
+                    <div class="rsi-left">
+                        <div class="rsi-symbol">${symbol}</div>
+                        <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
                     </div>
                     <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi.toFixed(1)}</span>
-                    <div class="rsi-bar">
-                        <div class="rsi-fill" style="width: ${rsi}%"></div>
-                    </div>
-                </a>
+                </div>
             `;
         }).join('');
     }
@@ -336,10 +333,10 @@ class DashboardWebSocket {
     }
 
     getRSIClass(rsi) {
-        if (!rsi) return '';
-        if (rsi <= 30) return 'oversold';
-        if (rsi >= 70) return 'overbought';
-        return '';
+        if (!rsi) return 'rsi-neutral';
+        if (rsi <= 24 || rsi >= 76) return 'rsi-danger';
+        if (rsi <= 35 || rsi >= 65) return 'rsi-warning';
+        return 'rsi-neutral';
     }
 }
 

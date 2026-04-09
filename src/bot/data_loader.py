@@ -93,7 +93,7 @@ class DataLoaderMixin:
             logger.warning(f"Failed to load equity history: {e}")
 
     async def load_fills(self: "TradingBot") -> None:
-        """Load fills from database for performance calculation"""
+        """Load fills from database for performance calculation and trade logs"""
         try:
             fills = await self.storage.get_all_fills()
             self.dashboard.fills = [
@@ -110,6 +110,27 @@ class DataLoaderMixin:
                 }
                 for f in fills
             ]
+
+            # Populate trade_logs from fills for Trades page
+            for f in fills:
+                side_val = f.side.value if f.side else "buy"
+                action = "buy" if side_val == "buy" else "sell"
+                pnl = float(f.pnl) if f.pnl else None
+                cost = float(f.price) * f.quantity
+                pnl_pct = (pnl / cost * 100) if pnl and cost > 0 else None
+                self.dashboard.add_trade_log(
+                    symbol=f.symbol,
+                    market=f.market.value.upper() if f.market else "US",
+                    action=action,
+                    price=float(f.price),
+                    quantity=f.quantity,
+                    rsi=f.rsi,
+                    trigger_rule="historical",
+                    result="success",
+                    pnl=pnl,
+                    pnl_pct=round(pnl_pct, 2) if pnl_pct else None,
+                )
+
             self.dashboard.calculate_performance()
             logger.info(f"Loaded {len(fills)} fills, performance calculated")
         except Exception as e:

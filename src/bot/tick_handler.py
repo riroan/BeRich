@@ -19,6 +19,8 @@ class TickHandlerMixin:
 
     async def on_tick(self: "TradingBot") -> None:
         """Called every minute - fetch prices and check strategies"""
+        if getattr(self.dashboard, 'debug_freeze', False):
+            return
         await self._warmup.log_status()
         await self.update_dashboard_status()
         await self.update_dashboard_positions()

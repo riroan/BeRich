@@ -10,217 +10,159 @@
         .analytics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1rem;
-            margin-bottom: 1.5rem;
+            gap: 16px;
+            margin-bottom: 20px;
         }
-
         .analytics-card {
-            background: #1a1a2e;
-            border-radius: 8px;
-            padding: 1.25rem;
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
         }
-
         .analytics-card h3 {
-            margin: 0 0 1rem 0;
-            font-size: 1rem;
-            color: #888;
-            border-bottom: 1px solid #2a2a3e;
-            padding-bottom: 0.5rem;
+            margin: 0 0 16px 0;
+            font-size: 14px;
+            color: var(--dim);
+            font-weight: 500;
         }
-
         .report-tabs {
             display: flex;
-            gap: 0.5rem;
-            margin-bottom: 1rem;
+            gap: 4px;
+            margin-bottom: 16px;
         }
-
         .report-tab {
-            padding: 0.5rem 1rem;
-            background: #2a2a3e;
-            border: none;
-            border-radius: 4px;
-            color: #888;
+            padding: 6px 14px;
+            background: transparent;
+            border: 1px solid var(--card);
+            border-radius: 20px;
+            color: var(--dim);
             cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            font-family: inherit;
             transition: all 0.2s;
         }
-
+        .report-tab:hover { border-color: var(--blue); color: var(--text); }
         .report-tab.active {
-            background: #e94560;
+            background: var(--blue);
             color: white;
+            border-color: var(--blue);
         }
-
         .stat-row {
             display: flex;
             justify-content: space-between;
-            padding: 0.5rem 0;
-            border-bottom: 1px solid #2a2a3e;
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(51,65,85,0.3);
+            font-size: 13px;
         }
-
-        .stat-row:last-child {
-            border-bottom: none;
-        }
-
-        .stat-label {
-            color: #888;
-        }
-
-        .stat-value {
-            font-weight: 600;
-        }
-
-        .stat-value.positive { color: #00d26a; }
-        .stat-value.negative { color: #ff4757; }
-        .stat-value.warning { color: #f1c40f; }
-        .stat-value.danger { color: #e74c3c; }
-
+        .stat-row:last-child { border-bottom: none; }
+        .stat-label { color: var(--dim); }
+        .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+        .stat-value.positive { color: var(--emerald); }
+        .stat-value.negative { color: var(--red); }
+        .stat-value.warning { color: var(--amber); }
+        .stat-value.danger { color: var(--red); }
         .drawdown-alert {
-            padding: 0.75rem;
-            border-radius: 4px;
-            margin-bottom: 1rem;
+            padding: 12px 16px;
+            border-radius: var(--radius);
+            margin-bottom: 12px;
         }
-
         .drawdown-alert.warning {
-            background: rgba(241, 196, 15, 0.2);
-            border: 1px solid #f1c40f;
+            background: rgba(245,158,11,0.1);
+            border: 1px solid rgba(245,158,11,0.3);
         }
-
         .drawdown-alert.danger {
-            background: rgba(231, 76, 60, 0.2);
-            border: 1px solid #e74c3c;
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
         }
-
         .drawdown-alert.critical {
-            background: rgba(231, 76, 60, 0.4);
-            border: 2px solid #e74c3c;
+            background: rgba(239,68,68,0.2);
+            border: 2px solid var(--red);
         }
-
-        .symbol-stats-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .symbol-stats-table th,
-        .symbol-stats-table td {
-            padding: 0.5rem;
-            text-align: left;
-            border-bottom: 1px solid #2a2a3e;
-        }
-
-        .symbol-stats-table th {
-            color: #888;
-            font-weight: normal;
-        }
-
         .time-stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-            gap: 0.5rem;
+            gap: 8px;
         }
-
         .time-stat-item {
             text-align: center;
-            padding: 0.5rem;
-            background: #2a2a3e;
-            border-radius: 4px;
+            padding: 8px;
+            background: var(--bg);
+            border-radius: 8px;
         }
-
-        .time-stat-item .label {
-            font-size: 0.75rem;
-            color: #888;
-        }
-
-        .time-stat-item .value {
-            font-size: 0.9rem;
-            font-weight: 600;
-        }
-
+        .time-stat-item .label { font-size: 11px; color: var(--dim); }
+        .time-stat-item .value { font-size: 13px; font-weight: 600; }
         .streak-display {
             display: flex;
             align-items: center;
-            gap: 0.5rem;
-            font-size: 1.5rem;
-            font-weight: bold;
+            gap: 8px;
+            font-size: 24px;
+            font-weight: 700;
         }
-
-        .streak-display.win { color: #00d26a; }
-        .streak-display.loss { color: #ff4757; }
-
-        .chart-container-small {
-            height: 200px;
-            width: 100%;
-        }
-
-        .summary-highlight {
-            text-align: center;
-            padding: 1rem;
-            background: #2a2a3e;
-            border-radius: 8px;
-            margin-bottom: 1rem;
-        }
-
-        .summary-highlight .value {
-            font-size: 2rem;
-            font-weight: bold;
-        }
-
-        .summary-highlight .label {
-            color: #888;
-            font-size: 0.9rem;
+        .streak-display.win { color: var(--emerald); }
+        .streak-display.loss { color: var(--red); }
+        .chart-container-small { height: 200px; width: 100%; }
         }
     </style>
 </head>
 <body>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            {% endif %}
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio">Portfolio</a>
+        <a href="/symbols">Symbols</a>
+        <a href="/trades">Trades</a>
+        <a href="/performance">Performance</a>
+        <a href="/analytics" class="active">Analytics</a>
+        <a href="/settings">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>Analytics</h1>
-            </div>
-            <div class="status-bar">
-                {% if bot_status %}
-                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
-                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
-                </span>
-                {% endif %}
-                <span class="update-time">
-                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
-            </div>
-        </header>
 
         <!-- Summary Highlights -->
-        <section class="analytics-grid">
-            <div class="summary-highlight">
-                <div class="value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">
-                    {{ "{:.1f}%".format(statistics.win_rate) }}
-                </div>
+        <div class="cards-row">
+            <div class="card">
                 <div class="label">Overall Win Rate</div>
+                <div class="value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">{{ "{:.1f}%".format(statistics.win_rate) }}</div>
             </div>
-            <div class="summary-highlight">
-                <div class="value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">
-                    ${{ "{:,.2f}".format(statistics.total_pnl) }}
-                </div>
+            <div class="card">
                 <div class="label">Total P&L</div>
+                <div class="value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">${{ "{:,.2f}".format(statistics.total_pnl) }}</div>
             </div>
-            <div class="summary-highlight">
-                <div class="value negative">
-                    {{ "{:.2f}%".format(drawdown.mdd_pct) }}
-                </div>
+            <div class="card">
                 <div class="label">Max Drawdown</div>
+                <div class="value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</div>
             </div>
-            <div class="summary-highlight">
-                <div class="value">
-                    {{ statistics.profit_factor | round(2) }}
-                </div>
+            <div class="card">
                 <div class="label">Profit Factor</div>
+                <div class="value">{{ statistics.profit_factor | round(2) }}</div>
             </div>
-        </section>
+        </div>
 
         <!-- Period Reports -->
-        <section class="analytics-card" style="grid-column: 1 / -1;">
+        <div class="card">
             <h3>Trade Reports</h3>
-            <div class="report-tabs">
+            <div class="strategy-tabs" style="margin-top:12px;">
                 <button class="report-tab active" data-period="daily">Daily</button>
                 <button class="report-tab" data-period="weekly">Weekly</button>
                 <button class="report-tab" data-period="monthly">Monthly</button>
@@ -232,7 +174,7 @@
                         <div class="stat-row">
                             <span class="stat-label">Period</span>
                             <span class="stat-value" id="report-period">
-                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}
+                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != daily_report.end_date %} ~ {{ daily_report.end_date.strftime('%Y-%m-%d') }}{% endif %}
                             </span>
                         </div>
                         <div class="stat-row">
@@ -282,10 +224,10 @@
             </div>
         </section>
 
-        <div class="analytics-grid">
+        <div class="two-col">
             <!-- Drawdown Analysis -->
-            <div class="analytics-card">
-                <h3>Drawdown Analysis</h3>
+            <div class="card">
+                <div class="section-title">Drawdown Analysis</div>
 
                 {% if drawdown.alert_triggered %}
                 <div class="drawdown-alert {{ drawdown.alert_level }}">
@@ -330,12 +272,11 @@
                     <span class="stat-value">{{ drawdown.current_drawdown_duration_days }} days</span>
                 </div>
 
-                <div id="drawdown-chart" class="chart-container-small" style="margin-top: 1rem;"></div>
             </div>
 
             <!-- Streaks -->
-            <div class="analytics-card">
-                <h3>Trading Streaks</h3>
+            <div class="card">
+                <div class="section-title">Trading Streaks</div>
 
                 <div style="text-align: center; margin: 1rem 0;">
                     <div class="stat-label">Current Streak</div>
@@ -373,11 +314,13 @@
             </div>
         </div>
 
+        <div style="margin-top:12px;"></div>
+
         <!-- Symbol Statistics -->
-        <section class="analytics-card">
-            <h3>Performance by Symbol</h3>
+        <div class="card">
+            <div class="section-title">Performance by Symbol</div>
             {% if statistics.by_symbol %}
-            <table class="symbol-stats-table">
+            <table class="symbol-stats-table center-table">
                 <thead>
                     <tr>
                         <th>Symbol</th>
@@ -406,109 +349,38 @@
             {% else %}
             <p class="empty">No trade data available</p>
             {% endif %}
-        </section>
-
-        <!-- Time-based Statistics -->
-        <div class="analytics-grid">
-            <div class="analytics-card">
-                <h3>Win Rate by Day of Week</h3>
-                {% if statistics.by_day_of_week %}
-                <div class="time-stats-grid">
-                    {% for t in statistics.by_day_of_week %}
-                    <div class="time-stat-item">
-                        <div class="label">{{ t.label }}</div>
-                        <div class="value {{ 'positive' if t.win_rate >= 50 else 'negative' }}">
-                            {{ "{:.0f}%".format(t.win_rate) }}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="empty">No data</p>
-                {% endif %}
-            </div>
-
-            <div class="analytics-card">
-                <h3>Win Rate by Hour (KST)</h3>
-                {% if statistics.by_hour %}
-                <div class="time-stats-grid">
-                    {% for t in statistics.by_hour %}
-                    <div class="time-stat-item">
-                        <div class="label">{{ t.label }}</div>
-                        <div class="value {{ 'positive' if t.win_rate >= 50 else 'negative' }}">
-                            {{ "{:.0f}%".format(t.win_rate) }}
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <p class="empty">No data</p>
-                {% endif %}
-            </div>
+            <div class="pagination" id="symbol-pagination"></div>
         </div>
-
-        <footer>
-            <p>BeRich Trading Bot - Analytics</p>
-        </footer>
     </div>
 
     <script>
-        // Chart colors
-        const colors = {
-            bg: '#1a1a2e',
-            text: '#eaeaea',
-            grid: '#16213e',
-            line: '#e94560',
-        };
+        // Symbol table pagination
+        const symRows = Array.from(document.querySelectorAll('.symbol-stats-table tbody tr'));
+        const SYM_PER_PAGE = 10;
+        let symPage = 1;
 
-        // Drawdown chart
-        const ddChartContainer = document.getElementById('drawdown-chart');
-        if (ddChartContainer) {
-            const ddChart = LightweightCharts.createChart(ddChartContainer, {
-                layout: {
-                    background: { color: colors.bg },
-                    textColor: colors.text,
-                },
-                grid: {
-                    vertLines: { color: colors.grid },
-                    horzLines: { color: colors.grid },
-                },
-                width: ddChartContainer.clientWidth,
-                height: 200,
-                timeScale: {
-                    timeVisible: true,
-                    secondsVisible: false,
-                },
-                rightPriceScale: {
-                    scaleMargins: { top: 0.1, bottom: 0.1 },
-                },
+        function showSymPage(page) {
+            symPage = page;
+            const start = (page - 1) * SYM_PER_PAGE;
+            const end = start + SYM_PER_PAGE;
+            symRows.forEach((row, i) => {
+                row.style.display = (i >= start && i < end) ? '' : 'none';
             });
-
-            const ddSeries = ddChart.addAreaSeries({
-                lineColor: colors.line,
-                topColor: 'rgba(233, 69, 96, 0.4)',
-                bottomColor: 'rgba(233, 69, 96, 0.0)',
-                lineWidth: 2,
-            });
-
-            // Fetch drawdown data
-            fetch('/api/analytics/drawdown')
-                .then(res => res.json())
-                .then(data => {
-                    if (data.history && data.history.length > 0) {
-                        const chartData = data.history.map(p => ({
-                            time: Math.floor(new Date(p.timestamp).getTime() / 1000),
-                            value: p.drawdown_pct,
-                        }));
-                        ddSeries.setData(chartData);
-                        ddChart.timeScale().fitContent();
-                    }
-                });
-
-            window.addEventListener('resize', () => {
-                ddChart.applyOptions({ width: ddChartContainer.clientWidth });
-            });
+            renderSymPagination();
         }
+
+        function renderSymPagination() {
+            const container = document.getElementById('symbol-pagination');
+            const pages = Math.ceil(symRows.length / SYM_PER_PAGE);
+            if (pages <= 1) { container.innerHTML = ''; return; }
+            let html = '';
+            for (let i = 1; i <= pages; i++) {
+                html += '<button class="page-btn ' + (i === symPage ? 'active' : '') + '" onclick="showSymPage(' + i + ')">' + i + '</button>';
+            }
+            container.innerHTML = html;
+        }
+
+        if (symRows.length > 0) showSymPage(1);
 
         // Report tabs
         const reportTabs = document.querySelectorAll('.report-tab');
@@ -521,7 +393,9 @@
                 const res = await fetch(`/api/analytics/reports?period=${period}`);
                 const data = await res.json();
 
-                document.getElementById('report-period').textContent = data.start_date.split('T')[0];
+                const start = data.start_date.split('T')[0];
+                const end = data.end_date.split('T')[0];
+                document.getElementById('report-period').textContent = (start === end) ? start : start + ' ~ ' + end;
                 document.getElementById('report-trades').textContent = data.total_trades;
                 document.getElementById('report-winrate').textContent = data.win_rate.toFixed(1) + '%';
                 document.getElementById('report-winrate').className = 'stat-value ' + (data.win_rate >= 50 ? 'positive' : 'negative');
@@ -534,29 +408,16 @@
             });
         });
     </script>
-
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/trades">
-            <span class="icon">📝</span>
-            <span>Trades</span>
-        </a>
-        <a href="/analytics" class="active">
-            <span class="icon">🔬</span>
-            <span>Analytics</span>
-        </a>
-    </nav>
+    <script>
+    async function togglePause() {
+        const btn = document.getElementById("pause-btn");
+        const isPaused = btn.classList.contains("paused");
+        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
+        const resp = await fetch(endpoint, {method: "POST"});
+        const data = await resp.json();
+        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
+        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
+    }
+    </script>
 </body>
 </html>

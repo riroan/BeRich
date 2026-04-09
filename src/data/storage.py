@@ -51,6 +51,16 @@ class Storage:
                     ))
                     logger.info("Migrated: added max_weight column")
 
+            # Add rsi to fills if missing
+            if "fills" in insp.get_table_names():
+                cols = [c["name"] for c in insp.get_columns("fills")]
+                if "rsi" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE fills "
+                        "ADD COLUMN rsi DECIMAL(10,4)"
+                    ))
+                    logger.info("Migrated: added rsi column to fills")
+
         await conn.run_sync(_check_and_migrate)
 
     async def close(self) -> None:
@@ -206,6 +216,7 @@ class Storage:
                 price=fill.price,
                 commission=fill.commission,
                 pnl=fill.pnl,
+                rsi=fill.rsi,
                 timestamp=fill.timestamp,
             )
             session.add(fill_model)
@@ -228,6 +239,7 @@ class Storage:
                     price=Decimal(str(row.price)),
                     commission=Decimal(str(row.commission)),
                     pnl=Decimal(str(row.pnl)) if row.pnl else None,
+                    rsi=float(row.rsi) if row.rsi else None,
                     timestamp=row.timestamp,
                 )
                 for row in rows
@@ -264,6 +276,7 @@ class Storage:
                     price=Decimal(str(row.price)),
                     commission=Decimal(str(row.commission)),
                     pnl=Decimal(str(row.pnl)) if row.pnl else None,
+                    rsi=float(row.rsi) if row.rsi else None,
                     timestamp=row.timestamp,
                 )
                 for row in rows

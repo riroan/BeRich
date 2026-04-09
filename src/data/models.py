@@ -61,6 +61,7 @@ class FillModel(Base):
     price = Column(Numeric(20, 8), nullable=False)
     commission = Column(Numeric(20, 8), nullable=False)
     pnl = Column(Numeric(20, 8))
+    rsi = Column(Numeric(10, 4))
     timestamp = Column(DateTime, nullable=False)
 
 

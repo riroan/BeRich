@@ -5,148 +5,220 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Strategy Settings - BeRich Dashboard</title>
     <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .settings-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 12px; color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+        .form-group .hint { font-size: 11px; color: var(--dim); }
+        .levels-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+        .level-table { width: 100%; }
+        .level-table th { font-size: 11px; color: var(--dim); text-transform: uppercase; padding: 8px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
+        .level-table td { padding: 10px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
+        .level-badge { background: var(--card); color: var(--white); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
+        .portion-wrap { display: flex; align-items: center; gap: 8px; }
+        .portion-bar { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+        .portion-fill { height: 100%; border-radius: 3px; }
+        .portion-fill.buy { background: var(--emerald); }
+        .portion-fill.sell { background: var(--amber); }
+        .portion-pct { font-size: 13px; font-weight: 600; color: var(--white); min-width: 35px; text-align: right; }
+        input.level-input[type="text"] { width: 60px; padding: 6px 8px; font-size: 13px; }
+        input.level-input[data-type$="-rsi"] { text-align: center; }
+        input.level-input[data-type$="-portion"] { text-align: right; }
+        .strategy-content { display: none; }
+        .strategy-content.active { display: flex; flex-direction: column; gap: 20px; }
+        .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+        .save-status { font-size: 13px; }
+        .save-status.success { color: var(--emerald); }
+        .save-status.error { color: var(--red); }
+
+        /* Read-only mode */
+        .strategy-content .read-val {
+            font-size: 13px; font-weight: 600; color: var(--white);
+            padding: 6px 8px; font-variant-numeric: tabular-nums;
+        }
+        .strategy-content .form-group .read-val {
+            font-size: 20px; font-weight: 700;
+        }
+        .strategy-content.editing .read-val { display: none; }
+        .strategy-content:not(.editing) input.level-input,
+        .strategy-content:not(.editing) .settings-form-grid input[type="text"] { display: none; }
+        .strategy-content.editing .read-val { display: none; }
+        .strategy-content.editing .read-val { display: none; }
+        .strategy-content:not(.editing) .btn-save { display: none; }
+        .strategy-content.editing .btn-edit { display: none; }
+    </style>
 </head>
 <body>
+    <div class="header">
+        <h1>Be<span>Rich</span></h1>
+        <div class="header-right">
+            {% if bot_status %}
+            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
+                {{ 'Running' if bot_status.running else 'Stopped' }}
+            </span>
+            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
+                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
+            </span>
+            {% if bot_status.warmup_remaining %}
+            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            {% endif %}
+            {% endif %}
+            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
+                    onclick="togglePause()">
+                {{ 'PAUSED' if trading_paused else 'TRADING' }}
+            </button>
+            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
+        </div>
+    </div>
+    <div class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/portfolio">Portfolio</a>
+        <a href="/symbols">Symbols</a>
+        <a href="/trades">Trades</a>
+        <a href="/performance">Performance</a>
+        <a href="/analytics">Analytics</a>
+        <a href="/settings" class="active">Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>
     <div class="container">
-        <header>
-            <div class="header-left">
-                <a href="/" class="back-link">&larr; Dashboard</a>
-                <h1>Strategy Settings</h1>
-            </div>
-            <div class="status-bar">
-                {% if bot_status %}
-                <span class="status {{ 'running' if bot_status.running else 'stopped' }}">
-                    {{ 'RUNNING' if bot_status.running else 'STOPPED' }}
-                </span>
-                {% endif %}
-                <span class="update-time">
-                    Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}
-                </span>
-                <a href="/logout" class="logout-btn">Logout</a>
-            </div>
-        </header>
 
-        <div class="info-banner">
-            Changes are applied immediately to the running bot.
+        <!-- Strategy Tabs -->
+        <div class="strategy-tabs">
+            {% for strategy_name in strategy_names %}
+            <button class="{{ 'active' if loop.first else '' }}" onclick="switchStrategy('{{ strategy_name }}', this)">{{ strategy_name.split('_')[0] }}_RSI</button>
+            {% endfor %}
         </div>
 
         {% for strategy_name in strategy_names %}
-        <section class="settings-section">
-            <div class="panel">
-                <h2>{{ strategy_name }}</h2>
+        {% set params = live_params.get(strategy_name, {}) %}
+        <div class="strategy-content {{ 'active' if loop.first else '' }}" id="strategy-{{ strategy_name }}">
+            <form onsubmit="saveParams(event, '{{ strategy_name }}')">
 
-                {% set params = live_params.get(strategy_name, {}) %}
-                {% set db_entry = None %}
-                {% for p in all_params %}
-                    {% if p.strategy_name == strategy_name %}
-                        {% set db_entry = p %}
-                    {% endif %}
-                {% endfor %}
-
-                <form class="settings-form" data-strategy="{{ strategy_name }}" onsubmit="saveParams(event, '{{ strategy_name }}')">
-                    <!-- RSI Period -->
-                    <div class="param-group">
-                        <label>RSI Period</label>
-                        <input type="number" name="rsi_period" value="{{ params.get('rsi_period', 14) }}" min="2" max="50" class="form-input param-input" />
-                        <span class="param-hint">RSI calculation period (days)</span>
+                <!-- Parameters -->
+                <div class="card">
+                    <div class="section-title">Parameters</div>
+                    <div class="settings-form-grid">
+                        <div class="form-group">
+                            <label>RSI Period</label>
+                            <span class="read-val">{{ params.get('rsi_period', 14) }}</span>
+                            <input type="text" name="rsi_period" value="{{ params.get('rsi_period', 14) }}">
+                            <span class="hint">Lookback window in days</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Stop Loss</label>
+                            <span class="read-val">{{ params.get('stop_loss', -10) }}%</span>
+                            <input type="text" name="stop_loss" value="{{ params.get('stop_loss', -10) }}">
+                            <span class="hint">Exit threshold (%)</span>
+                        </div>
+                        <div class="form-group">
+                            <label>Cooldown Days</label>
+                            <span class="read-val">{{ params.get('cooldown_days', 1) }}</span>
+                            <input type="text" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}">
+                            <span class="hint">Wait period after trade</span>
+                        </div>
                     </div>
+                </div>
 
-                    <!-- Stop Loss -->
-                    <div class="param-group">
-                        <label>Stop Loss (%)</label>
-                        <input type="number" name="stop_loss" value="{{ params.get('stop_loss', -10) }}" step="0.5" min="-50" max="0" class="form-input param-input" />
-                        <span class="param-hint">Exit position if PnL drops below this</span>
-                    </div>
-
-                    <!-- Cooldown Days -->
-                    <div class="param-group">
-                        <label>Cooldown Days</label>
-                        <input type="number" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}" min="0" max="30" class="form-input param-input" />
-                        <span class="param-hint">Days before buy stages reset</span>
-                    </div>
-
-                    <!-- Buy Levels -->
-                    <div class="param-group levels-group">
-                        <label>Buy Levels (RSI / Portion)</label>
+                <!-- Buy / Sell Levels -->
+                <div class="levels-row">
+                    <div class="card">
+                        <div class="section-title">Buy Levels</div>
                         {% set buy_levels = params.get('avg_down_levels', [[35, 0.3], [30, 0.35], [25, 0.35]]) %}
-                        <div class="levels-container" id="buy-levels-{{ strategy_name }}">
-                            {% for level in buy_levels %}
-                            <div class="level-row">
-                                <span class="level-label">{{ loop.index }}th</span>
-                                <input type="number" class="form-input level-input" data-type="buy-rsi" value="{{ level[0] }}" min="0" max="100" step="1" />
-                                <span class="level-sep">RSI /</span>
-                                <input type="number" class="form-input level-input" data-type="buy-portion" value="{{ (level[1] * 100) | round(0) | int }}" min="1" max="100" step="1" />
-                                <span class="level-unit">%</span>
-                            </div>
-                            {% endfor %}
-                        </div>
+                        <table class="level-table center-table">
+                            <thead><tr><th>Level</th><th>RSI &le;</th><th>Portion</th></tr></thead>
+                            <tbody id="buy-levels-{{ strategy_name }}">
+                                {% for level in buy_levels %}
+                                <tr>
+                                    <td><span class="level-badge">{{ loop.index }}</span></td>
+                                    <td>
+                                        <span class="read-val">{{ level[0] }}</span>
+                                        <input type="text" class="level-input" data-type="buy-rsi" value="{{ level[0] }}">
+                                    </td>
+                                    <td>
+                                        <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
+                                        <input type="text" class="level-input" data-type="buy-portion" value="{{ (level[1] * 100)|round(0)|int }}" style="width:40px;">
+                                        <span class="dim"> %</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
-
-                    <!-- Sell Levels -->
-                    <div class="param-group levels-group">
-                        <label>Sell Levels (RSI / Portion)</label>
+                    <div class="card">
+                        <div class="section-title">Sell Levels</div>
                         {% set sell_levels = params.get('sell_levels', [[70, 0.25], [75, 0.35], [80, 0.4]]) %}
-                        <div class="levels-container" id="sell-levels-{{ strategy_name }}">
-                            {% for level in sell_levels %}
-                            <div class="level-row">
-                                <span class="level-label">{{ loop.index }}th</span>
-                                <input type="number" class="form-input level-input" data-type="sell-rsi" value="{{ level[0] }}" min="0" max="100" step="1" />
-                                <span class="level-sep">RSI /</span>
-                                <input type="number" class="form-input level-input" data-type="sell-portion" value="{{ (level[1] * 100) | round(0) | int }}" min="1" max="100" step="1" />
-                                <span class="level-unit">%</span>
-                            </div>
-                            {% endfor %}
-                        </div>
+                        <table class="level-table center-table">
+                            <thead><tr><th>Level</th><th>RSI &ge;</th><th>Portion</th></tr></thead>
+                            <tbody id="sell-levels-{{ strategy_name }}">
+                                {% for level in sell_levels %}
+                                <tr>
+                                    <td><span class="level-badge">{{ loop.index }}</span></td>
+                                    <td>
+                                        <span class="read-val">{{ level[0] }}</span>
+                                        <input type="text" class="level-input" data-type="sell-rsi" value="{{ level[0] }}">
+                                    </td>
+                                    <td>
+                                        <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
+                                        <input type="text" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" style="width:40px;">
+                                        <span class="dim"> %</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
+                </div>
 
-                    <div class="form-actions">
-                        <button type="submit" class="btn-add">Save & Apply</button>
-                        <span class="save-status" id="status-{{ strategy_name }}"></span>
-                    </div>
-                </form>
-            </div>
-        </section>
+                <div class="form-actions">
+                    <span class="save-status" id="status-{{ strategy_name }}"></span>
+                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ strategy_name }}')">Edit</button>
+                    <button type="submit" class="btn btn-save">Save & Apply</button>
+                </div>
+            </form>
+        </div>
         {% else %}
-        <section class="settings-section">
-            <div class="panel">
-                <p class="empty">No strategies loaded. Start the bot first.</p>
-            </div>
-        </section>
+        <div class="card">
+            <p class="empty">No strategies loaded. Start the bot first.</p>
+        </div>
         {% endfor %}
 
-        <footer>
-            <p>BeRich Trading Bot - Strategy Settings</p>
-        </footer>
     </div>
 
     <script>
+        function toggleEdit(strategyName) {
+            const content = document.getElementById('strategy-' + strategyName);
+            content.classList.toggle('editing');
+        }
+
+        function switchStrategy(name, btn) {
+            document.querySelectorAll('.strategy-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.strategy-tabs button').forEach(b => b.classList.remove('active'));
+            document.getElementById('strategy-' + name).classList.add('active');
+            btn.classList.add('active');
+        }
+
         async function saveParams(event, strategyName) {
             event.preventDefault();
             const form = event.target;
             const statusEl = document.getElementById('status-' + strategyName);
 
-            // Collect simple params
             const params = {
                 rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
                 stop_loss: parseFloat(form.querySelector('[name="stop_loss"]').value),
                 cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
             };
 
-            // Collect buy levels
             const buyContainer = document.getElementById('buy-levels-' + strategyName);
-            const buyRows = buyContainer.querySelectorAll('.level-row');
             params.avg_down_levels = [];
-            buyRows.forEach(row => {
+            buyContainer.querySelectorAll('tr').forEach(row => {
                 const rsi = parseInt(row.querySelector('[data-type="buy-rsi"]').value);
                 const portion = parseInt(row.querySelector('[data-type="buy-portion"]').value) / 100;
                 params.avg_down_levels.push([rsi, portion]);
             });
 
-            // Collect sell levels
             const sellContainer = document.getElementById('sell-levels-' + strategyName);
-            const sellRows = sellContainer.querySelectorAll('.level-row');
             params.sell_levels = [];
-            sellRows.forEach(row => {
+            sellContainer.querySelectorAll('tr').forEach(row => {
                 const rsi = parseInt(row.querySelector('[data-type="sell-rsi"]').value);
                 const portion = parseInt(row.querySelector('[data-type="sell-portion"]').value) / 100;
                 params.sell_levels.push([rsi, portion]);
@@ -169,12 +241,18 @@
                     return;
                 }
 
-                if (data.applied_live) {
-                    statusEl.textContent = 'Saved & applied live';
-                } else {
-                    statusEl.textContent = 'Saved (apply on restart)';
-                }
+                statusEl.textContent = data.applied_live ? 'Saved & applied' : 'Saved (restart to apply)';
                 statusEl.className = 'save-status success';
+                document.getElementById('strategy-' + strategyName).classList.remove('editing');
+
+                // Update read-only values
+                form.querySelectorAll('.read-val').forEach(el => {
+                    const input = el.nextElementSibling;
+                    if (input && input.tagName === 'INPUT') {
+                        const suffix = el.textContent.includes('%') ? '%' : '';
+                        el.textContent = input.value + suffix;
+                    }
+                });
 
                 setTimeout(() => { statusEl.textContent = ''; }, 3000);
             } catch (e) {
@@ -183,25 +261,16 @@
             }
         }
     </script>
-
-    <!-- Mobile Bottom Navigation -->
-    <nav class="bottom-nav">
-        <a href="/">
-            <span class="icon">📊</span>
-            <span>Dashboard</span>
-        </a>
-        <a href="/symbols">
-            <span class="icon">🔍</span>
-            <span>Symbols</span>
-        </a>
-        <a href="/settings" class="active">
-            <span class="icon">⚙️</span>
-            <span>Settings</span>
-        </a>
-        <a href="/trades">
-            <span class="icon">📝</span>
-            <span>Trades</span>
-        </a>
-    </nav>
+    <script>
+    async function togglePause() {
+        const btn = document.getElementById("pause-btn");
+        const isPaused = btn.classList.contains("paused");
+        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
+        const resp = await fetch(endpoint, {method: "POST"});
+        const data = await resp.json();
+        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
+        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
+    }
+    </script>
 </body>
 </html>

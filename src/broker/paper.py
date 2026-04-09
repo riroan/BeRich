@@ -187,6 +187,15 @@ class PaperBroker:
         order.filled_avg_price = fill_price
         self._orders[order_id] = order
 
+        # Get current RSI from dashboard if available
+        current_rsi = None
+        try:
+            from src.web.app import get_dashboard_state
+            ds = get_dashboard_state()
+            current_rsi = ds.rsi_values.get(order.symbol)
+        except Exception:
+            pass
+
         # Create fill record
         fill = Fill(
             order_id=order_id,
@@ -198,6 +207,7 @@ class PaperBroker:
             commission=Decimal("0"),
             timestamp=datetime.now(),
             pnl=pnl if order.side == OrderSide.SELL else None,
+            rsi=current_rsi,
         )
         self._fills.append(fill)
 
