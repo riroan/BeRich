@@ -69,7 +69,7 @@ body {
 .pill.real, .mode.real { background: rgba(239,68,68,0.15); color: var(--red); }
 .pill.paper, .mode.paper { background: rgba(245,158,11,0.15); color: var(--amber); }
 .pill.time { color: var(--dim); font-size: 13px; }
-.warmup { background: rgba(245,158,11,0.15); color: var(--amber); padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+.pill.warmup { background: rgba(245,158,11,0.15); color: var(--amber); }
 
 .ws-status {
     padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; line-height: 1;

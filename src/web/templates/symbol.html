@@ -19,7 +19,7 @@
                 {{ 'Paper' if bot_status.paper_trading else 'Real' }}
             </span>
             {% if bot_status.warmup_remaining %}
-            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            <span class="pill warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
             {% endif %}
             {% endif %}
             <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
@@ -218,13 +218,9 @@
             },
         });
 
-        const candleSeries = priceChart.addCandlestickSeries({
-            upColor: colors.up,
-            downColor: colors.down,
-            borderUpColor: colors.up,
-            borderDownColor: colors.down,
-            wickUpColor: colors.up,
-            wickDownColor: colors.down,
+        const priceSeries = priceChart.addLineSeries({
+            color: colors.up,
+            lineWidth: 2,
         });
 
         // Create RSI chart
@@ -287,14 +283,12 @@
                 const data = await response.json();
 
                 if (data.prices && data.prices.length > 0) {
-                    const candleData = data.prices.map(p => ({
+                    const priceData = data.prices.map(p => ({
                         time: parseTime(p.time),
-                        open: p.open,
-                        high: p.high,
-                        low: p.low,
-                        close: p.close,
-                    }));
-                    candleSeries.setData(candleData);
+                        value: p.close,
+                    })).sort((a, b) => a.time - b.time)
+                      .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
+                    priceSeries.setData(priceData);
 
                     // Add trade markers
                     if (data.trade_points && data.trade_points.length > 0) {
@@ -305,15 +299,15 @@
                             shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
                             text: tp.action.toUpperCase(),
                         }));
-                        candleSeries.setMarkers(markers);
+                        priceSeries.setMarkers(markers);
                     }
 
                     priceChart.timeScale().fitContent();
 
                     // Calculate today change
-                    if (candleData.length >= 2) {
-                        const today = candleData[candleData.length - 1].close;
-                        const yesterday = candleData[candleData.length - 2].close;
+                    if (priceData.length >= 2) {
+                        const today = priceData[priceData.length - 1].value;
+                        const yesterday = priceData[priceData.length - 2].value;
                         const change = ((today - yesterday) / yesterday * 100).toFixed(2);
                         const el = document.getElementById('today-change');
                         if (el) {
@@ -327,7 +321,8 @@
                     const rsiData = data.rsi.map(r => ({
                         time: parseTime(r.time),
                         value: r.value,
-                    }));
+                    })).sort((a, b) => a.time - b.time)
+                      .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
                     rsiSeries.setData(rsiData);
 
                     // Add constant lines for oversold/overbought
@@ -390,7 +385,7 @@
             isSyncingCrosshair = true;
 
             if (param.time) {
-                priceChart.setCrosshairPosition(undefined, param.time, candleSeries);
+                priceChart.setCrosshairPosition(undefined, param.time, priceSeries);
             } else {
                 priceChart.clearCrosshairPosition();
             }
@@ -403,6 +398,21 @@
 
         // Refresh every 60 seconds
         setInterval(loadChartData, 60000);
+
+        async function togglePause() {
+            const btn = document.getElementById('pause-btn');
+            const isPaused = btn.classList.contains('paused');
+            const endpoint = isPaused ? '/api/trading/resume' : '/api/trading/pause';
+            const resp = await fetch(endpoint, {method: 'POST'});
+            const data = await resp.json();
+            if (data.paused) {
+                btn.textContent = 'PAUSED';
+                btn.classList.add('paused');
+            } else {
+                btn.textContent = 'TRADING';
+                btn.classList.remove('paused');
+            }
+        }
     </script>
 </body>
 </html>

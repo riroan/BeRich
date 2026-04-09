@@ -20,7 +20,7 @@
                 {{ 'Paper' if bot_status.paper_trading else 'Real' }}
             </span>
             {% if bot_status.warmup_remaining %}
-            <span class="warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
+            <span class="pill warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
             {% endif %}
             {% endif %}
             <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"

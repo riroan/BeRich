@@ -981,6 +981,8 @@ def create_app() -> FastAPI:
             "rsi": rsi,
             "trade_points": trade_points,
             "symbol_trades": symbol_trades,
+            "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
         }
         return templates.TemplateResponse(
@@ -1081,6 +1083,12 @@ def create_app() -> FastAPI:
             dashboard_state.update_rsi(symbol, rsi, price=price, market=market)
 
         dashboard_state.update_signal_candidates()
+        dashboard_state.set_bot_status(
+            running=True,
+            paper_trading=True,
+            strategies=["RSI Mean Reversion"],
+            uptime="0d 1h 23m",
+        )
         return {"seeded": len(test_positions), "signals": len(signal_rsi)}
 
     # ==================== Symbol Management Routes ====================
