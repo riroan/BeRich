@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.13-slim
 
 # Set timezone to KST
 ENV TZ=Asia/Seoul
@@ -16,6 +16,11 @@ COPY . .
 
 # Install package
 RUN pip install --no-cache-dir -e .
+
+# Run as non-root user
+RUN groupadd -r berich && useradd -r -g berich -d /app berich && \
+    chown -R berich:berich /app
+USER berich
 
 # Expose dashboard port
 EXPOSE 9095

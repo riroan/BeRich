@@ -14,6 +14,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+import secure
 import logging
 import json
 
@@ -673,6 +678,17 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # Session storage (in-memory)
 valid_sessions: Dict[str, datetime] = {}
 
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+# Security headers
+secure_headers = secure.Secure.with_default_headers()
+
+
+def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+    return JSONResponse(status_code=429, content={"detail": "Too many requests"})
+
+
 # Auth config from environment
 AUTH_USERNAME = os.getenv("DASHBOARD_USERNAME", "admin")
 AUTH_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
@@ -733,21 +749,28 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json" if _debug else None,
     )
 
+    # Rate limiter + security headers
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
     # Mount static files
     static_dir = BASE_DIR / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
     @app.middleware("http")
-    async def api_auth_middleware(request: Request, call_next):
-        """Require authentication for all /api/ endpoints"""
+    async def security_middleware(request: Request, call_next):
+        """Auth check for /api/ routes + security headers on all responses"""
         if request.url.path.startswith("/api/"):
             if not verify_session(request):
                 return JSONResponse(
                     status_code=401,
                     content={"detail": "Not authenticated"},
                 )
-        return await call_next(request)
+        response = await call_next(request)
+        secure_headers.set_headers(response)
+        return response
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request, error: str = ""):
@@ -763,6 +786,7 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/login")
+    @limiter.limit("5/minute")
     async def login(request: Request, username: str = Form(...), password: str = Form(...)):
         """Handle login"""
         if username == AUTH_USERNAME and hmac.compare_digest(password, AUTH_PASSWORD):
@@ -2059,6 +2083,9 @@ def create_app() -> FastAPI:
     @app.websocket("/ws")
     async def websocket_endpoint(websocket: WebSocket):
         """WebSocket endpoint for real-time updates"""
+        if not verify_session(websocket):
+            await websocket.close(code=1008)  # Policy Violation
+            return
         await ws_manager.connect(websocket)
         try:
             # Send initial data on connect
