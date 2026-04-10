@@ -970,6 +970,11 @@ def create_app() -> FastAPI:
         rsi = dashboard_state.rsi_values.get(symbol)
         trade_points = dashboard_state.trade_points.get(symbol, [])
 
+        # Get current price from rsi_prices (available even without position)
+        price_info = dashboard_state.rsi_prices.get(symbol, {})
+        current_price = price_info.get("price") if price_info else None
+        market = price_info.get("market", "nasdaq") if price_info else None
+
         # Get symbol-specific trade logs
         symbol_trades = [
             log.model_dump() for log in dashboard_state.trade_logs
@@ -981,6 +986,8 @@ def create_app() -> FastAPI:
             "symbol": symbol,
             "position": position,
             "rsi": rsi,
+            "current_price": current_price,
+            "symbol_market": market,
             "trade_points": trade_points,
             "symbol_trades": symbol_trades,
             "bot_status": dashboard_state.bot_status,

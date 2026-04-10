@@ -97,7 +97,7 @@
         <div class="cards-row" >
             <div class="card">
                 <div class="label">Current Price</div>
-                <div class="value small dim">-</div>
+                <div class="value small">{% if current_price %}{% if symbol_market == 'krx' %}{{ "{:,.0f}".format(current_price) }}{% else %}${{ "{:,.2f}".format(current_price) }}{% endif %}{% else %}-{% endif %}</div>
             </div>
             <div class="card">
                 <div class="label">P&L</div>
