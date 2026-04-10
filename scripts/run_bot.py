@@ -9,6 +9,10 @@ from pathlib import Path
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Load .env before any module imports so module-level os.getenv() calls are populated
+from dotenv import load_dotenv
+load_dotenv()
+
 from src.bot import TradingBot
 from src.utils.logger import setup_logger
 
