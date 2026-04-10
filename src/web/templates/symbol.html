@@ -40,15 +40,15 @@
         <a href="/logout" class="logout-btn">Logout</a>
     </div>
     <div class="container">
-        <div class="section-title" style="font-size:20px;gap:8px;">
-            <span style="margin-left:8px;">{{ symbol }}</span>
+        <div class="section-title symbol-title">
+            <span>{{ symbol }}</span>
             {% if position %}
             <span class="market-badge market-{{ position.market|lower }}">{{ position.market }}</span>
             {% endif %}
         </div>
 
         {% if position %}
-        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+        <div class="cards-row" >
             <div class="card">
                 <div class="label">Current Price</div>
                 <div class="value small">{% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.current_price) }}{% else %}${{ "{:,.2f}".format(position.current_price) }}{% endif %}</div>
@@ -68,7 +68,7 @@
                 <div class="delta dim">Avg {% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.avg_price) }}{% else %}${{ "{:,.2f}".format(position.avg_price) }}{% endif %}</div>
             </div>
         </div>
-        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+        <div class="cards-row" >
             <div class="card">
                 <div class="label">Buy Stage</div>
                 <div class="value small">{{ position.buy_stage }}/{{ position.max_buy_stages }}</div>
@@ -87,7 +87,7 @@
             </div>
         </div>
         {% else %}
-        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+        <div class="cards-row" >
             <div class="card">
                 <div class="label">Current Price</div>
                 <div class="value small dim">-</div>
@@ -105,7 +105,7 @@
                 <div class="value small dim">0</div>
             </div>
         </div>
-        <div class="cards-row" style="grid-template-columns:repeat(4,1fr);">
+        <div class="cards-row" >
             <div class="card">
                 <div class="label">Buy Stage</div>
                 <div class="value small dim">-</div>
@@ -144,6 +144,7 @@
         <section class="trades-section">
             <div class="panel">
                 <h2>Trade History</h2>
+                <div class="table-wrap">
                 <table class="trades-table center-table">
                     <thead>
                         <tr>
@@ -170,6 +171,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
         </section>
         {% endif %}
@@ -194,12 +196,13 @@
         };
 
         // Create price chart
+        const isMobile = window.innerWidth <= 768;
         const priceChartContainer = document.getElementById('price-chart');
         const priceChart = LightweightCharts.createChart(priceChartContainer, {
             layout: {
                 background: { color: colors.bg },
                 textColor: '#94a3b8',
-                fontSize: 12,
+                fontSize: isMobile ? 10 : 12,
             },
             grid: {
                 vertLines: { color: colors.grid },
@@ -207,10 +210,10 @@
             },
             rightPriceScale: {
                 borderColor: colors.grid,
-                minimumWidth: 80,
+                minimumWidth: isMobile ? 50 : 80,
             },
             width: priceChartContainer.clientWidth,
-            height: 400,
+            height: isMobile ? 250 : 400,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
@@ -229,7 +232,7 @@
             layout: {
                 background: { color: colors.bg },
                 textColor: '#94a3b8',
-                fontSize: 12,
+                fontSize: isMobile ? 10 : 12,
             },
             grid: {
                 vertLines: { color: colors.grid },
@@ -237,10 +240,10 @@
             },
             rightPriceScale: {
                 borderColor: colors.grid,
-                minimumWidth: 80,
+                minimumWidth: isMobile ? 50 : 80,
             },
             width: rsiChartContainer.clientWidth,
-            height: 200,
+            height: isMobile ? 150 : 200,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,

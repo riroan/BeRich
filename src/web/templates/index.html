@@ -42,7 +42,7 @@
     <div class="container">
 
         <!-- 1. Summary Cards (통일된 글자 크기) -->
-        <div class="cards-row" style="grid-template-columns:repeat(3,1fr);">
+        <div class="cards-row cols-3">
             <div class="card">
                 <div class="label">Total</div>
                 <div class="value small" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</div>
@@ -75,6 +75,7 @@
         <div class="two-col">
             <div class="card">
                 <div class="section-title">Positions <span class="count">{{ position_count }}</span></div>
+                <div class="table-wrap">
                 <table class="center-table">
                     <thead>
                         <tr>
@@ -105,6 +106,7 @@
                         {% endfor %}
                     </tbody>
                 </table>
+                </div>
             </div>
             <div class="card">
                 <div class="section-title">RSI Monitor <span class="count">{{ rsi_with_prices|length }}</span></div>

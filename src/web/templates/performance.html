@@ -160,19 +160,21 @@
         };
 
         // Create equity chart
+        const isMobile = window.innerWidth <= 768;
         const equityChartContainer = document.getElementById('equity-chart');
         if (equityChartContainer) {
             const chart = LightweightCharts.createChart(equityChartContainer, {
                 layout: {
                     background: { color: colors.bg },
                     textColor: colors.text,
+                    fontSize: isMobile ? 10 : 12,
                 },
                 grid: {
                     vertLines: { color: colors.grid },
                     horzLines: { color: colors.grid },
                 },
                 width: equityChartContainer.clientWidth,
-                height: 400,
+                height: isMobile ? 250 : 400,
                 timeScale: {
                     timeVisible: true,
                     secondsVisible: false,

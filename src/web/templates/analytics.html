@@ -320,6 +320,7 @@
         <div class="card">
             <div class="section-title">Performance by Symbol</div>
             {% if statistics.by_symbol %}
+            <div class="table-wrap">
             <table class="symbol-stats-table center-table">
                 <thead>
                     <tr>
@@ -346,6 +347,7 @@
                     {% endfor %}
                 </tbody>
             </table>
+            </div>
             {% else %}
             <p class="empty">No trade data available</p>
             {% endif %}
