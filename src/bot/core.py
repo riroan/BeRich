@@ -143,6 +143,11 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             self.strategy_engine.get_strategies()
         )
 
+        # Wire reload callback for web API hot reload
+        self.dashboard.reload_callback = (
+            self.reload_strategies
+        )
+
         # Initialize order manager
         self.order_manager = OrderManager(
             event_bus=self.event_bus,
@@ -236,112 +241,168 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             logger.info("Discord notifications disabled")
 
     async def _load_strategies(self) -> None:
-        """Load strategies from config, using DB symbols if available"""
-        from collections import defaultdict
+        """Load strategies from DB (strategy_configs table)"""
+        configs = await self.storage.get_all_strategy_configs()
 
-        # Check if DB has watched symbols
-        db_symbols = await self.storage.get_watched_symbols(
-            enabled_only=True,
-        )
-
-        if not db_symbols:
-            # Seed DB from config on first run
-            count = await self.storage.seed_watched_symbols(
-                self.config.strategies,
+        if not configs:
+            logger.info(
+                "No strategies in DB. "
+                "Create them via web UI."
             )
-            logger.info(f"Seeded {count} symbols from config to DB")
-            db_symbols = await self.storage.get_watched_symbols(
-                enabled_only=True,
-            )
+            self.dashboard.strategy_names = []
+            return
 
-        # Group DB symbols by strategy_name
-        symbols_by_strategy = defaultdict(list)
-        for s in db_symbols:
-            symbols_by_strategy[s["strategy_name"]].append(
-                s["symbol"]
-            )
-
-        # Store strategy names for web UI
         self.dashboard.strategy_names = [
-            s["name"]
-            for s in self.config.strategies
-            if s.get("enabled")
+            c["name"] for c in configs if c["enabled"]
         ]
 
-        # Seed strategy params on first run
-        all_db_params = await self.storage.get_all_strategy_params()
-        if not all_db_params:
-            count = await self.storage.seed_strategy_params(
-                self.config.strategies,
-            )
-            logger.info(
-                f"Seeded {count} strategy params to DB"
-            )
-            all_db_params = (
-                await self.storage.get_all_strategy_params()
+        for cfg in configs:
+            if not cfg["enabled"]:
+                continue
+            self._register_strategy_from_config(cfg)
+
+    def _register_strategy_from_config(self, cfg: dict) -> None:
+        """Create and register a strategy instance from DB config"""
+        try:
+            class_path = cfg["class_path"]
+            module_path, class_name = class_path.rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            strategy_class = getattr(module, class_name)
+
+            market = Market.from_string(cfg["market"])
+
+            # Extract symbol strings from objects
+            symbols = [
+                s["symbol"] if isinstance(s, dict) else s
+                for s in cfg["symbols"]
+            ]
+
+            if not symbols:
+                logger.warning(
+                    f"No symbols for {cfg['name']}, skipping"
+                )
+                return
+
+            strategy = strategy_class(
+                symbols=symbols,
+                market=market,
+                params=cfg["params"],
             )
 
-        # Build params lookup by strategy name
-        db_params_map = {
-            p["strategy_name"]: p["params"]
-            for p in all_db_params
+            self.strategy_engine.register_strategy(strategy)
+            logger.info(
+                f"Strategy loaded: {cfg['name']} "
+                f"({len(symbols)} symbols)"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"Failed to load strategy "
+                f"{cfg['name']}: {e}"
+            )
+
+    async def reload_strategies(self) -> None:
+        """Hot reload: rebuild strategies from DB (atomic swap)"""
+        configs = await self.storage.get_all_strategy_configs()
+
+        # Build comparison key for incremental reload
+        old_strategies = {
+            s.name_with_market: s
+            for s in self.strategy_engine.get_strategies()
         }
 
-        for strategy_config in self.config.strategies:
-            if not strategy_config.get("enabled"):
+        new_list = []
+        new_names = []
+
+        for cfg in configs:
+            if not cfg["enabled"]:
                 continue
 
+            name = cfg["name"]
+            new_names.append(name)
+
+            # Check if unchanged — reuse existing instance
+            old = old_strategies.get(name)
+            if old and self._strategy_unchanged(old, cfg):
+                new_list.append(old)
+                continue
+
+            # Changed or new — create fresh instance
             try:
-                class_path = strategy_config["class"]
-                module_path, class_name = class_path.rsplit(".", 1)
+                class_path = cfg["class_path"]
+                module_path, class_name = class_path.rsplit(
+                    ".", 1,
+                )
                 module = importlib.import_module(module_path)
                 strategy_class = getattr(module, class_name)
+                market = Market.from_string(cfg["market"])
 
-                market_map = {
-                    "krx": Market.KRX,
-                    "nyse": Market.NYSE,
-                    "nasdaq": Market.NASDAQ,
-                    "amex": Market.AMEX,
-                }
-                market = market_map.get(
-                    strategy_config["market"].lower(), Market.KRX,
-                )
-
-                # Use DB symbols if available, fallback to config
-                name = strategy_config["name"]
-                symbols = symbols_by_strategy.get(
-                    name, strategy_config["symbols"],
-                )
-
-                if not symbols:
-                    logger.warning(
-                        f"No symbols for {name}, skipping"
-                    )
-                    continue
-
-                # Use DB params if available, fallback to config
-                params = db_params_map.get(
-                    name,
-                    strategy_config.get("params", {}),
-                )
+                symbols = [
+                    s["symbol"] if isinstance(s, dict) else s
+                    for s in cfg["symbols"]
+                ]
 
                 strategy = strategy_class(
                     symbols=symbols,
                     market=market,
-                    params=params,
+                    params=cfg["params"],
                 )
 
-                self.strategy_engine.register_strategy(strategy)
-                logger.info(
-                    f"Strategy loaded: {name} "
-                    f"({len(symbols)} symbols)"
-                )
+                # Initialize new/changed strategy
+                try:
+                    historical_bars = {}
+                    for symbol in symbols:
+                        import asyncio
+                        await asyncio.sleep(0.5)
+                        bars = (
+                            await self.broker.get_historical_bars(
+                                symbol=symbol,
+                                market=market,
+                                days=strategy.required_history,
+                            )
+                        )
+                        historical_bars[symbol] = bars
+                    strategy.initialize(historical_bars)
+                except Exception as e:
+                    logger.warning(
+                        f"[{name}] Init failed: {e}"
+                    )
+
+                new_list.append(strategy)
+                logger.info(f"Strategy reloaded: {name}")
 
             except Exception as e:
                 logger.error(
-                    f"Failed to load strategy "
-                    f"{strategy_config['name']}: {e}"
+                    f"Failed to reload strategy {name}: {e}"
                 )
+
+        # Atomic swap
+        self.strategy_engine._strategies = new_list
+
+        # Update dashboard
+        self.dashboard.strategy_names = new_names
+        self.dashboard.strategy_instances = new_list
+
+        logger.info(
+            f"Strategies reloaded: {len(new_list)} active"
+        )
+
+    def _strategy_unchanged(
+        self, strategy, cfg: dict,
+    ) -> bool:
+        """Check if a strategy config matches the running instance"""
+        import json
+        symbols = [
+            s["symbol"] if isinstance(s, dict) else s
+            for s in cfg["symbols"]
+        ]
+        return (
+            sorted(strategy.symbols) == sorted(symbols)
+            and strategy.params == cfg["params"]
+            and strategy.market == Market.from_string(
+                cfg["market"],
+            )
+        )
 
     async def start(self) -> None:
         """Start the bot"""

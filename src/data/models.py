@@ -146,6 +146,22 @@ class StrategyParams(Base):
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
+class StrategyConfigModel(Base):
+    """Unified strategy configuration (replaces WatchedSymbol + StrategyParams)"""
+
+    __tablename__ = "strategy_configs"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    class_path = Column(String(200), nullable=False)
+    market = Column(String(20), nullable=False)
+    enabled = Column(Integer, default=1)
+    symbols_json = Column(Text, nullable=False)
+    params_json = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+
 class BotStateModel(Base):
     """Bot persistent state (warmup time, etc.)"""
 

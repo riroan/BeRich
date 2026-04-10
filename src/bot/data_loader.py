@@ -40,10 +40,19 @@ class DataLoaderMixin:
         """Load price/RSI history from database on startup (enabled only)"""
         try:
             # Only load history for enabled symbols
-            enabled = await self.storage.get_watched_symbols(
-                enabled_only=True,
+            configs = (
+                await self.storage.get_all_strategy_configs()
             )
-            enabled_symbols = {s["symbol"] for s in enabled}
+            enabled_symbols = set()
+            for cfg in configs:
+                if not cfg["enabled"]:
+                    continue
+                for s in cfg["symbols"]:
+                    sym = (
+                        s["symbol"]
+                        if isinstance(s, dict) else s
+                    )
+                    enabled_symbols.add(sym)
 
             all_symbols = await self.storage.get_all_symbols_with_history()
             symbols = [s for s in all_symbols if s in enabled_symbols]

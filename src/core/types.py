@@ -12,6 +12,14 @@ class Market(Enum):
     NASDAQ = "nasdaq"
     AMEX = "amex"
 
+    @classmethod
+    def from_string(cls, value: str) -> "Market":
+        """Convert string to Market enum (case-insensitive)"""
+        try:
+            return cls(value.lower())
+        except ValueError:
+            raise ValueError(f"Unknown market: {value}. Valid: {[m.value for m in cls]}")
+
 
 class OrderSide(Enum):
     BUY = "buy"

@@ -13,21 +13,28 @@
         .level-table th { font-size: 11px; color: var(--dim); text-transform: uppercase; padding: 8px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-table td { padding: 10px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-badge { background: var(--card); color: var(--white); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
-        .portion-wrap { display: flex; align-items: center; gap: 8px; }
-        .portion-bar { flex: 1; height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
-        .portion-fill { height: 100%; border-radius: 3px; }
-        .portion-fill.buy { background: var(--emerald); }
-        .portion-fill.sell { background: var(--amber); }
-        .portion-pct { font-size: 13px; font-weight: 600; color: var(--white); min-width: 35px; text-align: right; }
         input.level-input[type="text"] { width: 60px; padding: 6px 8px; font-size: 13px; }
-        input.level-input[data-type$="-rsi"] { text-align: center; }
-        input.level-input[data-type$="-portion"] { text-align: right; }
         .strategy-content { display: none; }
         .strategy-content.active { display: flex; flex-direction: column; gap: 20px; }
         .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
         .save-status { font-size: 13px; }
         .save-status.success { color: var(--emerald); }
         .save-status.error { color: var(--red); }
+        .strategy-meta { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
+        .strategy-meta span { display: flex; align-items: center; gap: 4px; }
+        .toggle-switch { position: relative; width: 40px; height: 22px; cursor: pointer; }
+        .toggle-switch input { opacity: 0; width: 0; height: 0; }
+        .toggle-slider { position: absolute; inset: 0; background: var(--bg); border-radius: 11px; transition: .2s; }
+        .toggle-slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--dim); border-radius: 50%; transition: .2s; }
+        .toggle-switch input:checked + .toggle-slider { background: var(--emerald); }
+        .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
+        .btn-danger { background: var(--red); color: white; }
+        .btn-danger:hover { opacity: .8; }
+
+        /* Create form */
+        .create-form { display: none; }
+        .create-form.active { display: block; }
+        .create-form .settings-form-grid { grid-template-columns: repeat(2, 1fr); }
 
         /* Read-only mode */
         .strategy-content .read-val {
@@ -40,44 +47,19 @@
         .strategy-content.editing .read-val { display: none; }
         .strategy-content:not(.editing) input.level-input,
         .strategy-content:not(.editing) .settings-form-grid input[type="text"] { display: none; }
-        .strategy-content.editing .read-val { display: none; }
-        .strategy-content.editing .read-val { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
 
         @media (max-width: 768px) {
-            .settings-form-grid {
-                grid-template-columns: 1fr !important;
-                gap: 0;
-            }
+            .settings-form-grid { grid-template-columns: 1fr !important; gap: 0; }
             .settings-form-grid .form-group {
-                flex-direction: row;
-                align-items: center;
-                justify-content: space-between;
-                padding: 12px 0;
-                border-bottom: 1px solid rgba(51,65,85,0.3);
-                gap: 8px;
+                flex-direction: row; align-items: center; justify-content: space-between;
+                padding: 12px 0; border-bottom: 1px solid rgba(51,65,85,0.3); gap: 8px;
             }
             .settings-form-grid .form-group:last-child { border-bottom: none; }
-            .settings-form-grid .form-group label {
-                flex-shrink: 0;
-            }
-            .settings-form-grid .form-group .read-val {
-                font-size: 15px;
-                text-align: right;
-                flex-shrink: 0;
-            }
-            .settings-form-grid .form-group .hint {
-                display: none;
-            }
-            .settings-form-grid .form-group input[type="text"] {
-                width: 80px;
-            }
-            .levels-row { grid-template-columns: 1fr !important; gap: 12px; }
-            .level-table { min-width: unset; }
-            .level-table th { font-size: 10px; padding: 6px 4px; }
-            .level-table td { padding: 8px 4px; font-size: 12px; }
-            input.level-input[type="text"] { width: 45px; padding: 5px 6px; font-size: 12px; }
+            .settings-form-grid .form-group .read-val { font-size: 15px; text-align: right; }
+            .settings-form-grid .form-group .hint { display: none; }
+            .levels-row { grid-template-columns: 1fr !important; }
             .form-actions { flex-direction: column; gap: 10px; }
             .form-actions .btn { width: 100%; text-align: center; }
         }
@@ -85,18 +67,72 @@
 {% endblock %}
 
 {% block content %}
-        <!-- Strategy Tabs -->
-        <div class="strategy-tabs">
-            {% for strategy_name in strategy_names %}
-            <button class="{{ 'active' if loop.first else '' }}" onclick="switchStrategy('{{ strategy_name }}', this)">{{ strategy_name.split('_')[0] }}_RSI</button>
-            {% endfor %}
+        <!-- Create Strategy Button -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <div class="strategy-tabs">
+                {% for cfg in strategy_configs %}
+                <button class="{{ 'active' if loop.first else '' }}" onclick="switchStrategy('{{ cfg.name }}', this)"
+                    style="{{ '' if cfg.enabled else 'opacity: 0.5;' }}">
+                    {{ cfg.name.split('_')[0] }}_{{ cfg.params.get('rsi_period', '') or 'RSI' }}
+                </button>
+                {% endfor %}
+            </div>
+            <button class="btn" onclick="toggleCreateForm()" id="btn-create">+ New Strategy</button>
         </div>
 
-        {% for strategy_name in strategy_names %}
-        {% set params = live_params.get(strategy_name, {}) %}
-        <div class="strategy-content {{ 'active' if loop.first else '' }}" id="strategy-{{ strategy_name }}">
-            <form onsubmit="saveParams(event, '{{ strategy_name }}')">
+        <!-- Create Strategy Form -->
+        <div class="create-form card" id="create-form">
+            <div class="section-title">Create New Strategy</div>
+            <div class="settings-form-grid">
+                <div class="form-group">
+                    <label>Name</label>
+                    <input type="text" id="new-name" placeholder="e.g. NASDAQ_RSI_MeanReversion">
+                </div>
+                <div class="form-group">
+                    <label>Strategy Class</label>
+                    <select id="new-class">
+                        {% for cls in strategy_classes %}
+                        <option value="{{ cls.class_path }}">{{ cls.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Market</label>
+                    <select id="new-market">
+                        <option value="nasdaq">NASDAQ</option>
+                        <option value="nyse">NYSE</option>
+                        <option value="amex">AMEX</option>
+                        <option value="krx">KRX</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Symbols (comma-separated)</label>
+                    <input type="text" id="new-symbols" placeholder="AAPL, GOOG, NVDA">
+                </div>
+            </div>
+            <div class="form-actions">
+                <span class="save-status" id="create-status"></span>
+                <button class="btn" onclick="toggleCreateForm()">Cancel</button>
+                <button class="btn btn-save" onclick="createStrategy()">Create</button>
+            </div>
+        </div>
 
+        <!-- Strategy Config Panels -->
+        {% for cfg in strategy_configs %}
+        {% set params = cfg.params %}
+        <div class="strategy-content {{ 'active' if loop.first else '' }}" id="strategy-{{ cfg.name }}">
+            <div class="strategy-meta">
+                <span>Class: <strong>{{ cfg.class_path.split('.')|last }}</strong></span>
+                <span>Market: <strong>{{ cfg.market|upper }}</strong></span>
+                <span>Symbols: <strong>{{ cfg.symbols|length }}</strong></span>
+                <label class="toggle-switch" title="Enabled/Disabled">
+                    <input type="checkbox" {{ 'checked' if cfg.enabled else '' }}
+                        onchange="toggleStrategy('{{ cfg.name }}', this.checked)">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+
+            <form onsubmit="saveStrategy(event, '{{ cfg.name }}')">
                 <!-- Parameters -->
                 <div class="card">
                     <div class="section-title">Parameters</div>
@@ -129,7 +165,7 @@
                         {% set buy_levels = params.get('avg_down_levels', [[35, 0.3], [30, 0.35], [25, 0.35]]) %}
                         <table class="level-table center-table">
                             <thead><tr><th>Level</th><th>RSI &le;</th><th>Portion</th></tr></thead>
-                            <tbody id="buy-levels-{{ strategy_name }}">
+                            <tbody id="buy-levels-{{ cfg.name }}">
                                 {% for level in buy_levels %}
                                 <tr>
                                     <td><span class="level-badge">{{ loop.index }}</span></td>
@@ -152,7 +188,7 @@
                         {% set sell_levels = params.get('sell_levels', [[70, 0.25], [75, 0.35], [80, 0.4]]) %}
                         <table class="level-table center-table">
                             <thead><tr><th>Level</th><th>RSI &ge;</th><th>Portion</th></tr></thead>
-                            <tbody id="sell-levels-{{ strategy_name }}">
+                            <tbody id="sell-levels-{{ cfg.name }}">
                                 {% for level in sell_levels %}
                                 <tr>
                                     <td><span class="level-badge">{{ loop.index }}</span></td>
@@ -173,15 +209,16 @@
                 </div>
 
                 <div class="form-actions">
-                    <span class="save-status" id="status-{{ strategy_name }}"></span>
-                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ strategy_name }}')">Edit</button>
+                    <span class="save-status" id="status-{{ cfg.name }}"></span>
+                    <button type="button" class="btn btn-danger" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
+                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
                     <button type="submit" class="btn btn-save">Save & Apply</button>
                 </div>
             </form>
         </div>
         {% else %}
-        <div class="card">
-            <p class="empty">No strategies loaded. Start the bot first.</p>
+        <div class="card" id="empty-state">
+            <p class="empty">No strategies configured. Click "+ New Strategy" to create one.</p>
         </div>
         {% endfor %}
 {% endblock %}
@@ -200,7 +237,92 @@
             btn.classList.add('active');
         }
 
-        async function saveParams(event, strategyName) {
+        function toggleCreateForm() {
+            document.getElementById('create-form').classList.toggle('active');
+        }
+
+        async function createStrategy() {
+            const statusEl = document.getElementById('create-status');
+            const name = document.getElementById('new-name').value.trim();
+            const classPath = document.getElementById('new-class').value;
+            const market = document.getElementById('new-market').value;
+            const symbolsStr = document.getElementById('new-symbols').value.trim();
+
+            if (!name || !symbolsStr) {
+                statusEl.textContent = 'Name and symbols required';
+                statusEl.className = 'save-status error';
+                return;
+            }
+
+            const symbols = symbolsStr.split(',').map(s => ({
+                symbol: s.trim().toUpperCase(),
+                max_weight: 15.0
+            }));
+
+            const defaultParams = {
+                rsi_period: 14,
+                stop_loss: -10,
+                cooldown_days: 3,
+                avg_down_levels: [[35, 0.3], [30, 0.35], [25, 0.35]],
+                sell_levels: [[70, 0.25], [75, 0.35], [80, 0.4]]
+            };
+
+            statusEl.textContent = 'Creating...';
+            statusEl.className = 'save-status';
+
+            try {
+                const resp = await fetch('/api/strategies', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        name, class_path: classPath, market, symbols, params: defaultParams
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    statusEl.textContent = data.detail || 'Failed';
+                    statusEl.className = 'save-status error';
+                    return;
+                }
+                location.reload();
+            } catch (e) {
+                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.className = 'save-status error';
+            }
+        }
+
+        async function deleteStrategy(name) {
+            if (!confirm('Delete strategy "' + name + '"? Trade history will be preserved.')) return;
+
+            try {
+                const resp = await fetch('/api/strategies/' + encodeURIComponent(name), {method: 'DELETE'});
+                if (resp.ok) location.reload();
+                else {
+                    const data = await resp.json();
+                    alert(data.detail || 'Delete failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function toggleStrategy(name, enabled) {
+            try {
+                const resp = await fetch('/api/strategies/' + encodeURIComponent(name), {
+                    method: 'PUT',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({enabled}),
+                });
+                if (!resp.ok) {
+                    const data = await resp.json();
+                    alert(data.detail || 'Toggle failed');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        async function saveStrategy(event, strategyName) {
             event.preventDefault();
             const form = event.target;
             const statusEl = document.getElementById('status-' + strategyName);
@@ -231,10 +353,10 @@
             statusEl.className = 'save-status';
 
             try {
-                const resp = await fetch('/api/settings', {
-                    method: 'POST',
+                const resp = await fetch('/api/strategies/' + encodeURIComponent(strategyName), {
+                    method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({strategy_name: strategyName, params}),
+                    body: JSON.stringify({params}),
                 });
                 const data = await resp.json();
 
@@ -244,11 +366,10 @@
                     return;
                 }
 
-                statusEl.textContent = data.applied_live ? 'Saved & applied' : 'Saved (restart to apply)';
+                statusEl.textContent = data.bot_reloaded ? 'Saved & applied' : 'Saved (bot not running)';
                 statusEl.className = 'save-status success';
                 document.getElementById('strategy-' + strategyName).classList.remove('editing');
 
-                // Update read-only values
                 form.querySelectorAll('.read-val').forEach(el => {
                     const input = el.nextElementSibling;
                     if (input && input.tagName === 'INPUT') {

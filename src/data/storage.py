@@ -7,7 +7,12 @@ from sqlalchemy import select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market
-from .models import Base, BarModel, OrderModel, FillModel, PriceRSIModel, EquitySnapshot, WatchedSymbol, StrategyParams, BotStateModel
+from .models import (
+    Base, BarModel, OrderModel, FillModel,
+    PriceRSIModel, EquitySnapshot,
+    WatchedSymbol, StrategyParams,
+    StrategyConfigModel, BotStateModel,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -685,3 +690,152 @@ class Storage:
             if record:
                 await session.delete(record)
                 await session.commit()
+
+    # ==================== Strategy Config ====================
+
+    async def get_all_strategy_configs(self) -> list[dict]:
+        """Get all strategy configurations"""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyConfigModel).order_by(
+                StrategyConfigModel.name,
+            )
+            result = await session.execute(query)
+            rows = result.scalars().all()
+            return [
+                {
+                    "id": row.id,
+                    "name": row.name,
+                    "class_path": row.class_path,
+                    "market": row.market,
+                    "enabled": bool(row.enabled),
+                    "symbols": json.loads(row.symbols_json),
+                    "params": json.loads(row.params_json),
+                    "created_at": (
+                        row.created_at.strftime("%Y-%m-%d %H:%M")
+                        if row.created_at else None
+                    ),
+                    "updated_at": (
+                        row.updated_at.strftime("%Y-%m-%d %H:%M")
+                        if row.updated_at else None
+                    ),
+                }
+                for row in rows
+            ]
+
+    async def get_strategy_config(
+        self, name: str,
+    ) -> Optional[dict]:
+        """Get a single strategy config by name"""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyConfigModel).where(
+                StrategyConfigModel.name == name,
+            )
+            result = await session.execute(query)
+            row = result.scalar_one_or_none()
+            if not row:
+                return None
+            return {
+                "id": row.id,
+                "name": row.name,
+                "class_path": row.class_path,
+                "market": row.market,
+                "enabled": bool(row.enabled),
+                "symbols": json.loads(row.symbols_json),
+                "params": json.loads(row.params_json),
+            }
+
+    async def create_strategy_config(
+        self,
+        name: str,
+        class_path: str,
+        market: str,
+        symbols: list,
+        params: dict,
+        enabled: bool = True,
+    ) -> dict:
+        """Create a new strategy config"""
+        import json
+        async with self.async_session() as session:
+            record = StrategyConfigModel(
+                name=name,
+                class_path=class_path,
+                market=market.lower(),
+                enabled=1 if enabled else 0,
+                symbols_json=json.dumps(symbols),
+                params_json=json.dumps(params),
+            )
+            session.add(record)
+            await session.commit()
+            await session.refresh(record)
+            return {
+                "id": record.id,
+                "name": record.name,
+                "class_path": record.class_path,
+                "market": record.market,
+                "enabled": bool(record.enabled),
+                "symbols": symbols,
+                "params": params,
+            }
+
+    async def update_strategy_config(
+        self,
+        name: str,
+        **kwargs,
+    ) -> Optional[dict]:
+        """Update a strategy config. Pass only fields to update."""
+        import json
+        async with self.async_session() as session:
+            query = select(StrategyConfigModel).where(
+                StrategyConfigModel.name == name,
+            )
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+            if not record:
+                return None
+
+            if "class_path" in kwargs:
+                record.class_path = kwargs["class_path"]
+            if "market" in kwargs:
+                record.market = kwargs["market"].lower()
+            if "enabled" in kwargs:
+                record.enabled = (
+                    1 if kwargs["enabled"] else 0
+                )
+            if "symbols" in kwargs:
+                record.symbols_json = json.dumps(
+                    kwargs["symbols"],
+                )
+            if "params" in kwargs:
+                record.params_json = json.dumps(
+                    kwargs["params"],
+                )
+
+            record.updated_at = datetime.now()
+            await session.commit()
+            return {
+                "id": record.id,
+                "name": record.name,
+                "class_path": record.class_path,
+                "market": record.market,
+                "enabled": bool(record.enabled),
+                "symbols": json.loads(record.symbols_json),
+                "params": json.loads(record.params_json),
+            }
+
+    async def delete_strategy_config(
+        self, name: str,
+    ) -> bool:
+        """Delete a strategy config. Returns True if deleted."""
+        async with self.async_session() as session:
+            query = select(StrategyConfigModel).where(
+                StrategyConfigModel.name == name,
+            )
+            result = await session.execute(query)
+            record = result.scalar_one_or_none()
+            if not record:
+                return False
+            await session.delete(record)
+            await session.commit()
+            return True

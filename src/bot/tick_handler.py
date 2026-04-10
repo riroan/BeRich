@@ -42,18 +42,23 @@ class TickHandlerMixin:
         await self.broadcast_tick_update()
 
     async def _sync_enabled_symbols(self: "TradingBot") -> None:
-        """Sync strategy symbols with DB enabled state"""
+        """Sync strategy symbols with DB (strategy_configs)"""
         try:
             from collections import defaultdict
 
-            db_symbols = await self.storage.get_watched_symbols(
-                enabled_only=True,
+            configs = (
+                await self.storage.get_all_strategy_configs()
             )
             symbols_by_strategy = defaultdict(set)
-            for s in db_symbols:
-                symbols_by_strategy[s["strategy_name"]].add(
-                    s["symbol"]
-                )
+            for cfg in configs:
+                if not cfg["enabled"]:
+                    continue
+                for s in cfg["symbols"]:
+                    sym = (
+                        s["symbol"]
+                        if isinstance(s, dict) else s
+                    )
+                    symbols_by_strategy[cfg["name"]].add(sym)
 
             for strategy in self.strategy_engine.get_strategies():
                 name = strategy.name_with_market
@@ -65,7 +70,6 @@ class TickHandlerMixin:
                     removed = current - enabled
                     strategy.symbols = list(enabled)
 
-                    # Load history for newly added symbols
                     for symbol in added:
                         try:
                             import asyncio
@@ -87,7 +91,6 @@ class TickHandlerMixin:
                                 f"history: {e}"
                             )
 
-                    # Clean RSI monitor for removed symbols
                     for symbol in removed:
                         self.dashboard.rsi_values.pop(symbol, None)
                         self.dashboard.rsi_prices.pop(symbol, None)

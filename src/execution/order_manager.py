@@ -182,17 +182,27 @@ class OrderManager:
             logger.debug(f"[{symbol}] No portfolio value")
             return 0
 
-        # Get max_weight from DB
+        # Get max_weight from strategy_configs DB
         max_weight = 20.0  # default
         if dashboard.storage:
             try:
-                symbols = await dashboard.storage.get_watched_symbols(
-                    enabled_only=True,
+                configs = (
+                    await dashboard.storage
+                    .get_all_strategy_configs()
                 )
-                for s in symbols:
-                    if s["symbol"] == symbol:
-                        max_weight = s.get("max_weight", 20.0)
-                        break
+                for cfg in configs:
+                    for s in cfg.get("symbols", []):
+                        sym = (
+                            s["symbol"]
+                            if isinstance(s, dict) else s
+                        )
+                        if sym == symbol:
+                            max_weight = (
+                                s.get("max_weight", 20.0)
+                                if isinstance(s, dict)
+                                else 20.0
+                            )
+                            break
             except Exception:
                 pass
 

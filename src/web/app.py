@@ -243,6 +243,9 @@ class DashboardState:
         # Live strategy instances (set by bot)
         self.strategy_instances: Optional[List[Any]] = None
 
+        # Hot reload callback (set by bot)
+        self.reload_callback: Optional[Any] = None
+
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
         self.debug_freeze: bool = False
@@ -1127,13 +1130,39 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
+        # Build flat symbol list from strategy_configs
         symbols = []
         storage = await _get_web_storage()
         if storage:
             try:
-                symbols = await storage.get_watched_symbols(
-                    enabled_only=False,
+                configs = (
+                    await storage.get_all_strategy_configs()
                 )
+                for cfg in configs:
+                    for s in cfg.get("symbols", []):
+                        sym = (
+                            s["symbol"]
+                            if isinstance(s, dict) else s
+                        )
+                        mw = (
+                            s.get("max_weight", 20.0)
+                            if isinstance(s, dict)
+                            else 20.0
+                        )
+                        symbols.append({
+                            "id": cfg["id"],
+                            "symbol": sym,
+                            "market": cfg["market"],
+                            "strategy_name": cfg["name"],
+                            "enabled": cfg["enabled"],
+                            "max_weight": mw,
+                            "created_at": cfg.get(
+                                "created_at",
+                            ),
+                            "updated_at": cfg.get(
+                                "updated_at",
+                            ),
+                        })
             finally:
                 await storage.close()
 
@@ -1159,15 +1188,33 @@ def create_app() -> FastAPI:
         strategy_name: str = None,
         enabled_only: bool = False,
     ):
-        """Get watched symbols"""
+        """Get symbols from strategy_configs"""
         storage = await _get_web_storage()
         if not storage:
-            return {"error": "Storage not available", "symbols": []}
+            return {"symbols": []}
         try:
-            symbols = await storage.get_watched_symbols(
-                strategy_name=strategy_name,
-                enabled_only=enabled_only,
+            configs = (
+                await storage.get_all_strategy_configs()
             )
+            symbols = []
+            for cfg in configs:
+                if strategy_name and (
+                    cfg["name"] != strategy_name
+                ):
+                    continue
+                if enabled_only and not cfg["enabled"]:
+                    continue
+                for s in cfg.get("symbols", []):
+                    sym = (
+                        s["symbol"]
+                        if isinstance(s, dict) else s
+                    )
+                    symbols.append({
+                        "symbol": sym,
+                        "market": cfg["market"],
+                        "strategy_name": cfg["name"],
+                        "enabled": cfg["enabled"],
+                    })
             return {"symbols": symbols}
         finally:
             await storage.close()
@@ -1377,16 +1424,20 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
-        # Get symbol weights from DB
+        # Get symbol weights from strategy_configs
         symbol_weights = {}
         storage = await _get_web_storage()
         if storage:
             try:
-                symbols = await storage.get_watched_symbols(
-                    enabled_only=False,
+                configs = (
+                    await storage.get_all_strategy_configs()
                 )
-                for s in symbols:
-                    symbol_weights[s["symbol"]] = s["max_weight"]
+                for cfg in configs:
+                    for s in cfg.get("symbols", []):
+                        if isinstance(s, dict):
+                            symbol_weights[s["symbol"]] = (
+                                s.get("max_weight", 20.0)
+                            )
             finally:
                 await storage.close()
 
@@ -1445,11 +1496,15 @@ def create_app() -> FastAPI:
         storage = await _get_web_storage()
         if storage:
             try:
-                symbols = await storage.get_watched_symbols(
-                    enabled_only=False,
+                configs = (
+                    await storage.get_all_strategy_configs()
                 )
-                for s in symbols:
-                    symbol_weights[s["symbol"]] = s["max_weight"]
+                for cfg in configs:
+                    for s in cfg.get("symbols", []):
+                        if isinstance(s, dict):
+                            symbol_weights[s["symbol"]] = (
+                                s.get("max_weight", 20.0)
+                            )
             finally:
                 await storage.close()
 
@@ -1496,31 +1551,29 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
-        # Get params from DB
-        all_params = []
+        # Get strategy configs from DB
+        strategy_configs = []
         storage = await _get_web_storage()
         if storage:
             try:
-                all_params = (
-                    await storage.get_all_strategy_params()
+                strategy_configs = (
+                    await storage.get_all_strategy_configs()
                 )
             finally:
                 await storage.close()
 
-        # Get current live params from strategies
-        live_params = {}
-        for strategy in (
-            dashboard_state.strategy_instances or []
-        ):
-            live_params[strategy.name_with_market] = (
-                dict(strategy.params)
-            )
+        # Get available strategy classes
+        from src.strategy import available_strategies
+        strategy_classes = [
+            {"class_path": k, "name": v}
+            for k, v in available_strategies().items()
+        ]
 
         context = {
             "request": request,
             "active_page": "settings",
-            "all_params": all_params,
-            "live_params": live_params,
+            "strategy_configs": strategy_configs,
+            "strategy_classes": strategy_classes,
             "strategy_names": dashboard_state.strategy_names,
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
@@ -1602,6 +1655,216 @@ def create_app() -> FastAPI:
             "applied_live": applied,
             "strategy_name": body.strategy_name,
             "params": body.params,
+        }
+
+    # ==================== Strategy Config CRUD ====================
+
+    class StrategyConfigCreate(BaseModel):
+        name: str
+        class_path: str
+        market: str
+        symbols: list
+        params: dict
+        enabled: bool = True
+
+    class StrategyConfigUpdate(BaseModel):
+        class_path: Optional[str] = None
+        market: Optional[str] = None
+        symbols: Optional[list] = None
+        params: Optional[dict] = None
+        enabled: Optional[bool] = None
+
+    @app.get("/api/strategies")
+    async def get_strategies():
+        """Get all strategy configurations"""
+        storage = await _get_web_storage()
+        if not storage:
+            return {"strategies": []}
+        try:
+            configs = (
+                await storage.get_all_strategy_configs()
+            )
+            return {"strategies": configs}
+        finally:
+            await storage.close()
+
+    @app.get("/api/strategy-classes")
+    async def get_strategy_classes():
+        """Get available strategy classes for dropdown"""
+        from src.strategy import available_strategies
+        classes = available_strategies()
+        return {
+            "classes": [
+                {"class_path": k, "name": v}
+                for k, v in classes.items()
+            ]
+        }
+
+    @app.post("/api/strategies")
+    async def create_strategy(body: StrategyConfigCreate):
+        """Create a new strategy configuration"""
+        from src.strategy import available_strategies
+
+        # Validate class_path against allowlist
+        allowed = available_strategies()
+        if body.class_path not in allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Invalid class_path. "
+                    f"Allowed: {list(allowed.keys())}"
+                ),
+            )
+
+        # Validate market
+        try:
+            from src.core.types import Market
+            Market.from_string(body.market)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=400, detail=str(e),
+            )
+
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503,
+                detail="Storage not available",
+            )
+
+        try:
+            result = (
+                await storage.create_strategy_config(
+                    name=body.name,
+                    class_path=body.class_path,
+                    market=body.market,
+                    symbols=body.symbols,
+                    params=body.params,
+                    enabled=body.enabled,
+                )
+            )
+        except Exception as e:
+            if "UNIQUE" in str(e):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Strategy '{body.name}' "
+                    f"already exists",
+                )
+            raise
+        finally:
+            await storage.close()
+
+        # Trigger hot reload
+        bot_running = False
+        cb = dashboard_state.reload_callback
+        if cb:
+            await cb()
+            bot_running = True
+
+        return {
+            "success": True,
+            "strategy": result,
+            "bot_reloaded": bot_running,
+        }
+
+    @app.put("/api/strategies/{name}")
+    async def update_strategy(
+        name: str, body: StrategyConfigUpdate,
+    ):
+        """Update a strategy configuration"""
+        # Validate class_path if provided
+        if body.class_path is not None:
+            from src.strategy import available_strategies
+            allowed = available_strategies()
+            if body.class_path not in allowed:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid class_path",
+                )
+
+        if body.market is not None:
+            try:
+                from src.core.types import Market
+                Market.from_string(body.market)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=400, detail=str(e),
+                )
+
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503,
+                detail="Storage not available",
+            )
+
+        try:
+            kwargs = {
+                k: v
+                for k, v in body.model_dump().items()
+                if v is not None
+            }
+            result = (
+                await storage.update_strategy_config(
+                    name, **kwargs,
+                )
+            )
+        finally:
+            await storage.close()
+
+        if result is None:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Strategy '{name}' not found",
+            )
+
+        # Trigger hot reload
+        bot_running = False
+        cb = dashboard_state.reload_callback
+        if cb:
+            await cb()
+            bot_running = True
+
+        return {
+            "success": True,
+            "strategy": result,
+            "bot_reloaded": bot_running,
+        }
+
+    @app.delete("/api/strategies/{name}")
+    async def delete_strategy(name: str):
+        """Delete a strategy configuration"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503,
+                detail="Storage not available",
+            )
+
+        try:
+            deleted = (
+                await storage.delete_strategy_config(name)
+            )
+        finally:
+            await storage.close()
+
+        if not deleted:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Strategy '{name}' not found",
+            )
+
+        # Trigger hot reload
+        bot_running = False
+        cb = dashboard_state.reload_callback
+        if cb:
+            await cb()
+            bot_running = True
+
+        return {
+            "success": True,
+            "deleted": name,
+            "bot_reloaded": bot_running,
         }
 
     # ==================== Analytics Routes ====================
