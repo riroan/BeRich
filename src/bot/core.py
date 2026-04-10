@@ -97,16 +97,28 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             "paper_trading": kis_config["paper_trading"],
         }
 
-        # Initialize risk manager
+        # Initialize broker first (needed for account balance)
+        await self._initialize_broker()
+
+        # FIX-005: Use actual account balance instead of hardcoded 100M
         risk_config = self.config.get_risk_config()
         limits = RiskLimits.from_config(risk_config)
+        try:
+            balances = await self.broker.get_account_balance()
+            account_value = Decimal(str(
+                balances.get("total_usd", 0) + balances.get("total_krw", 0)
+            ))
+            if account_value <= 0:
+                account_value = Decimal("100000000")
+                logger.warning("Account balance is 0, using fallback 100M for risk limits")
+        except Exception as e:
+            account_value = Decimal("100000000")
+            logger.warning(f"Failed to get account balance, using fallback 100M: {e}")
         self.risk_manager = RiskManager(
             limits=limits,
-            account_value=Decimal("100000000"),
+            account_value=account_value,
         )
-
-        # Initialize broker and share auth token
-        await self._initialize_broker()
+        logger.info(f"Risk manager initialized with account value: {account_value:,}")
         real_broker = getattr(
             self.broker, "_real_broker", self.broker,
         )
@@ -343,11 +355,11 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         await self.strategy_engine.start()
         await self.order_manager.start()
 
+        # FIX-004: Sync positions BEFORE initialize so strategies know existing positions
+        await self.strategy_engine.sync_positions()
+
         # Initialize strategies with historical data
         await self.strategy_engine.initialize()
-
-        # Sync existing positions from broker
-        await self.strategy_engine.sync_positions()
 
         # Load historical data
         await self.load_chart_history()

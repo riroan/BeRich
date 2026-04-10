@@ -294,10 +294,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 # Reset sell stages when buying
                 self._sell_stages[symbol] = 0
 
-                # Entry price will be updated via on_fill or sync_position
-                # For now, set initial entry price if not exists
-                if symbol not in self._entry_prices:
-                    self._entry_prices[symbol] = current_price
+                # FIX-007: Don't set entry price on signal generation
+                # Entry price is set ONLY via on_fill() or sync_position()
+                # to ensure it reflects actual fill price, not signal price
 
                 logger.info(
                     f"[{symbol}] *** BUY SIGNAL GENERATED *** | "
@@ -317,7 +316,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                         "rsi": float(current_rsi),
                         "reason": f"avg_down_stage_{stage + 1}",
                         "entry_price": float(current_price),
-                        "avg_price": float(self._entry_prices[symbol]),
+                        "avg_price": float(self._entry_prices.get(symbol, current_price)),
                         "stage": stage + 1,
                         "total_stages": len(avg_down_levels),
                     },

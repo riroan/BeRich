@@ -1,5 +1,5 @@
-from typing import Dict, Optional, Callable
-from datetime import datetime
+from typing import Dict, Optional, Callable, Tuple
+from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
 
@@ -43,6 +43,10 @@ class OrderManager:
 
         self._pending_orders: Dict[str, Order] = {}
         self._active_orders: Dict[str, Order] = {}
+        # FIX-001: Duplicate order prevention
+        # Key: (symbol, side) → timestamp of last order
+        self._recent_orders: Dict[Tuple[str, str], datetime] = {}
+        self._dedup_window = timedelta(seconds=60)
 
     async def start(self) -> None:
         """Start order manager"""
@@ -74,6 +78,18 @@ class OrderManager:
 
         logger.info(f"Processing signal from {strategy_name}: {signal.signal_type.name} {signal.symbol}")
 
+        # FIX-001: Duplicate order prevention
+        side_key = "buy" if signal.signal_type == SignalType.ENTRY_LONG else "sell"
+        dedup_key = (signal.symbol, side_key)
+        now = datetime.now()
+        last_order_time = self._recent_orders.get(dedup_key)
+        if last_order_time and (now - last_order_time) < self._dedup_window:
+            logger.warning(
+                f"[DEDUP] Duplicate signal ignored: {side_key} {signal.symbol} "
+                f"(last order {(now - last_order_time).seconds}s ago)"
+            )
+            return
+
         # Convert signal to order
         order = await self._signal_to_order(signal)
         if not order:
@@ -85,6 +101,9 @@ class OrderManager:
         if not is_valid:
             logger.warning(f"Order rejected by risk manager: {reject_reason}")
             return
+
+        # FIX-001: Record order timestamp for dedup
+        self._recent_orders[dedup_key] = now
 
         # Submit order
         logger.info(
@@ -227,12 +246,14 @@ class OrderManager:
     async def _submit_order(self, order: Order, signal_metadata: dict = None) -> None:
         """Submit order to broker"""
         try:
-            order_id = await self.broker.submit_order(order)
-            # Attach realized PnL from signal for risk tracking
+            # FIX-003: Attach PnL before submission
             if signal_metadata and order.side == OrderSide.SELL:
                 pnl = signal_metadata.get("pnl")
                 if pnl is not None:
                     order.realized_pnl = pnl
+
+            # FIX-003: Register in active_orders BEFORE submit to prevent lost fills
+            order_id = await self.broker.submit_order(order)
             self._active_orders[order_id] = order
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
