@@ -1,6 +1,7 @@
 """Web dashboard for trading bot monitoring"""
 
 import hashlib
+import hmac
 import secrets
 import os
 from datetime import datetime, timedelta
@@ -9,7 +10,7 @@ from typing import Optional, Dict, Any, List
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -691,9 +692,10 @@ def hash_password(password: str) -> str:
 
 def verify_session(request: Request) -> bool:
     """Check if request has valid session"""
-    # If no password set, allow access
     if not AUTH_PASSWORD:
-        return True
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD must be set in .env. Refusing to serve authenticated requests."
+        )
 
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_token:
@@ -726,6 +728,17 @@ def create_app() -> FastAPI:
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
+    @app.middleware("http")
+    async def api_auth_middleware(request: Request, call_next):
+        """Require authentication for all /api/ endpoints"""
+        if request.url.path.startswith("/api/"):
+            if not verify_session(request):
+                return JSONResponse(
+                    status_code=401,
+                    content={"detail": "Not authenticated"},
+                )
+        return await call_next(request)
+
     @app.get("/login", response_class=HTMLResponse)
     async def login_page(request: Request, error: str = ""):
         """Login page"""
@@ -742,7 +755,7 @@ def create_app() -> FastAPI:
     @app.post("/login")
     async def login(request: Request, username: str = Form(...), password: str = Form(...)):
         """Handle login"""
-        if username == AUTH_USERNAME and password == AUTH_PASSWORD:
+        if username == AUTH_USERNAME and hmac.compare_digest(password, AUTH_PASSWORD):
             # Create session
             token = generate_session_token()
             valid_sessions[token] = datetime.now()
@@ -1065,6 +1078,8 @@ def create_app() -> FastAPI:
     @app.post("/api/debug/seed-positions")
     async def seed_test_positions():
         """Inject test positions into dashboard (dev only)"""
+        if os.getenv("DEBUG") != "true":
+            raise HTTPException(status_code=404, detail="Not found")
         import random
         dashboard_state.debug_freeze = True
         test_positions = [
