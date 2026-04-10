@@ -10,6 +10,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -29,7 +32,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio" class="active">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -76,7 +83,7 @@
             <div class="panel">
                 <h2>Holdings</h2>
                 <div class="table-wrap">
-                <table class="positions-table">
+                <table class="positions-table mobile-cards">
                     <thead>
                         <tr>
                             <th>Symbol</th>
@@ -92,33 +99,32 @@
                     </thead>
                     <tbody>
                         {% for pos in portfolio %}
-                        <tr onclick="location.href='/symbol/{{ pos.symbol }}'" style="cursor: pointer;">
-                            <td class="symbol">{{ pos.symbol }}</td>
-                            <td>{{ pos.market }}</td>
-                            <td>{{ pos.quantity }}</td>
-                            <td>${{ "{:,.2f}".format(pos.avg_price) }}</td>
-                            <td>${{ "{:,.2f}".format(pos.current_price) }}</td>
-                            <td>${{ "{:,.2f}".format(pos.value) }}</td>
-                            <td class="{{ 'over-limit' if pos.over_limit else '' }}">
+                        <tr>
+                            <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
+                            <td data-label="Market">{{ pos.market }}</td>
+                            <td data-label="Qty">{{ pos.quantity }}</td>
+                            <td data-label="Avg Price">${{ "{:,.2f}".format(pos.avg_price) }}</td>
+                            <td data-label="Current">${{ "{:,.2f}".format(pos.current_price) }}</td>
+                            <td data-label="Value">${{ "{:,.2f}".format(pos.value) }}</td>
+                            <td data-label="Weight" class="{{ 'over-limit' if pos.over_limit else '' }}">
                                 {{ "{:.1f}".format(pos.weight) }}%
                             </td>
-                            <td>{{ "{:.0f}".format(pos.max_weight) }}%</td>
-                            <td class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">
+                            <td data-label="Limit">{{ "{:.0f}".format(pos.max_weight) }}%</td>
+                            <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">
                                 {{ "{:+.1f}".format(pos.pnl_pct) }}%
                             </td>
                         </tr>
                         {% endfor %}
-                        <!-- Cash row -->
                         <tr class="cash-row">
-                            <td class="symbol">Cash</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>-</td>
-                            <td>${{ "{:,.2f}".format(cash_total) }}</td>
-                            <td>{{ "{:.1f}".format(cash_weight) }}%</td>
-                            <td>-</td>
-                            <td>-</td>
+                            <td data-label="Symbol" class="full-width symbol">Cash</td>
+                            <td data-label="Market">-</td>
+                            <td data-label="Qty">-</td>
+                            <td data-label="Avg Price">-</td>
+                            <td data-label="Current">-</td>
+                            <td data-label="Value">${{ "{:,.2f}".format(cash_total) }}</td>
+                            <td data-label="Weight">{{ "{:.1f}".format(cash_weight) }}%</td>
+                            <td data-label="Limit">-</td>
+                            <td data-label="P&L">-</td>
                         </tr>
                     </tbody>
                 </table>
@@ -260,5 +266,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

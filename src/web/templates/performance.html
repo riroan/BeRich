@@ -11,6 +11,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -30,7 +33,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -281,5 +288,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

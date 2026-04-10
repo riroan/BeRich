@@ -9,6 +9,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             <span id="ws-status" class="ws-status disconnected">OFFLINE</span>
             {% if bot_status %}
@@ -29,7 +32,12 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+        <span id="sticky-ws" class="sticky-ws ws-status disconnected">OFFLINE</span>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/" class="active">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -76,7 +84,7 @@
             <div class="card">
                 <div class="section-title">Positions <span class="count">{{ position_count }}</span></div>
                 <div class="table-wrap">
-                <table class="center-table">
+                <table id="positions-table" class="center-table mobile-cards">
                     <thead>
                         <tr>
                             <th>Symbol</th>
@@ -88,12 +96,12 @@
                     </thead>
                     <tbody>
                         {% for pos in positions %}
-                        <tr onclick="location.href='/symbol/{{ pos.symbol }}'" style="cursor:pointer;">
-                            <td><span class="sym-badge">{{ pos.symbol }}</span></td>
-                            <td>{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
-                            <td class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
-                            <td class="{% if pos.rsi %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi else '-' }}</td>
-                            <td>
+                        <tr>
+                            <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
+                            <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
+                            <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
+                            <td data-label="RSI" class="{% if pos.rsi %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi else '-' }}</td>
+                            <td data-label="Stage">
                                 <div class="stage-bar">
                                     {% for i in range(pos.max_buy_stages) %}
                                     <span class="stage-dot {{ 'filled' if i < pos.buy_stage else '' }}"></span>
@@ -127,7 +135,7 @@
         </div>
 
         <!-- 3. Signals -->
-        <div class="three-col">
+        <div class="three-col signals-grid">
             <div class="signal-card">
                 <h3>Buy Candidates</h3>
                 {% for c in buy_candidates %}

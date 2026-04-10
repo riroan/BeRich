@@ -121,7 +121,18 @@
 
 ## Responsive Breakpoints
 - **1024px:** cards 2-column, signal/three-col 1-column, two-col 1-column
-- **768px:** cards 1-column, RSI grid 1-column, header wraps, padding shrinks to 20px
+- **768px:** cards 2-column, tables → card conversion, hamburger menu, sticky P&L header
+- **480px:** dashboard summary → 1-column, system status → 2-column
+
+## Mobile Overrides (≤768px)
+- **Typography floor:** 10px for card data-labels (below desktop 11px floor)
+- **Card padding:** 12px (reduced from desktop 20px)
+- **Card values:** 16px (reduced from desktop 20px)
+- **Navigation:** Hamburger menu (3-line → X transform, slide-down, 500px max-height transition)
+- **Sticky P&L:** Always-visible header with total P&L + WS connection status
+- **Touch feedback:** `:active` scale(0.98) + opacity on cards (hover: none media query)
+- **Table → Card:** `.mobile-cards` class converts tables to 2-column grid cards with data-labels
+- **Light theme:** `prefers-color-scheme: light` auto-detection with darkened accent colors for WCAG AA
 
 ## Decisions Log
 | Date | Decision | Rationale |

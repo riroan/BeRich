@@ -46,11 +46,51 @@
         .strategy-content.editing .read-val { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
+
+        @media (max-width: 768px) {
+            .settings-form-grid {
+                grid-template-columns: 1fr !important;
+                gap: 0;
+            }
+            .settings-form-grid .form-group {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+                padding: 12px 0;
+                border-bottom: 1px solid rgba(51,65,85,0.3);
+                gap: 8px;
+            }
+            .settings-form-grid .form-group:last-child { border-bottom: none; }
+            .settings-form-grid .form-group label {
+                flex-shrink: 0;
+            }
+            .settings-form-grid .form-group .read-val {
+                font-size: 15px;
+                text-align: right;
+                flex-shrink: 0;
+            }
+            .settings-form-grid .form-group .hint {
+                display: none;
+            }
+            .settings-form-grid .form-group input[type="text"] {
+                width: 80px;
+            }
+            .levels-row { grid-template-columns: 1fr !important; gap: 12px; }
+            .level-table { min-width: unset; }
+            .level-table th { font-size: 10px; padding: 6px 4px; }
+            .level-table td { padding: 8px 4px; font-size: 12px; }
+            input.level-input[type="text"] { width: 45px; padding: 5px 6px; font-size: 12px; }
+            .form-actions { flex-direction: column; gap: 10px; }
+            .form-actions .btn { width: 100%; text-align: center; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -70,7 +110,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -272,5 +316,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

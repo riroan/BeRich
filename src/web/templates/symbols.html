@@ -9,6 +9,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -28,7 +31,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols" class="active">Symbols</a>
@@ -69,20 +76,20 @@
 
         {% for strategy in ns.strategies %}
         <div class="card">
-            <div class="section-title" style="padding-bottom:12px;border-bottom:1px solid rgba(51,65,85,0.3);margin-bottom:4px;">{{ strategy }} <span class="count">{{ symbols|selectattr('strategy_name', 'equalto', strategy)|list|length }} symbols</span></div>
+            <div class="section-title" style="padding-bottom:12px;border-bottom:1px solid rgba(51,65,85,0.3);margin-bottom:4px;"><span class="strategy-name">{{ strategy }}</span> <span class="count">{{ symbols|selectattr('strategy_name', 'equalto', strategy)|list|length }} symbols</span></div>
             {% for s in symbols if s.strategy_name == strategy %}
             <div class="sym-row" data-id="{{ s.id }}">
                 <span class="sym-badge">{{ s.symbol }}</span>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
-                <div class="sym-weight">
-                    <label class="toggle">
-                        <input type="checkbox" {{ 'checked' if s.enabled else '' }} onchange="toggleSymbol({{ s.id }})">
-                        <span class="slider"></span>
-                    </label>
+                <label class="toggle sym-toggle">
+                    <input type="checkbox" {{ 'checked' if s.enabled else '' }} onchange="toggleSymbol({{ s.id }})">
+                    <span class="slider"></span>
+                </label>
+                <div class="sym-controls">
                     <input type="text" value="{{ s.max_weight }}" onchange="updateWeight({{ s.id }}, this.value)">
                     <span class="pct">%</span>
+                    <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">&#x2715;</button>
                 </div>
-                <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">&#x2715;</button>
             </div>
             {% endfor %}
         </div>
@@ -155,5 +162,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

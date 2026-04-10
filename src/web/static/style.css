@@ -243,20 +243,20 @@ body {
 .market-nyse { background: rgba(16,185,129,0.15); color: var(--emerald); }
 .market-amex { background: rgba(245,158,11,0.15); color: var(--amber); }
 .market-krx { background: rgba(139,92,246,0.15); color: #8b5cf6; }
-.sym-weight {
-    display: flex; align-items: center; gap: 14px; margin-left: auto;
+.sym-weight, .sym-controls {
+    display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
-.sym-weight input[type="text"] {
+.sym-controls input[type="text"], .sym-weight input[type="text"] {
     width: 60px; text-align: right; padding: 6px 8px; font-size: 13px;
 }
-.sym-weight .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
+.sym-controls .pct, .sym-weight .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
 
 /* Allocation chart + legend */
 .alloc-wrap { display: flex; align-items: center; justify-content: center; gap: 40px; }
-.alloc-legend { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.alloc-legend { display: flex; flex-direction: column; gap: 0; align-items: center; }
 .alloc-item {
-    display: flex; align-items: center; gap: 12px;
-    padding: 8px 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 4px 0;
 }
 .alloc-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
 .alloc-name { font-size: 14px; color: var(--white); font-weight: 600; width: 60px; }
@@ -797,6 +797,59 @@ select option { background: var(--surface); color: var(--text); }
 .symbol-title { font-size: 20px; gap: 8px; }
 .symbol-title span:first-child { margin-left: 8px; }
 
+/* ===================== Hamburger Menu ===================== */
+.mobile-menu-toggle {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 12px;
+    flex-shrink: 0;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+}
+.mobile-menu-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--white);
+    border-radius: 1px;
+    transition: transform 0.25s, opacity 0.25s;
+}
+/* gap(5) + height(2) = 7px center-to-center */
+.mobile-menu-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.mobile-menu-toggle.open span:nth-child(2) { opacity: 0; }
+.mobile-menu-toggle.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.menu-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 90;
+}
+.menu-backdrop.show { display: block; }
+
+/* ===================== Sticky P&L Header ===================== */
+.sticky-pnl {
+    display: none !important;
+}
+
+/* ===================== Mobile Card Conversion ===================== */
+.mobile-cards .empty-card {
+    text-align: center;
+    padding: 24px 16px;
+    color: var(--dim);
+    font-size: 13px;
+}
+.mobile-cards .empty-card .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
+.mobile-cards .empty-card .empty-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
+
+/* ===================== Touch Feedback ===================== */
+
 /* ===================== Responsive ===================== */
 
 /* Tablet (≤1024px) */
@@ -810,41 +863,130 @@ select option { background: var(--surface); color: var(--text); }
 
 /* Mobile (≤768px) */
 @media (max-width: 768px) {
-    /* Header: stack logo left, badges below */
+    /* Header: logo left, hamburger right, badges below */
     .header {
         padding: 12px 16px;
         flex-wrap: wrap;
         gap: 8px;
+        overflow: visible;
     }
-    .header h1 { font-size: 18px; margin-left: 4px; }
+    .header h1 { font-size: 18px; margin-left: 4px; flex: 1; }
     .header-right {
         width: 100%;
         display: flex;
         flex-wrap: wrap;
         gap: 6px;
-        justify-content: flex-start;
+        justify-content: flex-end;
+    }
+    .header-right .pill.time {
+        width: 100%;
+        text-align: right;
     }
 
-    /* Nav: horizontal scroll, no wrap */
+    /* Hamburger: show toggle, hide nav by default */
+    .mobile-menu-toggle { display: flex; flex-direction: column; z-index: 101; }
     .nav {
-        padding: 0 12px 12px;
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
+        display: none;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        background: var(--surface);
+        padding: 60px 16px 16px;
+        z-index: 100;
+        max-height: 0;
+        overflow: hidden;
+        transition: max-height 0.2s ease-out;
         gap: 2px;
-        /* Fade hint for scrollable content */
-        mask-image: linear-gradient(to right, black 90%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to right, black 90%, transparent 100%);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
     }
-    .nav::-webkit-scrollbar { display: none; }
+    .nav.open {
+        display: flex;
+        max-height: 500px;
+        transition: max-height 0.3s ease-in;
+    }
     .nav a, .nav-link {
-        white-space: nowrap;
-        padding: 6px 10px;
-        font-size: 12px;
+        padding: 12px 16px;
+        font-size: 14px;
+        border-radius: 8px;
         flex-shrink: 0;
     }
-    .logout-btn { margin-left: 0; }
+    .logout-btn { margin-left: 0; margin-top: 8px; border-top: 1px solid var(--border); padding-top: 12px; }
+
+    /* Card conversion: table → cards */
+    .mobile-cards thead { display: none; }
+    .mobile-cards tbody tr {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        background: var(--bg);
+        border-radius: var(--radius);
+        padding: 12px;
+        margin-bottom: 8px;
+        gap: 6px;
+        border-bottom: none;
+    }
+    .mobile-cards tbody tr:hover { background: var(--card); }
+    .mobile-cards td {
+        padding: 4px 0;
+        border-bottom: none;
+        text-align: left;
+        font-size: 13px;
+    }
+    .mobile-cards td::before {
+        content: attr(data-label);
+        font-size: 10px;
+        color: var(--dim);
+        display: block;
+        margin-bottom: 2px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+    }
+    .mobile-cards td.full-width {
+        grid-column: 1 / -1;
+    }
+    .mobile-cards .empty td {
+        grid-column: 1 / -1;
+    }
+    table.mobile-cards { min-width: unset; }
+
+    /* Positions table: Symbol top, Price|P&L|RSI|Stage in one row */
+    #positions-table tbody tr {
+        grid-template-columns: 20% 30% 20% auto;
+    }
+    #positions-table td[data-label="Symbol"] {
+        grid-column: 1 / -1;
+        padding-bottom: 4px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2px;
+        text-align: left;
+        font-size: 15px;
+        padding-left: 5px;
+    }
+    #positions-table td[data-label="Symbol"]::before {
+        display: none;
+    }
+    #positions-table td {
+        text-align: center;
+    }
+    #positions-table td::before {
+        font-size: 9px;
+    }
+    #positions-table td[data-label="Stage"]::before {
+        display: block;
+    }
+    #positions-table td[data-label="Stage"] .stage-bar {
+        justify-content: center;
+    }
+
+    /* Signals: Buy + Sell side by side, Recent Trades below */
+    .signals-grid {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 8px !important;
+    }
+    .signals-grid .signal-card:last-child {
+        grid-column: 1 / -1;
+    }
 
     /* Container */
     .container { padding: 0 12px 16px; gap: 12px; }
@@ -883,7 +1025,7 @@ select option { background: var(--surface); color: var(--text); }
     .sys-cell .sys-value, .sys-cell .sys-value-sm { font-size: 13px; }
 
     /* Monthly returns */
-    .monthly-grid { grid-template-columns: repeat(3, 1fr); }
+    .monthly-grid { grid-template-columns: repeat(2, 1fr); }
 
     /* Tables: horizontal scroll wrapper */
     .table-wrap {
@@ -903,6 +1045,11 @@ select option { background: var(--surface); color: var(--text); }
         font-size: 11px;
         padding: 6px 0;
     }
+    .signal-item.two-col {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
     .signal-tag { font-size: 10px; padding: 2px 8px; }
     .trade-qty { font-size: 13px; }
     .trade-price { font-size: 11px; }
@@ -913,14 +1060,38 @@ select option { background: var(--surface); color: var(--text); }
     /* Symbols page */
     .sym-add-form { flex-direction: column; gap: 8px; }
     .sym-add-form input, .sym-add-form select { width: 100%; min-width: unset; }
+
+    /* Strategy title: name on top (truncated), count below right-aligned */
+    .strategy-name {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .strategy-name + .count {
+        display: inline-block;
+        float: right;
+        margin-top: 4px;
+    }
+
+    /* Symbol row: name+market top, controls bottom-right */
     .sym-row {
         flex-wrap: wrap;
-        gap: 8px;
+        gap: 6px;
         padding: 10px 0;
     }
-    .sym-row .sym-badge { width: auto; font-size: 13px; }
+    .sym-row .sym-badge { font-size: 13px; }
     .sym-row .market-badge { font-size: 10px; padding: 2px 8px; }
-    .sym-weight { margin-left: 0; width: 100%; justify-content: space-between; }
+    .sym-toggle {
+        margin-left: auto;
+    }
+    .sym-controls {
+        width: 100%;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+    .sym-controls input[type="text"] { width: 50px; padding: 5px 6px; font-size: 12px; }
+    .sym-controls .btn-danger { padding: 4px 10px; }
 
     /* Charts: reduce height */
     .chart-container-small { min-height: 180px; }
@@ -1012,12 +1183,7 @@ select option { background: var(--surface); color: var(--text); }
     /* System status: 2-col */
     .sys-grid-row { grid-template-columns: repeat(2, 1fr); }
 
-    /* Signals: stack vertically */
-    .signal-item {
-        grid-template-columns: 1fr;
-        gap: 4px;
-    }
-    .signal-item .trade-price { text-align: left; }
+    /* Signals: keep one-line layout */
 
     /* RSI grid items */
     .rsi-item .rsi-value { font-size: 16px; }
@@ -1027,4 +1193,54 @@ select option { background: var(--surface); color: var(--text); }
 
     /* Symbol detail header */
     .section-title { font-size: 16px !important; }
+}
+
+/* ===================== Light Theme ===================== */
+@media (prefers-color-scheme: light) {
+    :root {
+        --bg: #f8fafc;
+        --surface: #ffffff;
+        --card: #f1f5f9;
+        --border: rgba(0,0,0,0.08);
+        --text: #1e293b;
+        --text-muted: #64748b;
+        --dim: #64748b;
+        --white: #0f172a;
+        --emerald: #059669;
+        --red: #dc2626;
+        --amber: #d97706;
+        --positive: #059669;
+        --negative: #dc2626;
+        --warning: #d97706;
+        --oversold: #059669;
+        --overbought: #dc2626;
+        --shadow: 0 4px 24px rgba(0,0,0,0.08);
+    }
+    .pill.running, .status.running { background: rgba(5,150,105,0.1); }
+    .pill.stopped, .status.stopped { background: rgba(220,38,38,0.1); }
+    .pill.real, .mode.real { background: rgba(220,38,38,0.1); }
+    .pill.paper, .mode.paper { background: rgba(217,119,6,0.1); }
+    .pill.warmup { background: rgba(217,119,6,0.1); }
+    .ws-status.connected { background: rgba(5,150,105,0.1); }
+    .ws-status.disconnected { background: rgba(220,38,38,0.1); }
+    .pause-btn { background: rgba(5,150,105,0.1); }
+    .pause-btn.paused { background: rgba(220,38,38,0.1); }
+    .signal-tag.buy { background: rgba(5,150,105,0.08); }
+    .signal-tag.sell { background: rgba(220,38,38,0.08); }
+    .alert { background: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.15); }
+    .alert.warning { background: rgba(217,119,6,0.05); border-color: rgba(217,119,6,0.15); }
+    tr:hover { background: rgba(59,130,246,0.06); }
+    .rsi-item:hover { background: var(--surface); }
+    .rsi-item { background: var(--card); }
+    .btn:hover, .btn-add:hover, .btn-save:hover {
+        background: #2563eb;
+        box-shadow: 0 0 16px rgba(59,130,246,0.15);
+    }
+    .sys-cell { background: var(--card); }
+    .nav { background: var(--bg); }
+    .nav.open { background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .sticky-pnl { background: var(--surface); border-bottom-color: rgba(0,0,0,0.06); }
+    .mobile-cards tbody tr { background: var(--card); }
+    .mobile-cards tbody tr:hover { background: #e2e8f0; }
+    .login-error { background: rgba(220,38,38,0.05); }
 }

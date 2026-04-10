@@ -860,6 +860,7 @@ def create_app() -> FastAPI:
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,
@@ -882,6 +883,7 @@ def create_app() -> FastAPI:
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
             "balance_usd": float(dashboard_state.balance_usd),
+            "pnl_usd": float(dashboard_state.pnl_usd),
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
@@ -984,6 +986,7 @@ def create_app() -> FastAPI:
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,
@@ -1131,6 +1134,7 @@ def create_app() -> FastAPI:
             "last_update": dashboard_state.last_update,
             "markets": ["krx", "nasdaq", "nyse", "amex"],
             "strategy_names": dashboard_state.strategy_names,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,
@@ -1418,6 +1422,7 @@ def create_app() -> FastAPI:
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,
@@ -1516,6 +1521,7 @@ def create_app() -> FastAPI:
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,
@@ -1631,6 +1637,7 @@ def create_app() -> FastAPI:
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
             request=request,

@@ -102,12 +102,39 @@
         .streak-display.win { color: var(--emerald); }
         .streak-display.loss { color: var(--red); }
         .chart-container-small { height: 200px; width: 100%; }
+
+        @media (max-width: 768px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+            .analytics-card {
+                padding: 14px;
+                overflow: hidden;
+            }
+            .stat-row {
+                font-size: 12px;
+                gap: 8px;
+            }
+            .stat-label {
+                flex-shrink: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .stat-value {
+                flex-shrink: 0;
+                text-align: right;
+            }
         }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -127,7 +154,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -278,19 +309,12 @@
             <div class="card">
                 <div class="section-title">Trading Streaks</div>
 
-                <div style="text-align: center; margin: 1rem 0;">
-                    <div class="stat-label">Current Streak</div>
-                    <div class="streak-display {{ 'win' if statistics.current_streak > 0 else 'loss' }}">
-                        {% if statistics.current_streak > 0 %}
-                        +{{ statistics.current_streak }}W
-                        {% elif statistics.current_streak < 0 %}
-                        {{ statistics.current_streak }}L
-                        {% else %}
-                        -
-                        {% endif %}
-                    </div>
+                <div class="stat-row">
+                    <span class="stat-label">Current Streak</span>
+                    <span class="stat-value {{ 'positive' if statistics.current_streak > 0 else ('negative' if statistics.current_streak < 0 else '') }}">
+                        {% if statistics.current_streak > 0 %}+{{ statistics.current_streak }}W{% elif statistics.current_streak < 0 %}{{ statistics.current_streak }}L{% else %}-{% endif %}
+                    </span>
                 </div>
-
                 <div class="stat-row">
                     <span class="stat-label">Max Win Streak</span>
                     <span class="stat-value positive">{{ statistics.max_win_streak }}</span>
@@ -321,7 +345,7 @@
             <div class="section-title">Performance by Symbol</div>
             {% if statistics.by_symbol %}
             <div class="table-wrap">
-            <table class="symbol-stats-table center-table">
+            <table class="symbol-stats-table center-table mobile-cards">
                 <thead>
                     <tr>
                         <th>Symbol</th>
@@ -334,15 +358,15 @@
                 <tbody>
                     {% for s in statistics.by_symbol %}
                     <tr>
-                        <td><a href="/symbol/{{ s.symbol }}">{{ s.symbol }}</a></td>
-                        <td>{{ s.total_trades }}</td>
-                        <td class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}">
+                        <td class="full-width" data-label="Symbol"><a href="/symbol/{{ s.symbol }}">{{ s.symbol }}</a></td>
+                        <td data-label="Trades">{{ s.total_trades }}</td>
+                        <td class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}" data-label="Win Rate">
                             {{ "{:.1f}%".format(s.win_rate) }}
                         </td>
-                        <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}">
+                        <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}" data-label="Total P&L">
                             ${{ "{:+,.2f}".format(s.total_pnl) }}
                         </td>
-                        <td>{{ "{:.2f}".format(s.profit_factor) }}</td>
+                        <td data-label="PF">{{ "{:.2f}".format(s.profit_factor) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -421,5 +445,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

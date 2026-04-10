@@ -10,6 +10,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -29,7 +32,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols">Symbols</a>
@@ -73,7 +80,7 @@
             </div>
 
             <div class="table-wrap">
-            <table class="trades-table center-table">
+            <table class="trades-table center-table mobile-cards">
                 <thead>
                     <tr>
                         <th>Time</th>
@@ -91,22 +98,22 @@
                 <tbody id="trades-body">
                     {% for log in trade_logs %}
                     <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}">
-                        <td>{{ log.timestamp }}</td>
-                        <td><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
-                        <td><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
-                        <td>
+                        <td data-label="Time" class="full-width">{{ log.timestamp }}</td>
+                        <td data-label="Symbol"><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
+                        <td data-label="Market"><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
+                        <td data-label="Action">
                             <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">
                                 {% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}
                             </span>
                         </td>
-                        <td>{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</td>
-                        <td>{{ log.quantity }}</td>
-                        <td>{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
-                        <td class="{{ 'positive' if log.result == 'success' else 'negative' }}">{{ log.result }}</td>
-                        <td class="{{ 'positive' if log.pnl and log.pnl >= 0 else ('negative' if log.pnl else '') }}">
+                        <td data-label="Price">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</td>
+                        <td data-label="Qty">{{ log.quantity }}</td>
+                        <td data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
+                        <td data-label="Result" class="{{ 'positive' if log.result == 'success' else 'negative' }}">{{ log.result }}</td>
+                        <td data-label="P&L" class="{{ 'positive' if log.pnl and log.pnl >= 0 else ('negative' if log.pnl else '') }}">
                             {% if log.pnl %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}
                         </td>
-                        <td class="{{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else ('negative' if log.pnl_pct else '') }}">
+                        <td data-label="P&L %" class="{{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else ('negative' if log.pnl_pct else '') }}">
                             {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
                         </td>
                     </tr>
@@ -200,5 +207,6 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

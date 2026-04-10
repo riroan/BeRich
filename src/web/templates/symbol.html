@@ -10,6 +10,9 @@
 <body>
     <div class="header">
         <h1>Be<span>Rich</span></h1>
+        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
         <div class="header-right">
             {% if bot_status %}
             <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
@@ -29,7 +32,11 @@
             <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="nav">
+    <div class="menu-backdrop" id="menu-backdrop"></div>
+    <div class="sticky-pnl">
+        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
+    </div>
+    <div class="nav" id="main-nav">
         <a href="/">Dashboard</a>
         <a href="/portfolio">Portfolio</a>
         <a href="/symbols" class="active">Symbols</a>
@@ -145,7 +152,7 @@
             <div class="panel">
                 <h2>Trade History</h2>
                 <div class="table-wrap">
-                <table class="trades-table center-table">
+                <table class="trades-table center-table mobile-cards">
                     <thead>
                         <tr>
                             <th>Time</th>
@@ -159,12 +166,12 @@
                     <tbody>
                         {% for log in symbol_trades %}
                         <tr class="{{ log.action }}">
-                            <td class="time">{{ log.timestamp }}</td>
-                            <td class="action {{ log.action }}">{{ log.action | upper }}</td>
-                            <td class="number">{{ "{:,.2f}".format(log.price) }}</td>
-                            <td class="number">{{ log.quantity }}</td>
-                            <td class="number">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
-                            <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}">
+                            <td class="time full-width" data-label="Time">{{ log.timestamp }}</td>
+                            <td class="action {{ log.action }}" data-label="Action">{{ log.action | upper }}</td>
+                            <td class="number" data-label="Price">{{ "{:,.2f}".format(log.price) }}</td>
+                            <td class="number" data-label="Qty">{{ log.quantity }}</td>
+                            <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
+                            <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}" data-label="P&L">
                                 {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
                             </td>
                         </tr>
@@ -417,5 +424,6 @@
             }
         }
     </script>
+    <script src="/static/script.js"></script>
 </body>
 </html>

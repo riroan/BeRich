@@ -131,29 +131,30 @@ class DashboardWebSocket {
     }
 
     updatePositionsTable(positions) {
-        const tbody = document.querySelector('.positions-section tbody');
+        const tbody = document.querySelector('#positions-table tbody');
         if (!tbody) return;
 
         if (positions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty">No positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No positions</td></tr>';
             return;
         }
 
         tbody.innerHTML = positions.map(pos => `
-            <tr onclick="window.location='/symbol/${pos.symbol}'">
-                <td class="symbol">${pos.symbol}</td>
-                <td>${pos.market}</td>
-                <td class="number">${pos.quantity.toLocaleString()}</td>
-                <td class="number">${this.formatPrice(pos.avg_price, pos.market)}</td>
-                <td class="number">${this.formatPrice(pos.current_price, pos.market)}</td>
-                <td class="number ${pos.pnl >= 0 ? 'positive' : 'negative'}">
-                    ${this.formatPnl(pos.pnl, pos.market)}
+            <tr>
+                <td data-label="Symbol" class="full-width"><a href="/symbol/${pos.symbol}" class="sym-badge">${pos.symbol}</a></td>
+                <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
+                <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
+                    ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
                 </td>
-                <td class="number ${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
-                    ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(2)}%
-                </td>
-                <td class="number rsi ${this.getRSIClass(pos.rsi)}">
+                <td data-label="RSI" class="${this.getRSIClass(pos.rsi)}">
                     ${pos.rsi ? pos.rsi.toFixed(1) : '-'}
+                </td>
+                <td data-label="Stage">
+                    <div class="stage-bar">
+                        ${Array.from({length: pos.max_buy_stages || 3}, (_, i) =>
+                            `<span class="stage-dot ${i < (pos.buy_stage || 0) ? 'filled' : ''}"></span>`
+                        ).join('')}
+                    </div>
                 </td>
             </tr>
         `).join('');
@@ -346,4 +347,107 @@ let dashboardWS = null;
 document.addEventListener('DOMContentLoaded', () => {
     dashboardWS = new DashboardWebSocket();
     dashboardWS.connect();
+    initHamburgerMenu();
+    initSwipeNav();
+    initChartTheme();
 });
+
+// ===================== Hamburger Menu =====================
+function initHamburgerMenu() {
+    const toggle = document.getElementById('menu-toggle');
+    const nav = document.getElementById('main-nav');
+    const backdrop = document.getElementById('menu-backdrop');
+    if (!toggle || !nav) return;
+
+    function openMenu() {
+        nav.classList.add('open');
+        toggle.classList.add('open');
+        toggle.setAttribute('aria-expanded', 'true');
+        if (backdrop) backdrop.classList.add('show');
+    }
+
+    function closeMenu() {
+        nav.classList.remove('open');
+        toggle.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        if (backdrop) backdrop.classList.remove('show');
+    }
+
+    toggle.addEventListener('click', () => {
+        nav.classList.contains('open') ? closeMenu() : openMenu();
+    });
+
+    if (backdrop) {
+        backdrop.addEventListener('click', closeMenu);
+    }
+
+    nav.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', closeMenu);
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && nav.classList.contains('open')) {
+            closeMenu();
+        }
+    });
+}
+
+// ===================== Swipe Navigation =====================
+function initSwipeNav() {
+    const pages = ['/', '/portfolio', '/symbols', '/trades', '/performance', '/analytics', '/settings'];
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let swiping = false;
+
+    document.addEventListener('touchstart', (e) => {
+        if (e.target.closest('.chart-container, .chart-container-small, canvas')) return;
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        swiping = true;
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
+        if (!swiping) return;
+        swiping = false;
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dx) < 50 || Math.abs(dy) > 30) return;
+
+        const current = window.location.pathname;
+        if (current.startsWith('/symbol/')) return;
+
+        const idx = pages.indexOf(current);
+        if (idx === -1) return;
+
+        if (dx < 0 && idx < pages.length - 1) {
+            window.location.href = pages[idx + 1];
+        } else if (dx > 0 && idx > 0) {
+            window.location.href = pages[idx - 1];
+        }
+    }, { passive: true });
+}
+
+// ===================== Chart Theme Detection =====================
+function initChartTheme() {
+    const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    if (!mq) return;
+
+    function applyChartTheme(isLight) {
+        document.querySelectorAll('[data-chart]').forEach(el => {
+            if (el._chart) {
+                el._chart.applyOptions({
+                    layout: {
+                        background: { color: isLight ? '#f8fafc' : '#0f172a' },
+                        textColor: isLight ? '#64748b' : '#94a3b8',
+                    },
+                    grid: {
+                        vertLines: { color: isLight ? '#e2e8f0' : '#1e293b' },
+                        horzLines: { color: isLight ? '#e2e8f0' : '#1e293b' },
+                    },
+                });
+            }
+        });
+    }
+
+    mq.addEventListener('change', (e) => applyChartTheme(e.matches));
+}
