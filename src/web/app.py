@@ -693,9 +693,7 @@ def hash_password(password: str) -> str:
 def verify_session(request: Request) -> bool:
     """Check if request has valid session"""
     if not AUTH_PASSWORD:
-        raise RuntimeError(
-            "DASHBOARD_PASSWORD must be set in .env. Refusing to serve authenticated requests."
-        )
+        return False
 
     session_token = request.cookies.get(SESSION_COOKIE_NAME)
     if not session_token:
@@ -721,6 +719,11 @@ def require_auth(request: Request):
 
 def create_app() -> FastAPI:
     """Create FastAPI application"""
+    if not AUTH_PASSWORD:
+        raise RuntimeError(
+            "DASHBOARD_PASSWORD must be set in .env. Refusing to start server."
+        )
+
     app = FastAPI(title="BeRich Dashboard", version="1.0.0")
 
     # Mount static files
@@ -766,6 +769,8 @@ def create_app() -> FastAPI:
                 value=token,
                 httponly=True,
                 max_age=SESSION_EXPIRE_HOURS * 3600,
+                secure=True,
+                samesite="strict",
             )
             return response
         else:
