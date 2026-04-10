@@ -46,6 +46,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         self._running = False
         self._stopped = False
+        self._status_task: Optional[asyncio.Task] = None
 
         # Project paths
         self._project_root = Path(__file__).parent.parent.parent
@@ -433,6 +434,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Start scheduler
         await self.scheduler.start()
 
+        # Dashboard status updater runs regardless of market hours (for warmup countdown)
+        self._status_task = asyncio.create_task(self._status_loop())
+
         logger.info("Trading Bot started")
         logger.info(f"Paper trading: {self.broker.paper_trading}")
         strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
@@ -464,6 +468,13 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         if self.notifier:
             await self.notifier.notify_shutdown()
 
+        if self._status_task:
+            self._status_task.cancel()
+            try:
+                await self._status_task
+            except asyncio.CancelledError:
+                pass
+
         if self.scheduler:
             await self.scheduler.stop()
 
@@ -485,6 +496,19 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             await self.notifier.close()
 
         logger.info("Trading Bot stopped")
+
+    async def _status_loop(self) -> None:
+        """Update dashboard status every 60s regardless of market hours (keeps warmup countdown live)"""
+        while self._running:
+            try:
+                await asyncio.sleep(60)
+                if self._running:
+                    await self.update_dashboard_status()
+                    await self.broadcast_tick_update()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Status loop error: {e}")
 
     async def run(self) -> None:
         """Main run loop"""
