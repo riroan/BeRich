@@ -177,9 +177,7 @@ class OrderManager:
         Example: $10,000 total × 20% weight × 30% stage = $600 → 3 shares at $200
         """
         dashboard = get_dashboard_state()
-        total_value = float(
-            dashboard.balance_usd + dashboard.balance_krw
-        )
+        total_value = float(dashboard.balance_usd)
         if total_value <= 0:
             logger.debug(f"[{symbol}] No portfolio value")
             return 0

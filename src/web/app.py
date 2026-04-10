@@ -1392,10 +1392,7 @@ def create_app() -> FastAPI:
 
         # Build portfolio data from positions
         positions = list(dashboard_state.positions.values())
-        total_value = float(
-            dashboard_state.balance_usd
-            + dashboard_state.balance_krw
-        )
+        total_value = float(dashboard_state.balance_usd)
 
         portfolio = []
         for pos in positions:
@@ -1417,9 +1414,7 @@ def create_app() -> FastAPI:
             })
 
         # Cash weight
-        cash_total = float(
-            dashboard_state.cash_usd + dashboard_state.cash_krw
-        )
+        cash_total = float(dashboard_state.cash_usd)
         cash_weight = (
             (cash_total / total_value * 100)
             if total_value > 0 else 100
@@ -1459,10 +1454,7 @@ def create_app() -> FastAPI:
                 await storage.close()
 
         positions = list(dashboard_state.positions.values())
-        total_value = float(
-            dashboard_state.balance_usd
-            + dashboard_state.balance_krw
-        )
+        total_value = float(dashboard_state.balance_usd)
 
         portfolio = []
         for pos in positions:
@@ -1479,9 +1471,7 @@ def create_app() -> FastAPI:
                 "pnl_pct": round(pos.pnl_pct, 2),
             })
 
-        cash_total = float(
-            dashboard_state.cash_usd + dashboard_state.cash_krw
-        )
+        cash_total = float(dashboard_state.cash_usd)
         cash_weight = (
             (cash_total / total_value * 100)
             if total_value > 0 else 100
