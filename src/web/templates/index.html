@@ -1,54 +1,8 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BeRich Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>Be<span>Rich</span></h1>
-        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
-            <span></span><span></span><span></span>
-        </button>
-        <div class="header-right">
-            <span id="ws-status" class="ws-status disconnected">OFFLINE</span>
-            {% if bot_status %}
-            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
-                {{ 'Running' if bot_status.running else 'Stopped' }}
-            </span>
-            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
-                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
-            </span>
-            {% if bot_status.warmup_remaining %}
-            <span class="pill warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
-            {% endif %}
-            {% endif %}
-            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
-                    onclick="togglePause()">
-                {{ 'PAUSED' if trading_paused else 'TRADING' }}
-            </button>
-            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
-        </div>
-    </div>
-    <div class="menu-backdrop" id="menu-backdrop"></div>
-    <div class="sticky-pnl">
-        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
-        <span id="sticky-ws" class="sticky-ws ws-status disconnected">OFFLINE</span>
-    </div>
-    <div class="nav" id="main-nav">
-        <a href="/" class="active">Dashboard</a>
-        <a href="/portfolio">Portfolio</a>
-        <a href="/symbols">Symbols</a>
-        <a href="/trades">Trades</a>
-        <a href="/performance">Performance</a>
-        <a href="/analytics">Analytics</a>
-        <a href="/settings">Settings</a>
-        <a href="/logout" class="logout-btn">Logout</a>
-    </div>
-    <div class="container">
+{% extends "base.html" %}
 
+{% block title %}BeRich Dashboard{% endblock %}
+
+{% block content %}
         <!-- 1. Summary Cards (통일된 글자 크기) -->
         <div class="cards-row cols-3">
             <div class="card">
@@ -213,25 +167,4 @@
             {{ bot_status.strategies|join(', ') }} | Uptime: {{ bot_status.uptime }}
         </div>
         {% endif %}
-
-    </div>
-
-    <script src="/static/script.js"></script>
-    <script>
-        async function togglePause() {
-            const btn = document.getElementById('pause-btn');
-            const isPaused = btn.classList.contains('paused');
-            const endpoint = isPaused ? '/api/trading/resume' : '/api/trading/pause';
-            const resp = await fetch(endpoint, {method: 'POST'});
-            const data = await resp.json();
-            if (data.paused) {
-                btn.textContent = 'PAUSED';
-                btn.classList.add('paused');
-            } else {
-                btn.textContent = 'TRADING';
-                btn.classList.remove('paused');
-            }
-        }
-    </script>
-</body>
-</html>
+{% endblock %}

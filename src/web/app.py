@@ -793,6 +793,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "dashboard",
             # Portfolio summary
             "positions": list(dashboard_state.positions.values()),
             "krw_positions": krw_positions,
@@ -856,6 +857,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "trades",
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
@@ -879,6 +881,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "performance",
             "performance": dashboard_state.performance.model_dump(),
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
@@ -983,6 +986,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "symbols",
             "symbol": symbol,
             "position": position,
             "rsi": rsi,
@@ -1135,6 +1139,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "symbols",
             "symbols": symbols,
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
@@ -1422,6 +1427,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "portfolio",
             "portfolio": portfolio,
             "total_value": total_value,
             "cash_total": cash_total,
@@ -1522,6 +1528,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "settings",
             "all_params": all_params,
             "live_params": live_params,
             "strategy_names": dashboard_state.strategy_names,
@@ -1636,6 +1643,7 @@ def create_app() -> FastAPI:
 
         context = {
             "request": request,
+            "active_page": "analytics",
             "daily_report": daily_report,
             "weekly_report": weekly_report,
             "monthly_report": monthly_report,

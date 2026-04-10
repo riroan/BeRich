@@ -1,0 +1,10 @@
+    <div class="nav" id="main-nav">
+        <a href="/"{% if active_page == 'dashboard' %} class="active"{% endif %}>Dashboard</a>
+        <a href="/portfolio"{% if active_page == 'portfolio' %} class="active"{% endif %}>Portfolio</a>
+        <a href="/symbols"{% if active_page == 'symbols' %} class="active"{% endif %}>Symbols</a>
+        <a href="/trades"{% if active_page == 'trades' %} class="active"{% endif %}>Trades</a>
+        <a href="/performance"{% if active_page == 'performance' %} class="active"{% endif %}>Performance</a>
+        <a href="/analytics"{% if active_page == 'analytics' %} class="active"{% endif %}>Analytics</a>
+        <a href="/settings"{% if active_page == 'settings' %} class="active"{% endif %}>Settings</a>
+        <a href="/logout" class="logout-btn">Logout</a>
+    </div>

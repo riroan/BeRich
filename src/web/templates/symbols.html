@@ -1,52 +1,8 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Symbol Management - BeRich Dashboard</title>
-    <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <div class="header">
-        <h1>Be<span>Rich</span></h1>
-        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
-            <span></span><span></span><span></span>
-        </button>
-        <div class="header-right">
-            {% if bot_status %}
-            <span class="pill {{ 'running' if bot_status.running else 'stopped' }}">
-                {{ 'Running' if bot_status.running else 'Stopped' }}
-            </span>
-            <span class="pill {{ 'paper' if bot_status.paper_trading else 'real' }}">
-                {{ 'Paper' if bot_status.paper_trading else 'Real' }}
-            </span>
-            {% if bot_status.warmup_remaining %}
-            <span class="pill warmup">WARMUP: {{ bot_status.warmup_remaining }}</span>
-            {% endif %}
-            {% endif %}
-            <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
-                    onclick="togglePause()">
-                {{ 'PAUSED' if trading_paused else 'TRADING' }}
-            </button>
-            <span class="pill time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
-        </div>
-    </div>
-    <div class="menu-backdrop" id="menu-backdrop"></div>
-    <div class="sticky-pnl">
-        <div><span class="sticky-label">P&L</span> <span class="sticky-value {{ 'positive' if pnl_usd|default(0) >= 0 else 'negative' }}">${{ "{:+,.2f}".format(pnl_usd|default(0)) }}</span></div>
-    </div>
-    <div class="nav" id="main-nav">
-        <a href="/">Dashboard</a>
-        <a href="/portfolio">Portfolio</a>
-        <a href="/symbols" class="active">Symbols</a>
-        <a href="/trades">Trades</a>
-        <a href="/performance">Performance</a>
-        <a href="/analytics">Analytics</a>
-        <a href="/settings">Settings</a>
-        <a href="/logout" class="logout-btn">Logout</a>
-    </div>
-    <div class="container">
+{% extends "base.html" %}
 
+{% block title %}Symbol Management - BeRich Dashboard{% endblock %}
+
+{% block content %}
         <!-- Add Symbol -->
         <div class="card">
             <div class="section-title">Add Symbol</div>
@@ -100,9 +56,9 @@
             <p class="empty">No symbols tracked. Add a symbol above or restart the bot to seed from config.</p>
         </div>
         {% endif %}
+{% endblock %}
 
-    </div>
-
+{% block scripts %}
     <script>
         async function addSymbol() {
             const symbol = document.getElementById('symbol-input').value.trim();
@@ -151,17 +107,4 @@
             if (e.key === 'Enter') addSymbol();
         });
     </script>
-    <script>
-    async function togglePause() {
-        const btn = document.getElementById("pause-btn");
-        const isPaused = btn.classList.contains("paused");
-        const endpoint = isPaused ? "/api/trading/resume" : "/api/trading/pause";
-        const resp = await fetch(endpoint, {method: "POST"});
-        const data = await resp.json();
-        if (data.paused) { btn.textContent = "PAUSED"; btn.classList.add("paused"); }
-        else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
-    }
-    </script>
-    <script src="/static/script.js"></script>
-</body>
-</html>
+{% endblock %}
