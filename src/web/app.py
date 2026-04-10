@@ -1758,7 +1758,8 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            await cb()
+            import asyncio
+            asyncio.create_task(cb())
             bot_running = True
 
         return {
@@ -1822,7 +1823,8 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            await cb()
+            import asyncio
+            asyncio.create_task(cb())
             bot_running = True
 
         return {
@@ -1858,7 +1860,8 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            await cb()
+            import asyncio
+            asyncio.create_task(cb())
             bot_running = True
 
         return {

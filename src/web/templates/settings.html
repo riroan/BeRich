@@ -28,8 +28,6 @@
         .toggle-slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--dim); border-radius: 50%; transition: .2s; }
         .toggle-switch input:checked + .toggle-slider { background: var(--emerald); }
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
-        .btn-danger { background: var(--red); color: white; }
-        .btn-danger:hover { opacity: .8; }
 
         /* Create form */
         .create-form { display: none; }
@@ -210,9 +208,9 @@
 
                 <div class="form-actions">
                     <span class="save-status" id="status-{{ cfg.name }}"></span>
-                    <button type="button" class="btn btn-danger" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
-                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
                     <button type="submit" class="btn btn-save">Save & Apply</button>
+                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
+                    <button type="button" class="btn" style="background:rgba(239,68,68,0.15);color:var(--red);" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
                 </div>
             </form>
         </div>
