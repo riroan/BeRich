@@ -39,7 +39,7 @@ class StrategyEngine:
 
             for symbol in strategy.symbols:
                 try:
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1)
                     bars = await self.broker.get_historical_bars(
                         symbol=symbol,
                         market=strategy.market,
