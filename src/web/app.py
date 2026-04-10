@@ -724,7 +724,14 @@ def create_app() -> FastAPI:
             "DASHBOARD_PASSWORD must be set in .env. Refusing to start server."
         )
 
-    app = FastAPI(title="BeRich Dashboard", version="1.0.0")
+    _debug = os.getenv("DEBUG") == "true"
+    app = FastAPI(
+        title="BeRich Dashboard",
+        version="1.0.0",
+        docs_url="/docs" if _debug else None,
+        redoc_url="/redoc" if _debug else None,
+        openapi_url="/openapi.json" if _debug else None,
+    )
 
     # Mount static files
     static_dir = BASE_DIR / "static"
