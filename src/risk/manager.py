@@ -1,4 +1,3 @@
-from typing import Optional, Dict, Tuple, List
 from decimal import Decimal
 from datetime import date
 import logging
@@ -18,7 +17,7 @@ class RiskManager:
         self.available_cash = account_value  # 현금 잔고 (초기값은 계좌 가치)
 
         # State tracking
-        self._positions: Dict[str, Position] = {}
+        self._positions: dict[str, Position] = {}
         self._daily_pnl: Decimal = Decimal("0")
         self._daily_trades: int = 0
         self._last_reset_date: date = date.today()
@@ -31,11 +30,11 @@ class RiskManager:
         """Update available cash"""
         self.available_cash = cash
 
-    def update_positions(self, positions: List[Position]) -> None:
+    def update_positions(self, positions: list[Position]) -> None:
         """Update position state"""
         self._positions = {p.symbol: p for p in positions}
 
-    def validate_order(self, order: Order) -> Tuple[bool, Optional[str]]:
+    def validate_order(self, order: Order) -> tuple[bool, str | None]:
         """Validate order against risk limits"""
         self._check_daily_reset()
 

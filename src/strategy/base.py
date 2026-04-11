@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any, List
+from typing import Any
 from decimal import Decimal
 import pandas as pd
 
@@ -11,17 +11,17 @@ class BaseStrategy(ABC):
 
     def __init__(
         self,
-        symbols: List[str],
+        symbols: list[str],
         market: Market,
-        params: Dict[str, Any] = None,
+        params: dict[str, Any] = None,
     ):
         self.symbols = symbols
         self.market = market
         self.params = params or {}
 
         # Internal state
-        self._bars: Dict[str, pd.DataFrame] = {}
-        self._positions: Dict[str, int] = {}
+        self._bars: dict[str, pd.DataFrame] = {}
+        self._positions: dict[str, int] = {}
         self._is_initialized = False
 
     @property
@@ -40,7 +40,7 @@ class BaseStrategy(ABC):
         """Unique name including market (matches config name)"""
         return f"{self.market.value.upper()}_{self.name}"
 
-    def initialize(self, historical_bars: Dict[str, List[Bar]]) -> None:
+    def initialize(self, historical_bars: dict[str, list[Bar]]) -> None:
         """Initialize strategy with historical data"""
         for symbol, bars in historical_bars.items():
             if not bars:
@@ -111,11 +111,11 @@ class BaseStrategy(ABC):
         self._positions[symbol] = quantity
 
     @abstractmethod
-    async def calculate_signal(self, symbol: str) -> Optional[Signal]:
+    async def calculate_signal(self, symbol: str) -> Signal | None:
         """Calculate trading signal (implement in subclass)"""
         pass
 
-    async def on_bar(self, bar: Bar) -> Optional[Signal]:
+    async def on_bar(self, bar: Bar) -> Signal | None:
         """Called when new bar data received"""
         if bar.symbol not in self.symbols:
             return None
@@ -123,7 +123,7 @@ class BaseStrategy(ABC):
         self.update_bar(bar)
         return await self.calculate_signal(bar.symbol)
 
-    async def on_quote(self, quote: Quote) -> Optional[Signal]:
+    async def on_quote(self, quote: Quote) -> Signal | None:
         """Called when new quote data received"""
         return None
 

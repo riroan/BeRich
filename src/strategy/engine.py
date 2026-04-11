@@ -1,4 +1,3 @@
-from typing import Dict, List, Optional, Set
 import asyncio
 from datetime import datetime
 import logging
@@ -19,12 +18,12 @@ class StrategyEngine:
         self,
         event_bus: EventBus,
         broker: KISBroker,
-        notifier: Optional[DiscordNotifier] = None,
+        notifier: DiscordNotifier | None = None,
     ):
         self.event_bus = event_bus
         self.broker = broker
         self.notifier = notifier
-        self._strategies: List[BaseStrategy] = []
+        self._strategies: list[BaseStrategy] = []
         self._running = False
 
     def register_strategy(self, strategy: BaseStrategy) -> None:
@@ -143,7 +142,7 @@ class StrategyEngine:
             f"{signal.symbol} (strength={signal.strength:.2f})"
         )
 
-    def get_strategies(self) -> List[BaseStrategy]:
+    def get_strategies(self) -> list[BaseStrategy]:
         """Get all registered strategies"""
         return self._strategies
 
@@ -152,12 +151,12 @@ class StrategyEngine:
         logger.info("Syncing positions from broker...")
 
         # Collect all unique markets from strategies
-        markets: Set[Market] = set()
+        markets: set[Market] = set()
         for strategy in self._strategies:
             markets.add(strategy.market)
 
         # Fetch positions for each market
-        all_positions: Dict[str, Position] = {}
+        all_positions: dict[str, Position] = {}
         for market in markets:
             try:
                 await asyncio.sleep(0.5)

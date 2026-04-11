@@ -7,7 +7,7 @@ import secrets
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional, Dict, Any, List
+from typing import Any
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
@@ -33,7 +33,7 @@ class ConnectionManager:
     """WebSocket connection manager"""
 
     def __init__(self):
-        self.active_connections: List[WebSocket] = []
+        self.active_connections: list[WebSocket] = []
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
@@ -88,13 +88,13 @@ class PositionInfo(BaseModel):
     current_price: float
     pnl: float
     pnl_pct: float
-    rsi: Optional[float] = None
+    rsi: float | None = None
     # Strategy-specific info
     buy_stage: int = 0
     sell_stage: int = 0
     max_buy_stages: int = 3
     max_sell_stages: int = 3
-    last_buy_date: Optional[str] = None
+    last_buy_date: str | None = None
     stop_loss_pct: float = -10.0
     stop_loss_distance: float = 0.0  # how far from stop loss
 
@@ -107,22 +107,22 @@ class TradeLog(BaseModel):
     action: str  # buy, sell, partial_sell, stop_loss
     price: float
     quantity: int
-    rsi: Optional[float] = None
+    rsi: float | None = None
     trigger_rule: str  # what triggered this trade
     result: str  # success, failed, pending
-    pnl: Optional[float] = None
-    pnl_pct: Optional[float] = None
+    pnl: float | None = None
+    pnl_pct: float | None = None
 
 
 class SystemStatus(BaseModel):
     """System status info"""
     auto_trading_enabled: bool = True
-    last_strategy_run: Optional[str] = None
-    last_price_update: Optional[str] = None
+    last_strategy_run: str | None = None
+    last_price_update: str | None = None
     api_connected: bool = True
     account_tradable: bool = True
     data_collection_ok: bool = True
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 class PerformanceMetrics(BaseModel):
@@ -145,7 +145,7 @@ class PerformanceMetrics(BaseModel):
 
 class MarketStatus(BaseModel):
     """Market overview status"""
-    market_rsi: Optional[float] = None
+    market_rsi: float | None = None
     oversold_count: int = 0
     overbought_count: int = 0
     total_symbols: int = 0
@@ -155,8 +155,8 @@ class MarketStatus(BaseModel):
 class BotStatus(BaseModel):
     running: bool
     paper_trading: bool
-    warmup_remaining: Optional[str] = None
-    strategies: List[str]
+    warmup_remaining: str | None = None
+    strategies: list[str]
     uptime: str
 
 
@@ -174,12 +174,12 @@ class DashboardState:
 
     def __init__(self):
         # Core data
-        self.positions: Dict[str, PositionInfo] = {}
-        self.rsi_values: Dict[str, float] = {}
-        self.rsi_prices: Dict[str, Dict[str, Any]] = {}  # symbol -> {price, market}
-        self.recent_signals: List[Dict[str, Any]] = []
-        self.recent_orders: List[Dict[str, Any]] = []
-        self.bot_status: Optional[BotStatus] = None
+        self.positions: dict[str, PositionInfo] = {}
+        self.rsi_values: dict[str, float] = {}
+        self.rsi_prices: dict[str, dict[str, Any]] = {}  # symbol -> {price, market}
+        self.recent_signals: list[dict[str, Any]] = []
+        self.recent_orders: list[dict[str, Any]] = []
+        self.bot_status: BotStatus | None = None
 
         # Balance info - separate by currency
         self.account_value: Decimal = Decimal("0")
@@ -193,19 +193,19 @@ class DashboardState:
         self.total_pnl: Decimal = Decimal("0")
 
         # Timestamps
-        self.last_update: Optional[datetime] = None
-        self.last_strategy_run: Optional[datetime] = None
-        self.last_price_update: Optional[datetime] = None
+        self.last_update: datetime | None = None
+        self.last_strategy_run: datetime | None = None
+        self.last_price_update: datetime | None = None
 
         # Price/RSI history for charts
-        self.price_history: Dict[str, List[PricePoint]] = {}
-        self.rsi_history: Dict[str, List[Dict[str, Any]]] = {}
+        self.price_history: dict[str, list[PricePoint]] = {}
+        self.rsi_history: dict[str, list[dict[str, Any]]] = {}
 
         # Trade logs (extended from recent_orders)
-        self.trade_logs: List[TradeLog] = []
+        self.trade_logs: list[TradeLog] = []
 
         # Signal candidates
-        self.signal_candidates: List[SignalCandidate] = []
+        self.signal_candidates: list[SignalCandidate] = []
 
         # System status
         self.system_status: SystemStatus = SystemStatus()
@@ -218,40 +218,40 @@ class DashboardState:
         self.market_status_us: MarketStatus = MarketStatus()
 
         # Risk alerts
-        self.risk_alerts: List[Dict[str, Any]] = []
+        self.risk_alerts: list[dict[str, Any]] = []
 
         # Strategy internal state (synced from strategy)
-        self.strategy_state: Dict[str, Dict[str, Any]] = {}
+        self.strategy_state: dict[str, dict[str, Any]] = {}
 
         # Trade points for chart markers
-        self.trade_points: Dict[str, List[Dict[str, Any]]] = {}
+        self.trade_points: dict[str, list[dict[str, Any]]] = {}
 
         # Equity history for equity curve chart
-        self.equity_history: List[Dict[str, Any]] = []
+        self.equity_history: list[dict[str, Any]] = []
 
         # Fills for performance calculation
-        self.fills: List[Dict[str, Any]] = []
+        self.fills: list[dict[str, Any]] = []
 
         # Storage reference (set by bot on init - NOT usable from web thread)
         self.storage = None
 
         # Database URL for web-local storage
-        self.db_url: Optional[str] = None
+        self.db_url: str | None = None
 
         # Strategy names from config
-        self.strategy_names: List[str] = []
+        self.strategy_names: list[str] = []
 
         # KIS API config for symbol validation
-        self.kis_config: Optional[Dict[str, Any]] = None
+        self.kis_config: dict[str, Any] | None = None
 
         # KIS auth token (shared from bot's broker)
-        self.kis_auth_token: Optional[str] = None
+        self.kis_auth_token: str | None = None
 
         # Live strategy instances (set by bot)
-        self.strategy_instances: Optional[List[Any]] = None
+        self.strategy_instances: list[Any] | None = None
 
         # Hot reload callback (set by bot)
-        self.reload_callback: Optional[Any] = None
+        self.reload_callback: Any | None = None
 
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
@@ -264,12 +264,12 @@ class DashboardState:
         quantity: int,
         avg_price: float,
         current_price: float,
-        rsi: Optional[float] = None,
+        rsi: float | None = None,
         buy_stage: int = 0,
         sell_stage: int = 0,
         max_buy_stages: int = 3,
         max_sell_stages: int = 3,
-        last_buy_date: Optional[str] = None,
+        last_buy_date: str | None = None,
         stop_loss_pct: float = -10.0,
     ):
         pnl = (current_price - avg_price) * quantity
@@ -345,7 +345,7 @@ class DashboardState:
         if len(self.rsi_history[symbol]) > 500:
             self.rsi_history[symbol] = self.rsi_history[symbol][-500:]
 
-    def add_signal(self, signal_data: Dict[str, Any]):
+    def add_signal(self, signal_data: dict[str, Any]):
         self.recent_signals.insert(0, {
             **signal_data,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -353,7 +353,7 @@ class DashboardState:
         # Keep only last 50 signals
         self.recent_signals = self.recent_signals[:50]
 
-    def add_order(self, order_data: Dict[str, Any]):
+    def add_order(self, order_data: dict[str, Any]):
         self.recent_orders.insert(0, {
             **order_data,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -370,9 +370,9 @@ class DashboardState:
         quantity: int,
         trigger_rule: str,
         result: str = "success",
-        rsi: Optional[float] = None,
-        pnl: Optional[float] = None,
-        pnl_pct: Optional[float] = None,
+        rsi: float | None = None,
+        pnl: float | None = None,
+        pnl_pct: float | None = None,
     ):
         """Add detailed trade log"""
         log = TradeLog(
@@ -541,9 +541,9 @@ class DashboardState:
         self,
         running: bool,
         paper_trading: bool,
-        strategies: List[str],
+        strategies: list[str],
         uptime: str,
-        warmup_remaining: Optional[str] = None,
+        warmup_remaining: str | None = None,
     ):
         self.bot_status = BotStatus(
             running=running,
@@ -559,7 +559,7 @@ class DashboardState:
         api_connected: bool = True,
         account_tradable: bool = True,
         data_ok: bool = True,
-        error: Optional[str] = None,
+        error: str | None = None,
     ):
         self.system_status = SystemStatus(
             auto_trading_enabled=auto_trading,
@@ -677,7 +677,7 @@ dashboard_state = DashboardState()
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 # Session storage (in-memory)
-valid_sessions: Dict[str, datetime] = {}
+valid_sessions: dict[str, datetime] = {}
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -1595,7 +1595,7 @@ def create_app() -> FastAPI:
 
     class StrategyParamsUpdate(BaseModel):
         strategy_name: str
-        params: Dict[str, Any]
+        params: dict[str, Any]
 
     @app.get("/settings", response_class=HTMLResponse)
     async def settings_page(request: Request):
@@ -1720,11 +1720,11 @@ def create_app() -> FastAPI:
         enabled: bool = True
 
     class StrategyConfigUpdate(BaseModel):
-        class_path: Optional[str] = None
-        market: Optional[str] = None
-        symbols: Optional[list] = None
-        params: Optional[dict] = None
-        enabled: Optional[bool] = None
+        class_path: str | None = None
+        market: str | None = None
+        symbols: list | None = None
+        params: dict | None = None
+        enabled: bool | None = None
 
     @app.get("/api/strategies")
     async def get_strategies():

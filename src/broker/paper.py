@@ -3,7 +3,6 @@
 import uuid
 from datetime import datetime
 from decimal import Decimal
-from typing import Dict, List
 import logging
 
 from src.core.types import (
@@ -38,17 +37,17 @@ class PaperBroker:
         self.paper_trading = True
 
         # Virtual account
-        self._cash: Dict[str, Decimal] = {
+        self._cash: dict[str, Decimal] = {
             "krw": initial_cash_krw,
             "usd": initial_cash_usd,
         }
 
         # Virtual positions: {symbol: {quantity, avg_price, market}}
-        self._positions: Dict[str, dict] = {}
+        self._positions: dict[str, dict] = {}
 
         # Order tracking
-        self._orders: Dict[str, Order] = {}
-        self._fills: List[Fill] = []
+        self._orders: dict[str, Order] = {}
+        self._fills: list[Fill] = []
 
         self._connected = False
 
@@ -225,7 +224,7 @@ class PaperBroker:
 
     async def get_positions(
         self, market: Market,
-    ) -> List[Position]:
+    ) -> list[Position]:
         """Get virtual positions"""
         positions = []
         for symbol, pos in self._positions.items():

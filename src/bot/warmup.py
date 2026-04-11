@@ -1,7 +1,6 @@
 """Warmup period management for trading bot"""
 
 from datetime import datetime, timedelta
-from typing import Optional
 import logging
 
 from src.data.storage import Storage
@@ -14,7 +13,7 @@ WARMUP_KEY = "warmup_start_time"
 class WarmupManager:
     """Manages warmup period before trading starts"""
 
-    def __init__(self, warmup_hours: int, storage: Optional[Storage] = None):
+    def __init__(self, warmup_hours: int, storage: Storage | None = None):
         self._warmup_hours = warmup_hours
         self._storage = storage
         self._start_time: datetime | None = None

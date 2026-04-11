@@ -1,5 +1,5 @@
 import aiohttp
-from typing import Optional, AsyncIterator
+from typing import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
 import logging
@@ -47,8 +47,8 @@ class KISBroker:
             account_no=account_no,
             base_url=self.base_url,
         )
-        self._session: Optional[aiohttp.ClientSession] = None
-        self._websocket: Optional[KISWebSocket] = None
+        self._session: aiohttp.ClientSession | None = None
+        self._websocket: KISWebSocket | None = None
         self._mapper = KISMapper()
         self._connected = False
         self._orders: dict[str, Order] = {}

@@ -10,7 +10,6 @@ Note: RSI is calculated from daily bars, not intraday data.
 Current price updates today's daily close for real-time RSI estimation.
 """
 
-from typing import Optional
 from decimal import Decimal
 from datetime import datetime, timedelta
 import pandas as pd
@@ -106,14 +105,14 @@ class RSIMeanReversionStrategy(BaseStrategy):
         """Get daily DataFrame for RSI calculation"""
         return self._daily_bars.get(symbol, pd.DataFrame())
 
-    async def on_bar(self, bar) -> Optional[Signal]:
+    async def on_bar(self, bar) -> Signal | None:
         """Override to skip update_bar (we use daily data via update_daily_close)"""
         if bar.symbol not in self.symbols:
             return None
         # Don't call update_bar - daily close is updated separately
         return await self.calculate_signal(bar.symbol)
 
-    async def calculate_signal(self, symbol: str) -> Optional[Signal]:
+    async def calculate_signal(self, symbol: str) -> Signal | None:
         # Use daily bars for RSI calculation
         df = self.get_daily_dataframe(symbol)
         if len(df) < self.required_history:
@@ -380,7 +379,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
         rsi = 100 - (100 / (1 + rs))
         return rsi
 
-    def get_current_rsi(self, symbol: str) -> Optional[float]:
+    def get_current_rsi(self, symbol: str) -> float | None:
         """Get current RSI value for a symbol (based on daily data)"""
         df = self.get_daily_dataframe(symbol)
         if len(df) < self.required_history:

@@ -2,7 +2,6 @@ from enum import Enum, auto
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 
 class Market(Enum):
@@ -82,12 +81,12 @@ class Order:
     side: OrderSide
     order_type: OrderType
     quantity: int
-    price: Optional[Decimal] = None
-    order_id: Optional[str] = None
+    price: Decimal | None = None
+    order_id: str | None = None
     status: OrderStatus = OrderStatus.PENDING
     created_at: datetime = field(default_factory=datetime.now)
     filled_quantity: int = 0
-    filled_avg_price: Optional[Decimal] = None
+    filled_avg_price: Decimal | None = None
 
 
 @dataclass
@@ -109,8 +108,8 @@ class Signal:
     symbol: str
     market: Market
     strength: float  # 0.0 ~ 1.0
-    target_price: Optional[Decimal] = None
-    stop_loss: Optional[Decimal] = None
+    target_price: Decimal | None = None
+    stop_loss: Decimal | None = None
     metadata: dict = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.now)
 
@@ -126,5 +125,5 @@ class Fill:
     price: Decimal
     commission: Decimal
     timestamp: datetime
-    pnl: Optional[Decimal] = None
-    rsi: Optional[float] = None
+    pnl: Decimal | None = None
+    rsi: float | None = None

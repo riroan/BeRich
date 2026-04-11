@@ -1,4 +1,3 @@
-from typing import Optional
 from decimal import Decimal
 import pandas as pd
 
@@ -17,7 +16,7 @@ class MomentumStrategy(BaseStrategy):
     def required_history(self) -> int:
         return 50
 
-    async def calculate_signal(self, symbol: str) -> Optional[Signal]:
+    async def calculate_signal(self, symbol: str) -> Signal | None:
         df = self.get_dataframe(symbol)
         if len(df) < self.required_history:
             return None

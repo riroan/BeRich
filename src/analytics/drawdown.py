@@ -2,7 +2,6 @@
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 from dataclasses import dataclass
 import logging
 
@@ -31,9 +30,9 @@ class DrawdownAnalysis:
     # Maximum drawdown
     mdd: Decimal = Decimal("0")
     mdd_pct: float = 0.0
-    mdd_start: Optional[datetime] = None
-    mdd_bottom: Optional[datetime] = None
-    mdd_recovered: Optional[datetime] = None
+    mdd_start: datetime | None = None
+    mdd_bottom: datetime | None = None
+    mdd_recovered: datetime | None = None
 
     # Statistics
     avg_drawdown_pct: float = 0.0
@@ -189,7 +188,7 @@ class DrawdownAnalyzer:
             return True, "warning"
         return False, ""
 
-    def get_recovery_estimate(self, analysis: DrawdownAnalysis) -> Optional[dict]:
+    def get_recovery_estimate(self, analysis: DrawdownAnalysis) -> dict | None:
         """Estimate time to recovery based on historical data"""
         if analysis.current_drawdown_pct <= 0:
             return None

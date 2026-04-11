@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
 from dataclasses import dataclass, field
 import logging
 
@@ -52,7 +51,7 @@ class ReportGenerator:
         self.fills = fills
         self.equity_history = equity_history
 
-    def generate_daily_report(self, date: Optional[datetime] = None) -> PeriodReport:
+    def generate_daily_report(self, date: datetime | None = None) -> PeriodReport:
         """Generate daily report"""
         if date is None:
             date = datetime.now()
@@ -62,7 +61,7 @@ class ReportGenerator:
 
         return self._generate_report("daily", start, end)
 
-    def generate_weekly_report(self, date: Optional[datetime] = None) -> PeriodReport:
+    def generate_weekly_report(self, date: datetime | None = None) -> PeriodReport:
         """Generate weekly report (Mon-Sun)"""
         if date is None:
             date = datetime.now()
@@ -74,7 +73,7 @@ class ReportGenerator:
 
         return self._generate_report("weekly", start, end)
 
-    def generate_monthly_report(self, date: Optional[datetime] = None) -> PeriodReport:
+    def generate_monthly_report(self, date: datetime | None = None) -> PeriodReport:
         """Generate monthly report"""
         if date is None:
             date = datetime.now()

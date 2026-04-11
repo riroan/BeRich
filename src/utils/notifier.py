@@ -3,7 +3,7 @@
 import aiohttp
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,10 +21,10 @@ COLOR_YELLOW = 0xF1C40F   # Caution
 class DiscordNotifier:
     """Discord webhook notifier for trading alerts"""
 
-    def __init__(self, webhook_url: Optional[str] = None, enabled: bool = True):
+    def __init__(self, webhook_url: str | None = None, enabled: bool = True):
         self.webhook_url = webhook_url
         self.enabled = enabled and bool(webhook_url)
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -162,7 +162,7 @@ class DiscordNotifier:
         side: str,
         price: Decimal,
         quantity: int,
-        pnl: Optional[Decimal] = None,
+        pnl: Decimal | None = None,
     ) -> bool:
         """Notify order filled"""
         value = price * quantity
@@ -473,7 +473,7 @@ class DiscordNotifier:
 
     async def notify_scheduler_stopped(
         self,
-        last_run: Optional[datetime] = None,
+        last_run: datetime | None = None,
     ) -> bool:
         """Notify scheduler not working"""
         last_run_str = last_run.strftime("%Y-%m-%d %H:%M:%S") if last_run else "알 수 없음"

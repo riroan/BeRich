@@ -1,6 +1,5 @@
 import aiohttp
 from datetime import datetime, timedelta
-from typing import Optional
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,9 +20,9 @@ class KISAuth:
         self.account_no = account_no
         self.base_url = base_url
 
-        self._access_token: Optional[str] = None
-        self._token_expires_at: Optional[datetime] = None
-        self._websocket_key: Optional[str] = None
+        self._access_token: str | None = None
+        self._token_expires_at: datetime | None = None
+        self._websocket_key: str | None = None
 
     @property
     def is_authenticated(self) -> bool:

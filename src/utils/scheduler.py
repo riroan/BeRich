@@ -2,7 +2,7 @@
 
 import asyncio
 from datetime import datetime, time
-from typing import Callable, Optional, List, Tuple
+from typing import Callable
 from zoneinfo import ZoneInfo
 import logging
 
@@ -18,7 +18,7 @@ def is_us_dst() -> bool:
     return now_et.utcoffset().total_seconds() == -4 * 3600
 
 
-def get_us_market_hours_kst() -> List[Tuple[time, time]]:
+def get_us_market_hours_kst() -> list[tuple[time, time]]:
     """Get US market hours in KST, accounting for DST"""
     # US Regular Market: 9:30 AM - 4:00 PM ET
     # EST (winter): 23:30 - 06:00 KST (next day)
@@ -41,12 +41,12 @@ class TradingScheduler:
     def __init__(
         self,
         interval_seconds: int = 60,  # Default: 1 minute
-        market_hours: List[Tuple[time, time]] = None,  # List of (open, close) times
+        market_hours: list[tuple[time, time]] = None,  # List of (open, close) times
         us_only: bool = False,  # Only trade during US market hours
     ):
         self.interval = interval_seconds
         self._running = False
-        self._task: Optional[asyncio.Task] = None
+        self._task: asyncio.Task | None = None
         self._callbacks: list[Callable] = []
         self.us_only = us_only
 

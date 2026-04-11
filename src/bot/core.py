@@ -5,7 +5,6 @@ import importlib
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Optional
 import logging
 
 from src.core.events import EventBus
@@ -36,19 +35,19 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self.config = Config(config_dir)
         self.event_bus = EventBus()
 
-        self.storage: Optional[Storage] = None
-        self.broker: Optional[KISBroker] = None
-        self.strategy_engine: Optional[StrategyEngine] = None
-        self.order_manager: Optional[OrderManager] = None
-        self.risk_manager: Optional[RiskManager] = None
-        self.scheduler: Optional[TradingScheduler] = None
-        self.notifier: Optional[DiscordNotifier] = None
+        self.storage: Storage | None = None
+        self.broker: KISBroker | None = None
+        self.strategy_engine: StrategyEngine | None = None
+        self.order_manager: OrderManager | None = None
+        self.risk_manager: RiskManager | None = None
+        self.scheduler: TradingScheduler | None = None
+        self.notifier: DiscordNotifier | None = None
         self.dashboard = get_dashboard_state()
 
         self._running = False
         self._stopped = False
-        self._status_task: Optional[asyncio.Task] = None
-        self._bot_start_time: Optional[datetime] = None
+        self._status_task: asyncio.Task | None = None
+        self._bot_start_time: datetime | None = None
 
         # Project paths
         self._project_root = Path(__file__).parent.parent.parent

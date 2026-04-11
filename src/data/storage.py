@@ -1,4 +1,3 @@
-from typing import List, Optional
 from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
@@ -91,7 +90,7 @@ class Storage:
             session.add(bar_model)
             await session.commit()
 
-    async def save_bars(self, bars: List[Bar]) -> None:
+    async def save_bars(self, bars: list[Bar]) -> None:
         """Save multiple bars to database"""
         async with self.async_session() as session:
             for bar in bars:
@@ -116,7 +115,7 @@ class Storage:
         start: datetime,
         end: datetime,
         market: Market = Market.KRX,
-    ) -> List[Bar]:
+    ) -> list[Bar]:
         """Get bars from database"""
         async with self.async_session() as session:
             query = (
@@ -181,7 +180,7 @@ class Storage:
 
             await session.commit()
 
-    async def get_order(self, order_id: str) -> Optional[Order]:
+    async def get_order(self, order_id: str) -> Order | None:
         """Get order by ID"""
         async with self.async_session() as session:
             query = select(OrderModel).where(OrderModel.order_id == order_id)
@@ -227,7 +226,7 @@ class Storage:
             session.add(fill_model)
             await session.commit()
 
-    async def get_all_fills(self) -> List[Fill]:
+    async def get_all_fills(self) -> list[Fill]:
         """Get all fills for performance calculation"""
         async with self.async_session() as session:
             query = select(FillModel).order_by(FillModel.timestamp)
@@ -254,8 +253,8 @@ class Storage:
         self,
         start: datetime,
         end: datetime,
-        symbol: Optional[str] = None,
-    ) -> List[Fill]:
+        symbol: str | None = None,
+    ) -> list[Fill]:
         """Get fills within date range"""
         async with self.async_session() as session:
             query = select(FillModel).where(
@@ -294,7 +293,7 @@ class Storage:
         symbol: str,
         market: Market,
         price: Decimal,
-        rsi: Optional[float] = None,
+        rsi: float | None = None,
     ) -> None:
         """Save price and RSI data"""
         async with self.async_session() as session:
@@ -312,7 +311,7 @@ class Storage:
         self,
         symbol: str,
         limit: int = 200,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Get recent price/RSI history for a symbol"""
         async with self.async_session() as session:
             query = (
@@ -337,7 +336,7 @@ class Storage:
                 for row in reversed(rows)
             ]
 
-    async def get_all_symbols_with_history(self) -> List[str]:
+    async def get_all_symbols_with_history(self) -> list[str]:
         """Get all symbols that have price/RSI history"""
         async with self.async_session() as session:
             from sqlalchemy import distinct
@@ -370,7 +369,7 @@ class Storage:
             session.add(snapshot)
             await session.commit()
 
-    async def get_equity_history(self, days: int = 90) -> List[dict]:
+    async def get_equity_history(self, days: int = 90) -> list[dict]:
         """Get equity history for the last N days"""
         async with self.async_session() as session:
             from_date = datetime.now() - timedelta(days=days)
@@ -400,9 +399,9 @@ class Storage:
 
     async def get_watched_symbols(
         self,
-        strategy_name: Optional[str] = None,
+        strategy_name: str | None = None,
         enabled_only: bool = True,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Get all watched symbols"""
         async with self.async_session() as session:
             query = select(WatchedSymbol)
@@ -489,7 +488,7 @@ class Storage:
             await session.commit()
             return True
 
-    async def toggle_watched_symbol(self, symbol_id: int) -> Optional[dict]:
+    async def toggle_watched_symbol(self, symbol_id: int) -> dict | None:
         """Toggle enabled/disabled for a watched symbol"""
         async with self.async_session() as session:
             query = select(WatchedSymbol).where(WatchedSymbol.id == symbol_id)
@@ -513,7 +512,7 @@ class Storage:
 
     async def update_watched_symbol_weight(
         self, symbol_id: int, max_weight: float,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Update max portfolio weight for a symbol"""
         async with self.async_session() as session:
             query = select(WatchedSymbol).where(
@@ -576,7 +575,7 @@ class Storage:
 
     async def get_strategy_params(
         self, strategy_name: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get strategy params from DB (JSON parsed)"""
         import json
         async with self.async_session() as session:
@@ -589,7 +588,7 @@ class Storage:
                 return None
             return json.loads(row.params_json)
 
-    async def get_all_strategy_params(self) -> List[dict]:
+    async def get_all_strategy_params(self) -> list[dict]:
         """Get all strategy params"""
         import json
         async with self.async_session() as session:
@@ -657,7 +656,7 @@ class Storage:
 
     # ==================== Bot State ====================
 
-    async def get_bot_state(self, key: str) -> Optional[str]:
+    async def get_bot_state(self, key: str) -> str | None:
         """Get a bot state value by key"""
         async with self.async_session() as session:
             query = select(BotStateModel).where(BotStateModel.key == key)
@@ -725,7 +724,7 @@ class Storage:
 
     async def get_strategy_config(
         self, name: str,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Get a single strategy config by name"""
         import json
         async with self.async_session() as session:
@@ -783,7 +782,7 @@ class Storage:
         self,
         name: str,
         **kwargs,
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Update a strategy config. Pass only fields to update."""
         import json
         async with self.async_session() as session:

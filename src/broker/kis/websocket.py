@@ -1,7 +1,7 @@
 import asyncio
 import json
 import websockets
-from typing import Optional, AsyncIterator
+from typing import AsyncIterator
 from datetime import datetime
 from decimal import Decimal
 import logging
@@ -32,10 +32,10 @@ class KISWebSocket:
         self._paper_trading = paper_trading
         self._ws_url = self.WS_URL_PAPER if paper_trading else self.WS_URL_REAL
 
-        self._ws: Optional[websockets.WebSocketClientProtocol] = None
+        self._ws: websockets.WebSocketClientProtocol | None = None
         self._connected = False
         self._subscriptions: set[str] = set()
-        self._approval_key: Optional[str] = None
+        self._approval_key: str | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -180,7 +180,7 @@ class KISWebSocket:
                 self._connected = False
                 break
 
-    def _parse_message(self, message: str) -> Optional[Quote]:
+    def _parse_message(self, message: str) -> Quote | None:
         """Parse WebSocket message to Quote"""
         try:
             # KIS sends data in pipe-separated format
@@ -212,7 +212,7 @@ class KISWebSocket:
             logger.debug(f"Failed to parse message: {e}")
             return None
 
-    def _parse_domestic_quote(self, data: str) -> Optional[Quote]:
+    def _parse_domestic_quote(self, data: str) -> Quote | None:
         """Parse domestic stock quote data"""
         try:
             fields = data.split("^")
@@ -233,7 +233,7 @@ class KISWebSocket:
         except Exception:
             return None
 
-    def _parse_overseas_quote(self, data: str) -> Optional[Quote]:
+    def _parse_overseas_quote(self, data: str) -> Quote | None:
         """Parse overseas stock quote data"""
         try:
             fields = data.split("^")

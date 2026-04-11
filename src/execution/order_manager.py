@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Callable, Tuple
+from typing import Callable
 from datetime import datetime, timedelta
 from decimal import Decimal
 import logging
@@ -30,7 +30,7 @@ class OrderManager:
         risk_manager: RiskManager,
         storage: Storage,
         is_trading_enabled: Callable = None,
-        notifier: Optional[DiscordNotifier] = None,
+        notifier: DiscordNotifier | None = None,
     ):
         self.event_bus = event_bus
         self.broker = broker
@@ -41,11 +41,11 @@ class OrderManager:
         self._is_trading_enabled = is_trading_enabled or _default_enabled
         self.notifier = notifier
 
-        self._pending_orders: Dict[str, Order] = {}
-        self._active_orders: Dict[str, Order] = {}
+        self._pending_orders: dict[str, Order] = {}
+        self._active_orders: dict[str, Order] = {}
         # FIX-001: Duplicate order prevention
         # Key: (symbol, side) → timestamp of last order
-        self._recent_orders: Dict[Tuple[str, str], datetime] = {}
+        self._recent_orders: dict[tuple[str, str], datetime] = {}
         self._dedup_window = timedelta(seconds=60)
 
     async def start(self) -> None:
@@ -113,7 +113,7 @@ class OrderManager:
         )
         await self._submit_order(order, signal_metadata=signal.metadata)
 
-    async def _signal_to_order(self, signal: Signal) -> Optional[Order]:
+    async def _signal_to_order(self, signal: Signal) -> Order | None:
         """Convert signal to order"""
         # Determine order side
         if signal.signal_type == SignalType.ENTRY_LONG:
@@ -397,7 +397,7 @@ class OrderManager:
             await self.storage.save_order(order)
         return success
 
-    async def cancel_all_orders(self, symbol: Optional[str] = None) -> int:
+    async def cancel_all_orders(self, symbol: str | None = None) -> int:
         """Cancel all orders"""
         cancelled = 0
         for order_id, order in list(self._active_orders.items()):
