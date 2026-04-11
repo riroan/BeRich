@@ -23,8 +23,7 @@ class DataLoaderMixin:
             for symbol in strategy.symbols:
                 try:
                     if hasattr(strategy, "get_current_rsi"):
-                        rsi = strategy.get_current_rsi(symbol)
-                        if rsi is not None:
+                        if (rsi := strategy.get_current_rsi(symbol)) is not None:
                             df = strategy.get_dataframe(symbol)
                             price = float(df["close"].iloc[-1]) if len(df) > 0 else None
                             market = strategy.market.value.upper()

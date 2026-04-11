@@ -324,8 +324,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             new_names.append(name)
 
             # Check if unchanged — reuse existing instance
-            old = old_strategies.get(name)
-            if old and self._strategy_unchanged(old, cfg):
+            if (old := old_strategies.get(name)) and self._strategy_unchanged(old, cfg):
                 new_list.append(old)
                 continue
 

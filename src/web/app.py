@@ -318,7 +318,7 @@ class DashboardState:
             self.price_history[symbol] = []
 
         point = PricePoint(
-            time=time.strftime("%Y-%m-%d %H:%M"),
+            time=f"{time:%Y-%m-%d %H:%M}",
             open=open_,
             high=high,
             low=low,
@@ -337,7 +337,7 @@ class DashboardState:
             self.rsi_history[symbol] = []
 
         self.rsi_history[symbol].append({
-            "time": time.strftime("%Y-%m-%d %H:%M"),
+            "time": f"{time:%Y-%m-%d %H:%M}",
             "value": rsi,
         })
 
@@ -348,7 +348,7 @@ class DashboardState:
     def add_signal(self, signal_data: dict[str, Any]):
         self.recent_signals.insert(0, {
             **signal_data,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
         })
         # Keep only last 50 signals
         self.recent_signals = self.recent_signals[:50]
@@ -356,7 +356,7 @@ class DashboardState:
     def add_order(self, order_data: dict[str, Any]):
         self.recent_orders.insert(0, {
             **order_data,
-            "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "timestamp": f"{datetime.now():%Y-%m-%d %H:%M:%S}",
         })
         # Keep only last 50 orders
         self.recent_orders = self.recent_orders[:50]
@@ -376,7 +376,7 @@ class DashboardState:
     ):
         """Add detailed trade log"""
         log = TradeLog(
-            timestamp=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            timestamp=f"{datetime.now():%Y-%m-%d %H:%M:%S}",
             symbol=symbol,
             market=market,
             action=action,
@@ -396,7 +396,7 @@ class DashboardState:
         if symbol not in self.trade_points:
             self.trade_points[symbol] = []
         self.trade_points[symbol].append({
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "time": f"{datetime.now():%Y-%m-%d %H:%M}",
             "action": action,
             "price": price,
             "rsi": rsi,
@@ -481,8 +481,7 @@ class DashboardState:
         us_rsis = []
 
         for symbol, rsi in self.rsi_values.items():
-            position = self.positions.get(symbol)
-            if position:
+            if (position := self.positions.get(symbol)):
                 if position.market == "KRX":
                     krx_rsis.append(rsi)
                 else:
@@ -563,8 +562,8 @@ class DashboardState:
     ):
         self.system_status = SystemStatus(
             auto_trading_enabled=auto_trading,
-            last_strategy_run=self.last_strategy_run.strftime("%Y-%m-%d %H:%M:%S") if self.last_strategy_run else None,
-            last_price_update=self.last_price_update.strftime("%Y-%m-%d %H:%M:%S") if self.last_price_update else None,
+            last_strategy_run=f"{self.last_strategy_run:%Y-%m-%d %H:%M:%S}" if self.last_strategy_run else None,
+            last_price_update=f"{self.last_price_update:%Y-%m-%d %H:%M:%S}" if self.last_price_update else None,
             api_connected=api_connected,
             account_tradable=account_tradable,
             data_collection_ok=data_ok,
@@ -712,8 +711,7 @@ def verify_session(request: Request) -> bool:
     if not AUTH_PASSWORD:
         return False
 
-    session_token = request.cookies.get(SESSION_COOKIE_NAME)
-    if not session_token:
+    if not (session_token := request.cookies.get(SESSION_COOKIE_NAME)):
         return False
 
     if session_token not in valid_sessions:
@@ -811,8 +809,10 @@ def create_app() -> FastAPI:
     @app.get("/logout")
     async def logout(request: Request):
         """Handle logout"""
-        session_token = request.cookies.get(SESSION_COOKIE_NAME)
-        if session_token and session_token in valid_sessions:
+        if (
+            (session_token := request.cookies.get(SESSION_COOKIE_NAME))
+            and session_token in valid_sessions
+        ):
             del valid_sessions[session_token]
 
         response = RedirectResponse(url="/login", status_code=302)

@@ -444,8 +444,7 @@ class KISBroker:
         endpoint = "/uapi/domestic-stock/v1/trading/order-rvsecncl"
         headers = self._auth.get_headers(tr_id)
 
-        order = self._orders.get(order_id)
-        if not order:
+        if not (order := self._orders.get(order_id)):
             return False
 
         body = {
@@ -479,8 +478,7 @@ class KISBroker:
         endpoint = "/uapi/overseas-stock/v1/trading/order-rvsecncl"
         headers = self._auth.get_headers(tr_id)
 
-        order = self._orders.get(order_id)
-        if not order:
+        if not (order := self._orders.get(order_id)):
             return False
 
         exchange_map = {
@@ -710,8 +708,7 @@ class KISBroker:
             OrderStatus.REJECTED: EventType.ORDER_REJECTED,
         }
 
-        event_type = event_map.get(order.status)
-        if event_type:
+        if (event_type := event_map.get(order.status)):
             await self.event_bus.publish(
                 Event(
                     event_type=event_type,

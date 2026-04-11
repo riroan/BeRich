@@ -95,7 +95,7 @@ class WarmupManager:
             hours, remainder = divmod(int(remaining.total_seconds()), 3600)
             minutes = remainder // 60
             logger.info(
-                f"Warmup resumed from {self._start_time.strftime('%Y-%m-%d %H:%M:%S')} "
+                f"Warmup resumed from {self._start_time:%Y-%m-%d %H:%M:%S} "
                 f"({hours}h {minutes}m remaining)"
             )
         else:

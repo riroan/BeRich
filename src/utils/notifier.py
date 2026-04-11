@@ -476,7 +476,7 @@ class DiscordNotifier:
         last_run: datetime | None = None,
     ) -> bool:
         """Notify scheduler not working"""
-        last_run_str = last_run.strftime("%Y-%m-%d %H:%M:%S") if last_run else "알 수 없음"
+        last_run_str = f"{last_run:%Y-%m-%d %H:%M:%S}" if last_run else "알 수 없음"
         message = (
             f"🚨 **[시스템 오류] 스케줄러 중단**\n"
             f"```\n"

@@ -26,7 +26,7 @@ class TickHandlerMixin:
         await self.update_dashboard_positions()
         await self._sync_enabled_symbols()
 
-        logger.debug(f"Tick: {datetime.now().strftime('%H:%M:%S')}")
+        logger.debug(f"Tick: {datetime.now():%H:%M:%S}")
 
         for strategy in self.strategy_engine.get_strategies():
             for symbol in strategy.symbols:
@@ -140,8 +140,7 @@ class TickHandlerMixin:
             rsi = None
             rsi_str = ""
             if hasattr(strategy, "get_current_rsi"):
-                rsi = strategy.get_current_rsi(symbol)
-                if rsi is not None:
+                if (rsi := strategy.get_current_rsi(symbol)) is not None:
                     rsi_str = f" | RSI: {rsi:.1f}"
 
             await self.storage.save_price_rsi(

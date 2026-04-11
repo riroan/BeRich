@@ -67,7 +67,7 @@ class DashboardSyncMixin:
                 state = strategy_states.get(pos.symbol, {})
                 last_buy_date = None
                 if state.get("last_buy_time"):
-                    last_buy_date = state["last_buy_time"].strftime("%m-%d %H:%M")
+                    last_buy_date = f"{state['last_buy_time']:%m-%d %H:%M}"
 
                 pnl_pct = 0
                 if pos.avg_entry_price > 0:

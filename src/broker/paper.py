@@ -154,8 +154,10 @@ class PaperBroker:
             )
 
         elif order.side == OrderSide.SELL:
-            pos = self._positions.get(order.symbol)
-            if not pos or pos["quantity"] < order.quantity:
+            if (
+                not (pos := self._positions.get(order.symbol))
+                or pos["quantity"] < order.quantity
+            ):
                 logger.warning(
                     f"[PAPER] Insufficient position for {order.symbol}"
                 )

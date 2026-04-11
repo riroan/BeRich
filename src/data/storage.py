@@ -423,8 +423,8 @@ class Storage:
                     "strategy_name": row.strategy_name,
                     "enabled": bool(row.enabled),
                     "max_weight": float(row.max_weight) if row.max_weight else 20.0,
-                    "created_at": row.created_at.strftime("%Y-%m-%d %H:%M") if row.created_at else None,
-                    "updated_at": row.updated_at.strftime("%Y-%m-%d %H:%M") if row.updated_at else None,
+                    "created_at": f"{row.created_at:%Y-%m-%d %H:%M}" if row.created_at else None,
+                    "updated_at": f"{row.updated_at:%Y-%m-%d %H:%M}" if row.updated_at else None,
                 }
                 for row in rows
             ]
@@ -601,10 +601,7 @@ class Storage:
                 {
                     "strategy_name": row.strategy_name,
                     "params": json.loads(row.params_json),
-                    "updated_at": (
-                        row.updated_at.strftime("%Y-%m-%d %H:%M")
-                        if row.updated_at else None
-                    ),
+                    "updated_at": f"{row.updated_at:%Y-%m-%d %H:%M}" if row.updated_at else None,
                 }
                 for row in rows
             ]
@@ -644,8 +641,7 @@ class Storage:
             if not strategy.get("enabled"):
                 continue
             name = strategy["name"]
-            params = strategy.get("params", {})
-            if not params:
+            if not (params := strategy.get("params", {})):
                 continue
 
             existing = await self.get_strategy_params(name)
@@ -710,14 +706,8 @@ class Storage:
                     "enabled": bool(row.enabled),
                     "symbols": json.loads(row.symbols_json),
                     "params": json.loads(row.params_json),
-                    "created_at": (
-                        row.created_at.strftime("%Y-%m-%d %H:%M")
-                        if row.created_at else None
-                    ),
-                    "updated_at": (
-                        row.updated_at.strftime("%Y-%m-%d %H:%M")
-                        if row.updated_at else None
-                    ),
+                    "created_at": f"{row.created_at:%Y-%m-%d %H:%M}" if row.created_at else None,
+                    "updated_at": f"{row.updated_at:%Y-%m-%d %H:%M}" if row.updated_at else None,
                 }
                 for row in rows
             ]

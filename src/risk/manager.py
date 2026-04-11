@@ -60,8 +60,7 @@ class RiskManager:
                 return False, "Total exposure limit exceeded"
 
         # 5. Position quantity limit
-        current_position = self._positions.get(order.symbol)
-        if current_position:
+        if (current_position := self._positions.get(order.symbol)):
             if order.side == OrderSide.BUY:
                 new_quantity = current_position.quantity + order.quantity
             else:

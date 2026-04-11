@@ -82,8 +82,10 @@ class OrderManager:
         side_key = "buy" if signal.signal_type == SignalType.ENTRY_LONG else "sell"
         dedup_key = (signal.symbol, side_key)
         now = datetime.now()
-        last_order_time = self._recent_orders.get(dedup_key)
-        if last_order_time and (now - last_order_time) < self._dedup_window:
+        if (
+            (last_order_time := self._recent_orders.get(dedup_key))
+            and (now - last_order_time) < self._dedup_window
+        ):
             logger.warning(
                 f"[DEDUP] Duplicate signal ignored: {side_key} {signal.symbol} "
                 f"(last order {(now - last_order_time).seconds}s ago)"
@@ -208,8 +210,7 @@ class OrderManager:
 
         # Check current position value
         current_value = 0.0
-        pos = dashboard.positions.get(symbol)
-        if pos:
+        if (pos := dashboard.positions.get(symbol)):
             current_value = pos.current_price * pos.quantity
 
         # Max allowed value for this symbol
@@ -256,8 +257,7 @@ class OrderManager:
         try:
             # FIX-003: Attach PnL before submission
             if signal_metadata and order.side == OrderSide.SELL:
-                pnl = signal_metadata.get("pnl")
-                if pnl is not None:
+                if (pnl := signal_metadata.get("pnl")) is not None:
                     order.realized_pnl = pnl
 
             # FIX-003: Register in active_orders BEFORE submit to prevent lost fills
