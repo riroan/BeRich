@@ -203,10 +203,9 @@ class DashboardSyncMixin:
         """Update dashboard with current bot status"""
         strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
 
-        # Calculate uptime
-        if await self._warmup.is_complete() or self._warmup._start_time:
-            start = self._warmup._start_time or datetime.now()
-            uptime = datetime.now() - start
+        # Calculate uptime from bot start time
+        if self._bot_start_time:
+            uptime = datetime.now() - self._bot_start_time
             hours, remainder = divmod(int(uptime.total_seconds()), 3600)
             minutes = remainder // 60
             uptime_str = f"{hours}h {minutes}m"

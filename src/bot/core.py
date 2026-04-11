@@ -2,6 +2,7 @@
 
 import asyncio
 import importlib
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Optional
@@ -47,6 +48,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self._running = False
         self._stopped = False
         self._status_task: Optional[asyncio.Task] = None
+        self._bot_start_time: Optional[datetime] = None
 
         # Project paths
         self._project_root = Path(__file__).parent.parent.parent
@@ -409,6 +411,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         """Start the bot"""
         logger.info("Starting Trading Bot...")
         self._running = True
+        self._bot_start_time = datetime.now()
 
         await self._warmup.start()
 
@@ -498,13 +501,18 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         logger.info("Trading Bot stopped")
 
     async def _status_loop(self) -> None:
-        """Update dashboard status every 60s regardless of market hours (keeps warmup countdown live)"""
+        """Update dashboard status every 60s regardless of market hours (keeps warmup countdown live).
+        Exits automatically once warmup is complete — market-hours tick handler takes over."""
         while self._running:
             try:
                 await asyncio.sleep(60)
-                if self._running:
-                    await self.update_dashboard_status()
-                    await self.broadcast_tick_update()
+                if not self._running:
+                    break
+                await self.update_dashboard_status()
+                await self.broadcast_tick_update()
+                # Stop looping once warmup is done; on_tick() handles updates during market hours
+                if await self._warmup.is_complete():
+                    break
             except asyncio.CancelledError:
                 break
             except Exception as e:
