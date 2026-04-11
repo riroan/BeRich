@@ -85,25 +85,6 @@ class TradingScheduler:
 
         return False
 
-    def get_active_market(self) -> str:
-        """Get which market is currently active"""
-        now = datetime.now().time()
-
-        # US-only mode: skip KRX check
-        if self.us_only:
-            # Check US market hours (DST-aware)
-            for market_open, market_close in self.market_hours:
-                if market_open <= now <= market_close:
-                    return "US"
-            return "CLOSED"
-
-        # Multi-market mode
-        if time(9, 0) <= now <= time(15, 30):
-            return "KRX"
-        elif time(23, 30) <= now or now <= time(6, 0):
-            return "US"
-        return "CLOSED"
-
     async def start(self) -> None:
         """Start the scheduler"""
         self._running = True

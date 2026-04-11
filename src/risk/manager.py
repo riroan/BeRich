@@ -102,29 +102,6 @@ class RiskManager:
 
         return max(0, quantity)
 
-    def check_risk_limits(self) -> Tuple[bool, List[str]]:
-        """Check overall risk limits"""
-        warnings = []
-
-        # Total unrealized PnL
-        total_pnl = sum(p.unrealized_pnl for p in self._positions.values())
-        if total_pnl < -self.limits.max_drawdown:
-            warnings.append(f"Drawdown warning: {total_pnl}")
-
-        # Position concentration
-        if self._positions:
-            total_value = sum(
-                abs(p.quantity * p.current_price) for p in self._positions.values()
-            )
-            if total_value > 0:
-                max_position = max(
-                    abs(p.quantity * p.current_price) for p in self._positions.values()
-                )
-                if max_position / total_value > self.limits.max_concentration:
-                    warnings.append("Position concentration warning")
-
-        return len(warnings) == 0, warnings
-
     def record_trade(self, pnl: Decimal) -> None:
         """Record a completed trade"""
         self._check_daily_reset()
