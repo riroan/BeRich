@@ -1,5 +1,6 @@
 """Web dashboard for trading bot monitoring"""
 
+import asyncio
 import hashlib
 import hmac
 import secrets
@@ -1809,8 +1810,12 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            import asyncio
-            asyncio.create_task(cb())
+            async def _reload():
+                try:
+                    await cb()
+                except Exception as e:
+                    logger.error(f"Strategy reload failed: {e}")
+            asyncio.create_task(_reload())
             bot_running = True
 
         return {
@@ -1874,8 +1879,12 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            import asyncio
-            asyncio.create_task(cb())
+            async def _reload():
+                try:
+                    await cb()
+                except Exception as e:
+                    logger.error(f"Strategy reload failed: {e}")
+            asyncio.create_task(_reload())
             bot_running = True
 
         return {
@@ -1911,8 +1920,12 @@ def create_app() -> FastAPI:
         bot_running = False
         cb = dashboard_state.reload_callback
         if cb:
-            import asyncio
-            asyncio.create_task(cb())
+            async def _reload():
+                try:
+                    await cb()
+                except Exception as e:
+                    logger.error(f"Strategy reload failed: {e}")
+            asyncio.create_task(_reload())
             bot_running = True
 
         return {

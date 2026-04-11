@@ -355,7 +355,6 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                 try:
                     historical_bars = {}
                     for symbol in symbols:
-                        import asyncio
                         await asyncio.sleep(0.5)
                         bars = (
                             await self.broker.get_historical_bars(

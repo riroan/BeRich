@@ -96,8 +96,8 @@ class DashboardSyncMixin:
 
                 await self._check_stop_loss_alert(pos, pnl_pct, stop_loss_pct)
 
-        except Exception:
-            pass  # Skip markets with no positions
+        except Exception as e:
+            logger.debug(f"Failed to update positions for {market.value}: {e}")
 
     async def _check_stop_loss_alert(
         self: "TradingBot", pos, pnl_pct: float, stop_loss_pct: float
