@@ -12,6 +12,7 @@ load_dotenv()
 
 import os
 import uvicorn
+import src.web.app as web_app
 from src.web.app import create_app, get_dashboard_state
 
 # Create mock data for testing
@@ -131,8 +132,9 @@ if __name__ == "__main__":
     state.db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/trading.db")
 
     if args.mock:
+        web_app.MOCK_MODE = True
         setup_mock_data()
-        print("Using mock data for testing")
+        print("Using mock data for testing (auth disabled)")
 
     app = create_app()
     print(f"Starting dashboard at http://{args.host}:{args.port}")

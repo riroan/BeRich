@@ -679,6 +679,9 @@ templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 # Session storage (in-memory)
 valid_sessions: dict[str, datetime] = {}
 
+# Mock mode: skip authentication entirely
+MOCK_MODE: bool = False
+
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
@@ -719,6 +722,9 @@ def hash_password(password: str) -> str:
 
 def verify_session(request: Request) -> bool:
     """Check if request has valid session"""
+    if MOCK_MODE:
+        return True
+
     if not AUTH_PASSWORD:
         return False
 
