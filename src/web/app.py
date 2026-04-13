@@ -2056,6 +2056,7 @@ def create_app() -> FastAPI:
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
             "pnl_usd": float(dashboard_state.pnl_usd),
+            "timedelta": timedelta,
         }
         return templates.TemplateResponse(
             request=request,

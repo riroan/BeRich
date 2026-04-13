@@ -164,7 +164,8 @@
                         <div class="stat-row">
                             <span class="stat-label">Period</span>
                             <span class="stat-value" id="report-period">
-                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != daily_report.end_date %} ~ {{ daily_report.end_date.strftime('%Y-%m-%d') }}{% endif %}
+                                {% set display_end = daily_report.end_date - timedelta(days=1) %}
+                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != display_end %} ~ {{ display_end.strftime('%Y-%m-%d') }}{% endif %}
                             </span>
                         </div>
                         <div class="stat-row">
@@ -380,7 +381,9 @@
                 const data = await res.json();
 
                 const start = data.start_date.split('T')[0];
-                const end = data.end_date.split('T')[0];
+                const endDate = new Date(data.end_date);
+                endDate.setDate(endDate.getDate() - 1);
+                const end = endDate.toISOString().split('T')[0];
                 document.getElementById('report-period').textContent = (start === end) ? start : start + ' ~ ' + end;
                 document.getElementById('report-trades').textContent = data.total_trades;
                 document.getElementById('report-winrate').textContent = data.win_rate.toFixed(1) + '%';
