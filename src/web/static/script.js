@@ -394,37 +394,7 @@ function initHamburgerMenu() {
 
 // ===================== Swipe Navigation =====================
 function initSwipeNav() {
-    const pages = ['/', '/portfolio', '/symbols', '/trades', '/performance', '/analytics', '/settings'];
-    let touchStartX = 0;
-    let touchStartY = 0;
-    let swiping = false;
-
-    document.addEventListener('touchstart', (e) => {
-        if (e.target.closest('.chart-container, .chart-container-small, canvas')) return;
-        touchStartX = e.touches[0].clientX;
-        touchStartY = e.touches[0].clientY;
-        swiping = true;
-    }, { passive: true });
-
-    document.addEventListener('touchend', (e) => {
-        if (!swiping) return;
-        swiping = false;
-        const dx = e.changedTouches[0].clientX - touchStartX;
-        const dy = e.changedTouches[0].clientY - touchStartY;
-        if (Math.abs(dx) < 50 || Math.abs(dy) > 30) return;
-
-        const current = window.location.pathname;
-        if (current.startsWith('/symbol/')) return;
-
-        const idx = pages.indexOf(current);
-        if (idx === -1) return;
-
-        if (dx < 0 && idx < pages.length - 1) {
-            window.location.href = pages[idx + 1];
-        } else if (dx > 0 && idx > 0) {
-            window.location.href = pages[idx - 1];
-        }
-    }, { passive: true });
+    // Disabled: swipe navigation removed (caused accidental page changes)
 }
 
 // ===================== Chart Theme Detection =====================
