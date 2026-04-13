@@ -1195,12 +1195,14 @@ def create_app() -> FastAPI:
 
         # Build flat symbol list from strategy_configs
         symbols = []
+        strategy_names: list[str] = []
         storage = await _get_web_storage()
         if storage:
             try:
                 configs = (
                     await storage.get_all_strategy_configs()
                 )
+                strategy_names = [cfg["name"] for cfg in configs]
                 for cfg in configs:
                     for s in cfg.get("symbols", []):
                         sym = (
@@ -1242,7 +1244,7 @@ def create_app() -> FastAPI:
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
             "markets": ["krx", "nasdaq", "nyse", "amex"],
-            "strategy_names": dashboard_state.strategy_names,
+            "strategy_names": strategy_names,
             "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(

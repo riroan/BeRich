@@ -381,8 +381,9 @@
                 const data = await res.json();
 
                 const start = data.start_date.split('T')[0];
-                const endDate = new Date(data.end_date);
-                endDate.setDate(endDate.getDate() - 1);
+                // end_date is exclusive (half-open interval), subtract 1 day via string to avoid timezone issues
+                const [ey, em, ed] = data.end_date.split('T')[0].split('-').map(Number);
+                const endDate = new Date(Date.UTC(ey, em - 1, ed - 1));
                 const end = endDate.toISOString().split('T')[0];
                 document.getElementById('report-period').textContent = (start === end) ? start : start + ' ~ ' + end;
                 document.getElementById('report-trades').textContent = data.total_trades;
