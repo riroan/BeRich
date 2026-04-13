@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
 load_dotenv()
 
+import os
 import uvicorn
 from src.web.app import create_app, get_dashboard_state
 
@@ -124,6 +125,10 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=8080, help="Port to bind")
     parser.add_argument("--mock", action="store_true", help="Use mock data")
     args = parser.parse_args()
+
+    # Set db_url so storage-backed API endpoints work
+    state = get_dashboard_state()
+    state.db_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///data/trading.db")
 
     if args.mock:
         setup_mock_data()

@@ -551,6 +551,7 @@ class DashboardState:
             uptime=uptime,
             warmup_remaining=warmup_remaining,
         )
+        self.strategy_names = strategies
 
     def update_system_status(
         self,
