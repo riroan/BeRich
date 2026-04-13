@@ -38,11 +38,11 @@
                 <span class="sym-badge">{{ s.symbol }}</span>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <label class="toggle sym-toggle">
-                    <input type="checkbox" {{ 'checked' if s.enabled else '' }} onchange="toggleSymbol({{ s.id }})">
+                    <input type="checkbox" {{ 'checked' if s.enabled else '' }} onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}')">
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
-                    <input type="text" value="{{ s.max_weight }}" onchange="updateWeight({{ s.id }}, this.value)">
+                    <input type="text" value="{{ s.max_weight }}" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
                     <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">&#x2715;</button>
                 </div>
@@ -79,14 +79,14 @@
             } catch (e) { alert('Error: ' + e.message); }
         }
 
-        async function toggleSymbol(id) {
-            try { await fetch(`/api/symbols/${id}/toggle`, {method: 'POST'}); }
+        async function toggleSymbol(id, symbol) {
+            try { await fetch(`/api/symbols/${id}/toggle?symbol=${encodeURIComponent(symbol)}`, {method: 'POST'}); }
             catch (e) { alert('Failed: ' + e.message); location.reload(); }
         }
 
-        async function updateWeight(id, weight) {
+        async function updateWeight(id, symbol, weight) {
             try {
-                const resp = await fetch(`/api/symbols/${id}/weight`, {
+                const resp = await fetch(`/api/symbols/${id}/weight?symbol=${encodeURIComponent(symbol)}`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({max_weight: parseFloat(weight)}),
@@ -98,7 +98,7 @@
         async function removeSymbol(id, symbol) {
             if (!confirm(`Delete ${symbol}?`)) return;
             try {
-                const resp = await fetch(`/api/symbols/${id}`, {method: 'DELETE'});
+                const resp = await fetch(`/api/symbols/${id}?symbol=${encodeURIComponent(symbol)}`, {method: 'DELETE'});
                 if (resp.ok) document.querySelector(`.sym-row[data-id="${id}"]`).remove();
             } catch (e) { alert('Error: ' + e.message); }
         }

@@ -36,7 +36,6 @@ class TestStorageInitialization:
             "position_snapshots",
             "price_rsi",
             "equity_snapshots",
-            "watched_symbols",
             "strategy_params",
         ]
         for table in expected:
@@ -52,53 +51,6 @@ class TestStorageInitialization:
         assert "aiosqlite" in str(store.engine.url)
         await store.close()
 
-
-class TestMigration:
-    """Test schema migration logic"""
-
-    async def test_migrate_adds_max_weight_column(self):
-        """Migration should add max_weight if missing"""
-        from sqlalchemy.ext.asyncio import create_async_engine
-        from sqlalchemy import text
-
-        engine = create_async_engine("sqlite+aiosqlite://", echo=False)
-
-        # Create watched_symbols table WITHOUT max_weight
-        async with engine.begin() as conn:
-            await conn.execute(text(
-                "CREATE TABLE watched_symbols ("
-                "  id INTEGER PRIMARY KEY,"
-                "  symbol VARCHAR(20) NOT NULL,"
-                "  market VARCHAR(10) NOT NULL,"
-                "  strategy_name VARCHAR(100) NOT NULL,"
-                "  enabled INTEGER DEFAULT 1,"
-                "  created_at DATETIME,"
-                "  updated_at DATETIME"
-                ")"
-            ))
-
-        # Now run Storage.initialize which calls _migrate
-        store = Storage("sqlite+aiosqlite://")
-        # Replace the engine with our pre-seeded one
-        store.engine = engine
-        from sqlalchemy.ext.asyncio import AsyncSession
-        from sqlalchemy.orm import sessionmaker
-        store.async_session = sessionmaker(
-            engine, class_=AsyncSession, expire_on_commit=False,
-        )
-
-        async with engine.begin() as conn:
-            await store._migrate(conn)
-
-        # Verify max_weight column exists now
-        async with engine.connect() as conn:
-            from sqlalchemy import inspect
-            cols = await conn.run_sync(
-                lambda sc: [c["name"] for c in inspect(sc).get_columns("watched_symbols")]
-            )
-        assert "max_weight" in cols
-
-        await engine.dispose()
 
 
 class TestSaveOrder:
@@ -159,139 +111,6 @@ class TestSaveOrder:
         assert result is None
 
 
-class TestWatchedSymbols:
-    """Test watched symbol CRUD operations"""
-
-    async def test_add_watched_symbol(self, storage: Storage):
-        """Add a watched symbol and verify it appears in the list"""
-        result = await storage.add_watched_symbol(
-            symbol="aapl",
-            market=Market.NASDAQ,
-            strategy_name="RSI_MeanReversion",
-        )
-
-        assert result["duplicate"] is False
-        assert result["symbol"] == "AAPL"  # should be uppercased
-        assert result["enabled"] is True
-
-    async def test_add_duplicate_watched_symbol(self, storage: Storage):
-        """Adding the same symbol+strategy should return duplicate flag"""
-        await storage.add_watched_symbol(
-            symbol="MSFT",
-            market=Market.NASDAQ,
-            strategy_name="RSI_MeanReversion",
-        )
-        result = await storage.add_watched_symbol(
-            symbol="MSFT",
-            market=Market.NASDAQ,
-            strategy_name="RSI_MeanReversion",
-        )
-        assert result["duplicate"] is True
-
-    async def test_get_watched_symbols_all(self, storage: Storage):
-        """Get all watched symbols"""
-        await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        await storage.add_watched_symbol("MSFT", Market.NASDAQ, "strat_a")
-
-        symbols = await storage.get_watched_symbols()
-        assert len(symbols) == 2
-        names = [s["symbol"] for s in symbols]
-        assert "AAPL" in names
-        assert "MSFT" in names
-
-    async def test_get_watched_symbols_by_strategy(self, storage: Storage):
-        """Filter watched symbols by strategy name"""
-        await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        await storage.add_watched_symbol("005930", Market.KRX, "strat_b")
-
-        symbols = await storage.get_watched_symbols(strategy_name="strat_a")
-        assert len(symbols) == 1
-        assert symbols[0]["symbol"] == "AAPL"
-
-    async def test_get_watched_symbols_enabled_only(self, storage: Storage):
-        """enabled_only filter should exclude disabled symbols"""
-        result = await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        symbol_id = result["id"]
-
-        # Disable the symbol
-        await storage.toggle_watched_symbol(symbol_id)
-
-        # enabled_only=True (default) should return empty
-        symbols = await storage.get_watched_symbols()
-        assert len(symbols) == 0
-
-        # enabled_only=False should return it
-        symbols = await storage.get_watched_symbols(enabled_only=False)
-        assert len(symbols) == 1
-
-    async def test_remove_watched_symbol(self, storage: Storage):
-        """Remove a watched symbol by ID"""
-        result = await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        symbol_id = result["id"]
-
-        removed = await storage.remove_watched_symbol(symbol_id)
-        assert removed is True
-
-        symbols = await storage.get_watched_symbols(enabled_only=False)
-        assert len(symbols) == 0
-
-    async def test_remove_watched_symbol_not_found(self, storage: Storage):
-        """Removing a non-existent symbol should return False"""
-        removed = await storage.remove_watched_symbol(99999)
-        assert removed is False
-
-    async def test_toggle_watched_symbol(self, storage: Storage):
-        """Toggle a watched symbol between enabled and disabled"""
-        result = await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        symbol_id = result["id"]
-
-        # Toggle off
-        toggled = await storage.toggle_watched_symbol(symbol_id)
-        assert toggled is not None
-        assert toggled["enabled"] is False
-
-        # Toggle on
-        toggled = await storage.toggle_watched_symbol(symbol_id)
-        assert toggled is not None
-        assert toggled["enabled"] is True
-
-    async def test_toggle_watched_symbol_not_found(self, storage: Storage):
-        """Toggling a non-existent symbol should return None"""
-        result = await storage.toggle_watched_symbol(99999)
-        assert result is None
-
-    async def test_update_symbol_weight(self, storage: Storage):
-        """Update the max_weight of a watched symbol"""
-        result = await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        symbol_id = result["id"]
-
-        updated = await storage.update_watched_symbol_weight(symbol_id, 15.5)
-        assert updated is not None
-        assert updated["max_weight"] == 15.5
-        assert updated["symbol"] == "AAPL"
-
-    async def test_update_symbol_weight_not_found(self, storage: Storage):
-        """Updating weight of a non-existent symbol should return None"""
-        result = await storage.update_watched_symbol_weight(99999, 10.0)
-        assert result is None
-
-    async def test_watched_symbol_dict_fields(self, storage: Storage):
-        """Returned dicts should contain expected keys"""
-        await storage.add_watched_symbol("AAPL", Market.NASDAQ, "strat_a")
-        symbols = await storage.get_watched_symbols()
-        assert len(symbols) == 1
-
-        s = symbols[0]
-        assert "id" in s
-        assert "symbol" in s
-        assert "market" in s
-        assert "strategy_name" in s
-        assert "enabled" in s
-        assert "max_weight" in s
-        assert "created_at" in s
-        assert "updated_at" in s
-        assert s["market"] == "nasdaq"
-
 
 class TestStrategyParams:
     """Test strategy parameter CRUD operations"""
@@ -351,28 +170,3 @@ class TestStrategyParams:
         assert count == 0
 
 
-class TestSeedWatchedSymbols:
-    """Test seeding watched symbols from config"""
-
-    async def test_seed_watched_symbols(self, storage: Storage):
-        """Seed symbols from config"""
-        config = [
-            {
-                "name": "strat_a",
-                "market": "nasdaq",
-                "symbols": ["AAPL", "MSFT"],
-                "enabled": True,
-            },
-            {
-                "name": "strat_b",
-                "market": "krx",
-                "symbols": ["005930"],
-                "enabled": False,
-            },
-        ]
-        count = await storage.seed_watched_symbols(config)
-        assert count == 3
-
-        # Seeding again should not duplicate
-        count = await storage.seed_watched_symbols(config)
-        assert count == 0

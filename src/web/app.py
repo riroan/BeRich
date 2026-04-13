@@ -682,7 +682,17 @@ valid_sessions: dict[str, datetime] = {}
 limiter = Limiter(key_func=get_remote_address)
 
 # Security headers
-secure_headers = secure.Secure.with_default_headers()
+_csp = (
+    secure.ContentSecurityPolicy()
+    .default_src("'self'")
+    .script_src("'self'", "'unsafe-inline'")
+    .style_src("'self'", "'unsafe-inline'", "https://fonts.googleapis.com")
+    .font_src("'self'", "https://fonts.gstatic.com")
+    .img_src("'self'", "data:")
+    .connect_src("'self'", "ws:", "wss:")
+    .object_src("'none'")
+)
+secure_headers = secure.Secure(csp=_csp)
 
 
 def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
@@ -1201,12 +1211,17 @@ def create_app() -> FastAPI:
                             if isinstance(s, dict)
                             else 20.0
                         )
+                        sym_enabled = (
+                            s.get("enabled", True)
+                            if isinstance(s, dict)
+                            else True
+                        )
                         symbols.append({
                             "id": cfg["id"],
                             "symbol": sym,
                             "market": cfg["market"],
                             "strategy_name": cfg["name"],
-                            "enabled": cfg["enabled"],
+                            "enabled": cfg["enabled"] and sym_enabled,
                             "max_weight": mw,
                             "created_at": cfg.get(
                                 "created_at",
@@ -1350,25 +1365,11 @@ def create_app() -> FastAPI:
 
     @app.post("/api/symbols")
     async def add_symbol(body: WatchedSymbolCreate):
-        """Add a watched symbol"""
+        """Add a symbol to a strategy config's symbols list"""
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
                 status_code=503, detail="Storage not available",
-            )
-
-        from src.core.types import Market
-        market_map = {
-            "krx": Market.KRX,
-            "nyse": Market.NYSE,
-            "nasdaq": Market.NASDAQ,
-            "amex": Market.AMEX,
-        }
-        market = market_map.get(body.market.lower())
-        if not market:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid market: {body.market}",
             )
 
         # Validate symbol via KIS API
@@ -1389,18 +1390,39 @@ def create_app() -> FastAPI:
                 )
 
         try:
-            result = await storage.add_watched_symbol(
-                symbol=body.symbol.upper(),
-                market=market,
-                strategy_name=body.strategy_name,
+            config = await storage.get_strategy_config(body.strategy_name)
+            if not config:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Strategy '{body.strategy_name}' not found",
+                )
+
+            symbol_upper = body.symbol.upper()
+            symbols_list = config["symbols"]
+
+            # Check for duplicate
+            existing = [
+                s["symbol"] if isinstance(s, dict) else s
+                for s in symbols_list
+            ]
+            if symbol_upper in existing:
+                return {"symbol": symbol_upper, "duplicate": True}
+
+            symbols_list.append({"symbol": symbol_upper, "max_weight": 20.0})
+            await storage.update_strategy_config(
+                body.strategy_name, symbols=symbols_list,
             )
-            return result
+            return {
+                "symbol": symbol_upper,
+                "strategy_name": body.strategy_name,
+                "duplicate": False,
+            }
         finally:
             await storage.close()
 
-    @app.delete("/api/symbols/{symbol_id}")
-    async def delete_symbol(symbol_id: int):
-        """Remove a watched symbol"""
+    @app.delete("/api/symbols/{config_id}")
+    async def delete_symbol(config_id: int, symbol: str):
+        """Remove a symbol from a strategy config's symbols list"""
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
@@ -1408,18 +1430,32 @@ def create_app() -> FastAPI:
             )
 
         try:
-            deleted = await storage.remove_watched_symbol(symbol_id)
-            if not deleted:
+            config = await storage.get_strategy_config_by_id(config_id)
+            if not config:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+
+            symbol_upper = symbol.upper()
+            new_symbols = [
+                s for s in config["symbols"]
+                if (s["symbol"] if isinstance(s, dict) else s) != symbol_upper
+            ]
+            if len(new_symbols) == len(config["symbols"]):
                 raise HTTPException(
                     status_code=404, detail="Symbol not found",
                 )
+
+            await storage.update_strategy_config(
+                config["name"], symbols=new_symbols,
+            )
             return {"success": True}
         finally:
             await storage.close()
 
-    @app.post("/api/symbols/{symbol_id}/toggle")
-    async def toggle_symbol(symbol_id: int):
-        """Toggle symbol enabled/disabled"""
+    @app.post("/api/symbols/{config_id}/toggle")
+    async def toggle_symbol(config_id: int, symbol: str):
+        """Toggle a symbol's enabled flag within a strategy config"""
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
@@ -1427,23 +1463,49 @@ def create_app() -> FastAPI:
             )
 
         try:
-            result = await storage.toggle_watched_symbol(symbol_id)
-            if not result:
+            config = await storage.get_strategy_config_by_id(config_id)
+            if not config:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+
+            symbol_upper = symbol.upper()
+            new_symbols = []
+            found = False
+            for s in config["symbols"]:
+                sym = s["symbol"] if isinstance(s, dict) else s
+                if sym == symbol_upper:
+                    found = True
+                    entry = s if isinstance(s, dict) else {"symbol": sym}
+                    entry["enabled"] = not entry.get("enabled", True)
+                    new_symbols.append(entry)
+                else:
+                    new_symbols.append(s)
+
+            if not found:
                 raise HTTPException(
                     status_code=404, detail="Symbol not found",
                 )
-            return result
+
+            await storage.update_strategy_config(
+                config["name"], symbols=new_symbols,
+            )
+            toggled = next(
+                s for s in new_symbols
+                if (s["symbol"] if isinstance(s, dict) else s) == symbol_upper
+            )
+            return {"symbol": symbol_upper, "enabled": toggled.get("enabled", True)}
         finally:
             await storage.close()
 
     class WeightUpdate(BaseModel):
         max_weight: float
 
-    @app.post("/api/symbols/{symbol_id}/weight")
+    @app.post("/api/symbols/{config_id}/weight")
     async def update_symbol_weight(
-        symbol_id: int, body: WeightUpdate,
+        config_id: int, body: WeightUpdate, symbol: str,
     ):
-        """Update max portfolio weight for a symbol"""
+        """Update max_weight for a symbol within a strategy config"""
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
@@ -1457,14 +1519,34 @@ def create_app() -> FastAPI:
             )
 
         try:
-            result = await storage.update_watched_symbol_weight(
-                symbol_id, body.max_weight,
-            )
-            if not result:
+            config = await storage.get_strategy_config_by_id(config_id)
+            if not config:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+
+            symbol_upper = symbol.upper()
+            new_symbols = []
+            found = False
+            for s in config["symbols"]:
+                sym = s["symbol"] if isinstance(s, dict) else s
+                if sym == symbol_upper:
+                    found = True
+                    entry = s if isinstance(s, dict) else {"symbol": sym}
+                    entry["max_weight"] = body.max_weight
+                    new_symbols.append(entry)
+                else:
+                    new_symbols.append(s)
+
+            if not found:
                 raise HTTPException(
                     status_code=404, detail="Symbol not found",
                 )
-            return result
+
+            await storage.update_strategy_config(
+                config["name"], symbols=new_symbols,
+            )
+            return {"symbol": symbol_upper, "max_weight": body.max_weight}
         finally:
             await storage.close()
 
