@@ -17,6 +17,7 @@ class WarmupManager:
         self._warmup_hours = warmup_hours
         self._storage = storage
         self._start_time: datetime | None = None
+        self._complete: bool = False
 
     @property
     def warmup_hours(self) -> int:
@@ -48,6 +49,9 @@ class WarmupManager:
         if self._warmup_hours <= 0:
             return True
 
+        if self._complete:
+            return True
+
         await self._sync_from_db()
 
         if self._start_time is None:
@@ -57,6 +61,7 @@ class WarmupManager:
         complete = elapsed >= timedelta(hours=self._warmup_hours)
 
         if complete:
+            self._complete = True
             await self._storage.delete_bot_state(WARMUP_KEY)
 
         return complete
