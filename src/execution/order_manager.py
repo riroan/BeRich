@@ -174,9 +174,13 @@ class OrderManager:
     async def _calculate_buy_quantity(
         self, symbol: str, price, stage_portion: float,
     ) -> int:
-        """Calculate buy quantity: total_value × max_weight × stage_portion / price
+        """Calculate buy quantity based on portion of REMAINING weight room.
 
-        Example: $10,000 total × 20% weight × 30% stage = $600 → 3 shares at $200
+        remaining_room = (total_value × max_weight) − current_position_value
+        buy_amount = remaining_room × stage_portion
+
+        Example: $10,000 total × 20% = $2,000 max. If already holding $1,000,
+        remaining = $1,000, stage 0.5 → buy $500.
         """
         dashboard = get_dashboard_state()
         total_value = float(dashboard.balance_usd)
@@ -225,18 +229,15 @@ class OrderManager:
             )
             return 0
 
-        # Target buy amount = total × weight × stage portion
-        buy_amount = total_value * (max_weight / 100) * stage_portion
+        # Target buy amount = remaining weight room × stage portion
+        remaining_room = max_symbol_value - current_value
+        buy_amount = remaining_room * stage_portion
 
         # Check available cash
         cash = float(dashboard.cash_usd + dashboard.cash_krw)
 
         # Don't exceed available cash
         buy_amount = min(buy_amount, cash)
-
-        # Don't exceed remaining weight room
-        remaining_room = max_symbol_value - current_value
-        buy_amount = min(buy_amount, remaining_room)
 
         if buy_amount <= 0:
             return 0
@@ -245,8 +246,9 @@ class OrderManager:
 
         logger.info(
             f"[{symbol}] Buy calc: "
-            f"${total_value:,.0f} × {max_weight:.0f}% × "
+            f"remaining ${remaining_room:,.0f} × "
             f"{stage_portion * 100:.0f}% = ${buy_amount:,.0f} "
+            f"(max ${max_symbol_value:,.0f}, held ${current_value:,.0f}) "
             f"→ {quantity} shares @ ${float(price):,.2f}"
         )
 
