@@ -14,8 +14,10 @@
         .level-table td { padding: 10px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-badge { background: var(--card); color: var(--white); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
         input.level-input[type="text"] { width: 60px; padding: 6px 8px; font-size: 13px; }
+        .strategy-tabs { display: flex; align-items: center; margin-bottom: 0; }
         .strategy-content { display: none; }
         .strategy-content.active { display: flex; flex-direction: column; gap: 20px; }
+        .strategy-select { display: none; }
         .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
         .save-status { font-size: 13px; }
         .save-status.success { color: var(--emerald); }
@@ -29,10 +31,17 @@
         .toggle-switch input:checked + .toggle-slider { background: var(--emerald); }
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
 
-        /* Create form */
-        .create-form { display: none; }
-        .create-form.active { display: block; }
-        .create-form .settings-form-grid { grid-template-columns: repeat(2, 1fr); }
+        /* Create strategy modal */
+        .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+        .modal-overlay.active { display: flex; }
+        .modal-box { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; }
+        .modal-header .section-title { margin: 0; }
+        .modal-close { background: none; border: none; color: var(--dim); font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .modal-close:hover { color: var(--white); }
+        .modal-form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
+        .modal-form-grid .form-group { gap: 6px; }
+        .modal-form-grid input, .modal-form-grid select { width: 100%; box-sizing: border-box; }
 
         /* Read-only mode */
         .strategy-content .read-val {
@@ -49,6 +58,7 @@
         .strategy-content.editing .btn-edit { display: none; }
 
         @media (max-width: 768px) {
+            /* Header row: tabs + new button */
             .settings-form-grid { grid-template-columns: 1fr !important; gap: 0; }
             .settings-form-grid .form-group {
                 flex-direction: row; align-items: center; justify-content: space-between;
@@ -57,61 +67,97 @@
             .settings-form-grid .form-group:last-child { border-bottom: none; }
             .settings-form-grid .form-group .read-val { font-size: 15px; text-align: right; }
             .settings-form-grid .form-group .hint { display: none; }
+            /* levels-row: 1 column, min-width:0 prevents grid cell from expanding beyond viewport */
             .levels-row { grid-template-columns: 1fr !important; }
-            .form-actions { flex-direction: column; gap: 10px; }
-            .form-actions .btn { width: 100%; text-align: center; }
+            .levels-row > .card { min-width: 0; width: 100%; box-sizing: border-box; }
+            .form-actions { flex-wrap: wrap; gap: 8px; }
+            .form-actions .btn { flex: 1 1 auto; text-align: center; min-width: 80px; }
+
+            /* Mobile: hide tabs, show dropdown — button pushed right via justify-content */
+            .strategy-tabs { display: none; }
+            #btn-create { flex: 1; width: 100%; text-align: center; }
+            .strategy-select {
+                display: block; width: 100%; box-sizing: border-box;
+                background: var(--surface); color: var(--white);
+                border: 1px solid rgba(51,65,85,0.5); border-radius: 8px;
+                padding: 8px 10px; font-size: 13px;
+            }
+
+            /* strategy-meta: wrap instead of overflow */
+            .strategy-meta { flex-wrap: wrap; gap: 8px; }
+
+
+            /* level tables: override global min-width:420px, fit within card */
+            .level-table { table-layout: fixed; width: 100%; min-width: 0 !important; }
+            .level-table th, .level-table td { padding: 8px 4px; font-size: 12px; }
+            input.level-input[type="text"] { width: 48px; max-width: 100%; box-sizing: border-box; }
+            input.level-input[type="text"] { width: 48px; padding: 5px 4px; font-size: 12px; }
         }
     </style>
 {% endblock %}
 
 {% block content %}
         <!-- Create Strategy Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0;">
+            <!-- Desktop: tabs -->
             <div class="strategy-tabs">
                 {% for cfg in strategy_configs %}
                 <button class="{{ 'active' if loop.first else '' }}" onclick="switchStrategy('{{ cfg.name }}', this)"
                     style="{{ '' if cfg.enabled else 'opacity: 0.5;' }}">
-                    {{ cfg.name.split('_')[0] }}_{{ cfg.params.get('rsi_period', '') or 'RSI' }}
+                    {{ cfg.name }}
                 </button>
                 {% endfor %}
             </div>
             <button class="btn" onclick="toggleCreateForm()" id="btn-create">+ New Strategy</button>
         </div>
+        <!-- Mobile: dropdown (full width below) -->
+        <select class="strategy-select" onchange="switchStrategyByName(this.value)" style="margin-bottom: 16px;">
+            {% for cfg in strategy_configs %}
+            <option value="{{ cfg.name }}" {{ 'selected' if loop.first else '' }}>
+                {{ cfg.name }}{% if not cfg.enabled %} (off){% endif %}
+            </option>
+            {% endfor %}
+        </select>
 
-        <!-- Create Strategy Form -->
-        <div class="create-form card" id="create-form">
-            <div class="section-title">Create New Strategy</div>
-            <div class="settings-form-grid">
-                <div class="form-group">
-                    <label>Name</label>
-                    <input type="text" id="new-name" placeholder="e.g. NASDAQ_RSI_MeanReversion">
+        <!-- Create Strategy Modal -->
+        <div class="modal-overlay" id="create-modal" onclick="if(event.target===this)toggleCreateForm()">
+            <div class="modal-box">
+                <div class="modal-header">
+                    <div class="section-title">New Strategy</div>
+                    <button class="modal-close" onclick="toggleCreateForm()">✕</button>
                 </div>
-                <div class="form-group">
-                    <label>Strategy Class</label>
-                    <select id="new-class">
-                        {% for cls in strategy_classes %}
-                        <option value="{{ cls.class_path }}">{{ cls.name }}</option>
-                        {% endfor %}
-                    </select>
+                <div class="modal-form-grid">
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="new-name" placeholder="e.g. NASDAQ_RSI_MeanReversion">
+                    </div>
+                    <div class="form-group">
+                        <label>Strategy Class</label>
+                        <select id="new-class">
+                            {% for cls in strategy_classes %}
+                            <option value="{{ cls.class_path }}">{{ cls.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Market</label>
+                        <select id="new-market">
+                            <option value="nasdaq">NASDAQ</option>
+                            <option value="nyse">NYSE</option>
+                            <option value="amex">AMEX</option>
+                            <option value="krx">KRX</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Symbols (comma-separated)</label>
+                        <input type="text" id="new-symbols" placeholder="AAPL, GOOG, NVDA">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>Market</label>
-                    <select id="new-market">
-                        <option value="nasdaq">NASDAQ</option>
-                        <option value="nyse">NYSE</option>
-                        <option value="amex">AMEX</option>
-                        <option value="krx">KRX</option>
-                    </select>
+                <div class="form-actions" style="margin-top: 0;">
+                    <span class="save-status" id="create-status"></span>
+                    <button class="btn" onclick="toggleCreateForm()">Cancel</button>
+                    <button class="btn btn-save" onclick="createStrategy()">Create</button>
                 </div>
-                <div class="form-group">
-                    <label>Symbols (comma-separated)</label>
-                    <input type="text" id="new-symbols" placeholder="AAPL, GOOG, NVDA">
-                </div>
-            </div>
-            <div class="form-actions">
-                <span class="save-status" id="create-status"></span>
-                <button class="btn" onclick="toggleCreateForm()">Cancel</button>
-                <button class="btn btn-save" onclick="createStrategy()">Create</button>
             </div>
         </div>
 
@@ -235,8 +281,14 @@
             btn.classList.add('active');
         }
 
+        function switchStrategyByName(name) {
+            document.querySelectorAll('.strategy-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.strategy-tabs button').forEach(b => b.classList.remove('active'));
+            document.getElementById('strategy-' + name).classList.add('active');
+        }
+
         function toggleCreateForm() {
-            document.getElementById('create-form').classList.toggle('active');
+            document.getElementById('create-modal').classList.toggle('active');
         }
 
         async function createStrategy() {
