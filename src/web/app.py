@@ -707,7 +707,33 @@ def _rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONRespons
 AUTH_USERNAME = os.getenv("DASHBOARD_USERNAME", "admin")
 AUTH_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 SESSION_COOKIE_NAME = "berich_session"
-SESSION_EXPIRE_HOURS = 24
+SESSION_EXPIRE_DAYS = 30
+SESSIONS_FILE = BASE_DIR.parent.parent / "data" / "sessions.json"
+
+
+def _load_sessions() -> None:
+    """Load persisted sessions from disk into valid_sessions."""
+    if not SESSIONS_FILE.exists():
+        return
+    try:
+        raw = json.loads(SESSIONS_FILE.read_text())
+        cutoff = datetime.now() - timedelta(days=SESSION_EXPIRE_DAYS)
+        for token, ts in raw.items():
+            last_seen = datetime.fromisoformat(ts)
+            if last_seen > cutoff:
+                valid_sessions[token] = last_seen
+    except (json.JSONDecodeError, ValueError, OSError) as exc:
+        logger.warning(f"Failed to load sessions: {exc}")
+
+
+def _save_sessions() -> None:
+    """Persist valid_sessions to disk."""
+    try:
+        SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {token: ts.isoformat() for token, ts in valid_sessions.items()}
+        SESSIONS_FILE.write_text(json.dumps(data))
+    except OSError as exc:
+        logger.warning(f"Failed to save sessions: {exc}")
 
 
 def generate_session_token() -> str:
@@ -734,11 +760,16 @@ def verify_session(request: Request) -> bool:
     if session_token not in valid_sessions:
         return False
 
-    # Check expiry
-    created = valid_sessions[session_token]
-    if datetime.now() - created > timedelta(hours=SESSION_EXPIRE_HOURS):
+    last_seen = valid_sessions[session_token]
+    if datetime.now() - last_seen > timedelta(days=SESSION_EXPIRE_DAYS):
         del valid_sessions[session_token]
+        _save_sessions()
         return False
+
+    # Sliding expiry: refresh timestamp on activity (throttled to once/hour to avoid disk churn)
+    if datetime.now() - last_seen > timedelta(hours=1):
+        valid_sessions[session_token] = datetime.now()
+        _save_sessions()
 
     return True
 
@@ -755,6 +786,8 @@ def create_app() -> FastAPI:
         raise RuntimeError(
             "DASHBOARD_PASSWORD must be set in .env. Refusing to start server."
         )
+
+    _load_sessions()
 
     _debug = os.getenv("DEBUG") == "true"
     app = FastAPI(
@@ -809,15 +842,16 @@ def create_app() -> FastAPI:
             # Create session
             token = generate_session_token()
             valid_sessions[token] = datetime.now()
+            _save_sessions()
 
             response = RedirectResponse(url="/", status_code=302)
             response.set_cookie(
                 key=SESSION_COOKIE_NAME,
                 value=token,
                 httponly=True,
-                max_age=SESSION_EXPIRE_HOURS * 3600,
+                max_age=SESSION_EXPIRE_DAYS * 86400,
                 secure=True,
-                samesite="strict",
+                samesite="lax",
             )
             return response
         else:
@@ -831,6 +865,7 @@ def create_app() -> FastAPI:
             and session_token in valid_sessions
         ):
             del valid_sessions[session_token]
+            _save_sessions()
 
         response = RedirectResponse(url="/login", status_code=302)
         response.delete_cookie(SESSION_COOKIE_NAME)
