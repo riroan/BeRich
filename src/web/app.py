@@ -1,7 +1,6 @@
 """Web dashboard for trading bot monitoring"""
 
 import asyncio
-import hashlib
 import hmac
 import secrets
 import os
@@ -708,42 +707,11 @@ AUTH_USERNAME = os.getenv("DASHBOARD_USERNAME", "admin")
 AUTH_PASSWORD = os.getenv("DASHBOARD_PASSWORD", "")
 SESSION_COOKIE_NAME = "berich_session"
 SESSION_EXPIRE_DAYS = 30
-SESSIONS_FILE = BASE_DIR.parent.parent / "data" / "sessions.json"
-
-
-def _load_sessions() -> None:
-    """Load persisted sessions from disk into valid_sessions."""
-    if not SESSIONS_FILE.exists():
-        return
-    try:
-        raw = json.loads(SESSIONS_FILE.read_text())
-        cutoff = datetime.now() - timedelta(days=SESSION_EXPIRE_DAYS)
-        for token, ts in raw.items():
-            last_seen = datetime.fromisoformat(ts)
-            if last_seen > cutoff:
-                valid_sessions[token] = last_seen
-    except (json.JSONDecodeError, ValueError, OSError) as exc:
-        logger.warning(f"Failed to load sessions: {exc}")
-
-
-def _save_sessions() -> None:
-    """Persist valid_sessions to disk."""
-    try:
-        SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data = {token: ts.isoformat() for token, ts in valid_sessions.items()}
-        SESSIONS_FILE.write_text(json.dumps(data))
-    except OSError as exc:
-        logger.warning(f"Failed to save sessions: {exc}")
 
 
 def generate_session_token() -> str:
     """Generate a secure session token"""
     return secrets.token_hex(32)
-
-
-def hash_password(password: str) -> str:
-    """Hash password for comparison"""
-    return hashlib.sha256(password.encode()).hexdigest()
 
 
 def verify_session(request: Request) -> bool:
@@ -763,14 +731,10 @@ def verify_session(request: Request) -> bool:
     last_seen = valid_sessions[session_token]
     if datetime.now() - last_seen > timedelta(days=SESSION_EXPIRE_DAYS):
         del valid_sessions[session_token]
-        _save_sessions()
         return False
 
-    # Sliding expiry: refresh timestamp on activity (throttled to once/hour to avoid disk churn)
-    if datetime.now() - last_seen > timedelta(hours=1):
-        valid_sessions[session_token] = datetime.now()
-        _save_sessions()
-
+    # Sliding expiry: refresh last-seen timestamp on activity
+    valid_sessions[session_token] = datetime.now()
     return True
 
 
@@ -786,8 +750,6 @@ def create_app() -> FastAPI:
         raise RuntimeError(
             "DASHBOARD_PASSWORD must be set in .env. Refusing to start server."
         )
-
-    _load_sessions()
 
     _debug = os.getenv("DEBUG") == "true"
     app = FastAPI(
@@ -810,7 +772,7 @@ def create_app() -> FastAPI:
 
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
-        """Auth check for /api/ routes + security headers on all responses"""
+        """Auth check for /api/ routes + security headers + sliding cookie."""
         if request.url.path.startswith("/api/"):
             if not verify_session(request):
                 return JSONResponse(
@@ -819,6 +781,22 @@ def create_app() -> FastAPI:
                 )
         response = await call_next(request)
         secure_headers.set_headers(response)
+
+        # Sliding cookie: re-issue max_age on authenticated requests so active
+        # users never expire. Skip /login and /logout which manage the cookie
+        # themselves.
+        path = request.url.path
+        if path not in ("/login", "/logout"):
+            token = request.cookies.get(SESSION_COOKIE_NAME)
+            if token and token in valid_sessions:
+                response.set_cookie(
+                    key=SESSION_COOKIE_NAME,
+                    value=token,
+                    httponly=True,
+                    max_age=SESSION_EXPIRE_DAYS * 86400,
+                    secure=True,
+                    samesite="lax",
+                )
         return response
 
     @app.get("/login", response_class=HTMLResponse)
@@ -842,7 +820,6 @@ def create_app() -> FastAPI:
             # Create session
             token = generate_session_token()
             valid_sessions[token] = datetime.now()
-            _save_sessions()
 
             response = RedirectResponse(url="/", status_code=302)
             response.set_cookie(
@@ -865,7 +842,6 @@ def create_app() -> FastAPI:
             and session_token in valid_sessions
         ):
             del valid_sessions[session_token]
-            _save_sessions()
 
         response = RedirectResponse(url="/login", status_code=302)
         response.delete_cookie(SESSION_COOKIE_NAME)
