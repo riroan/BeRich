@@ -77,6 +77,10 @@ class TradingScheduler:
             return False
         if weekday == 5 and now > time(6, 0):  # Saturday after 06:00
             return False
+        # Monday early morning KST corresponds to Sunday ET — US market still closed.
+        # The first real US session of the week lands on Monday night KST (22:30+).
+        if weekday == 0 and now < time(6, 0):
+            return False
 
         # Check if current time falls within any market hours
         for market_open, market_close in self.market_hours:
