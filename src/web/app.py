@@ -1088,11 +1088,41 @@ def create_app() -> FastAPI:
 
     @app.get("/api/symbol/{symbol}/history")
     async def get_symbol_history(symbol: str, limit: int = 100):
-        """Get price history for a symbol"""
-        prices = dashboard_state.price_history.get(symbol, [])
-        rsi = dashboard_state.rsi_history.get(symbol, [])
+        """Get price history for a symbol (from DB, falls back to memory)"""
         trade_points = dashboard_state.trade_points.get(symbol, [])
 
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                history = await storage.get_price_rsi_history(
+                    symbol, limit=limit,
+                )
+                prices = []
+                rsi_points = []
+                for record in history:
+                    ts = f"{record['timestamp']:%Y-%m-%d %H:%M}"
+                    price = record["price"]
+                    prices.append({
+                        "time": ts,
+                        "open": price,
+                        "high": price,
+                        "low": price,
+                        "close": price,
+                        "volume": 0,
+                    })
+                    if record["rsi"] is not None:
+                        rsi_points.append({"time": ts, "value": record["rsi"]})
+                return {
+                    "symbol": symbol,
+                    "prices": prices,
+                    "rsi": rsi_points,
+                    "trade_points": trade_points[-limit:],
+                }
+            finally:
+                await storage.close()
+
+        prices = dashboard_state.price_history.get(symbol, [])
+        rsi = dashboard_state.rsi_history.get(symbol, [])
         return {
             "symbol": symbol,
             "prices": [p.model_dump() for p in prices[-limit:]],
