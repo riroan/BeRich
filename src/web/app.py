@@ -1087,19 +1087,42 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/api/symbol/{symbol}/history")
-    async def get_symbol_history(symbol: str, limit: int = 100):
-        """Get price history for a symbol (from DB, falls back to memory)"""
+    async def get_symbol_history(
+        symbol: str,
+        limit: int = 100,
+        before: str | None = None,
+    ):
+        """Get price history for a symbol (from DB, falls back to memory).
+
+        ``before`` is a "YYYY-MM-DD HH:MM" cursor (same format as response
+        ``time`` fields). Records strictly older than the cursor are returned,
+        enabling lazy-loading when the user scrolls back on the chart.
+        """
         trade_points = dashboard_state.trade_points.get(symbol, [])
+
+        before_dt: datetime | None = None
+        if before:
+            try:
+                before_dt = datetime.fromisoformat(before)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Invalid 'before' timestamp format",
+                )
 
         storage = await _get_web_storage()
         if storage:
             try:
                 history = await storage.get_price_rsi_history(
-                    symbol, limit=limit,
+                    symbol, limit=limit, before=before_dt,
                 )
                 prices = []
                 rsi_points = []
                 for record in history:
+                    # Skip records without RSI so price and RSI series stay
+                    # index-aligned — chart sync uses logical bar indices.
+                    if record["rsi"] is None:
+                        continue
                     ts = f"{record['timestamp']:%Y-%m-%d %H:%M}"
                     price = record["price"]
                     prices.append({
@@ -1110,8 +1133,7 @@ def create_app() -> FastAPI:
                         "close": price,
                         "volume": 0,
                     })
-                    if record["rsi"] is not None:
-                        rsi_points.append({"time": ts, "value": record["rsi"]})
+                    rsi_points.append({"time": ts, "value": record["rsi"]})
                 return {
                     "symbol": symbol,
                     "prices": prices,
@@ -1123,6 +1145,9 @@ def create_app() -> FastAPI:
 
         prices = dashboard_state.price_history.get(symbol, [])
         rsi = dashboard_state.rsi_history.get(symbol, [])
+        if before:
+            prices = [p for p in prices if p.time < before]
+            rsi = [r for r in rsi if r["time"] < before]
         return {
             "symbol": symbol,
             "prices": [p.model_dump() for p in prices[-limit:]],

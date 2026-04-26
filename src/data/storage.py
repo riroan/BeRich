@@ -300,13 +300,22 @@ class Storage:
         self,
         symbol: str,
         limit: int = 200,
+        before: datetime | None = None,
     ) -> list[dict]:
-        """Get recent price/RSI history for a symbol"""
+        """Get recent price/RSI history for a symbol.
+
+        If ``before`` is given, returns records strictly older than that
+        timestamp (used for cursor-based pagination when scrolling back).
+        """
         async with self.async_session() as session:
             query = (
                 select(PriceRSIModel)
                 .where(PriceRSIModel.symbol == symbol)
-                .order_by(PriceRSIModel.timestamp.desc())
+            )
+            if before is not None:
+                query = query.where(PriceRSIModel.timestamp < before)
+            query = (
+                query.order_by(PriceRSIModel.timestamp.desc())
                 .limit(limit)
             )
 

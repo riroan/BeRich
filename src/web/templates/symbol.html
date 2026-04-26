@@ -247,21 +247,55 @@
             return Math.floor(date.getTime() / 1000) + 32400;
         }
 
-        // Fetch and display data
-        async function loadChartData() {
+        // Pagination state for lazy-loading older history
+        const PAGE_SIZE = 2000;
+        let priceData = [];
+        let rsiData = [];
+        let oldestCursor = null;   // "YYYY-MM-DD HH:MM" of oldest loaded point
+        let isLoading = false;
+        let reachedEnd = false;
+
+        function applyRsiReferenceLines() {
+            const times = rsiData.map(r => r.time);
+            if (times.length >= 2) {
+                oversoldLine.setData([
+                    { time: times[0], value: 30 },
+                    { time: times[times.length - 1], value: 30 },
+                ]);
+                overboughtLine.setData([
+                    { time: times[0], value: 70 },
+                    { time: times[times.length - 1], value: 70 },
+                ]);
+            }
+        }
+
+        function mergeSorted(existing, incoming) {
+            // incoming is older; prepend, then sort + dedupe by time
+            return [...incoming, ...existing]
+                .sort((a, b) => a.time - b.time)
+                .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
+        }
+
+        async function fetchPage(before = null) {
+            let url = `/api/symbol/${symbol}/history?limit=${PAGE_SIZE}`;
+            if (before) url += `&before=${encodeURIComponent(before)}`;
+            const response = await fetch(url);
+            return await response.json();
+        }
+
+        async function loadInitial() {
             try {
-                const response = await fetch(`/api/symbol/${symbol}/history?limit=2000`);
-                const data = await response.json();
+                const data = await fetchPage();
 
                 if (data.prices && data.prices.length > 0) {
-                    const priceData = data.prices.map(p => ({
+                    oldestCursor = data.prices[0].time;
+                    priceData = data.prices.map(p => ({
                         time: parseTime(p.time),
                         value: p.close,
                     })).sort((a, b) => a.time - b.time)
                       .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
                     priceSeries.setData(priceData);
 
-                    // Add trade markers
                     if (data.trade_points && data.trade_points.length > 0) {
                         const markers = data.trade_points.map(tp => ({
                             time: parseTime(tp.time),
@@ -275,7 +309,6 @@
 
                     priceChart.timeScale().fitContent();
 
-                    // Calculate today change
                     if (priceData.length >= 2) {
                         const today = priceData[priceData.length - 1].value;
                         const yesterday = priceData[priceData.length - 2].value;
@@ -289,30 +322,101 @@
                 }
 
                 if (data.rsi && data.rsi.length > 0) {
-                    const rsiData = data.rsi.map(r => ({
+                    rsiData = data.rsi.map(r => ({
                         time: parseTime(r.time),
                         value: r.value,
                     })).sort((a, b) => a.time - b.time)
                       .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
                     rsiSeries.setData(rsiData);
-
-                    // Add constant lines for oversold/overbought
-                    const times = rsiData.map(r => r.time);
-                    if (times.length >= 2) {
-                        oversoldLine.setData([
-                            { time: times[0], value: 30 },
-                            { time: times[times.length - 1], value: 30 },
-                        ]);
-                        overboughtLine.setData([
-                            { time: times[0], value: 70 },
-                            { time: times[times.length - 1], value: 70 },
-                        ]);
-                    }
-
+                    applyRsiReferenceLines();
                     rsiChart.timeScale().fitContent();
                 }
             } catch (error) {
                 console.error('Error loading chart data:', error);
+            }
+        }
+
+        async function loadMore() {
+            if (isLoading || reachedEnd || !oldestCursor) return;
+            isLoading = true;
+            try {
+                const data = await fetchPage(oldestCursor);
+                if (!data.prices || data.prices.length === 0) {
+                    reachedEnd = true;
+                    return;
+                }
+                oldestCursor = data.prices[0].time;
+
+                const newPricePoints = data.prices.map(p => ({
+                    time: parseTime(p.time),
+                    value: p.close,
+                }));
+                priceData = mergeSorted(priceData, newPricePoints);
+                priceSeries.setData(priceData);
+
+                if (data.rsi && data.rsi.length > 0) {
+                    const newRsiPoints = data.rsi.map(r => ({
+                        time: parseTime(r.time),
+                        value: r.value,
+                    }));
+                    rsiData = mergeSorted(rsiData, newRsiPoints);
+                    rsiSeries.setData(rsiData);
+                    applyRsiReferenceLines();
+                }
+            } catch (error) {
+                console.error('Error loading more history:', error);
+            } finally {
+                isLoading = false;
+            }
+        }
+
+        // Periodic refresh: merge latest page into existing data without
+        // wiping the lazy-loaded history to the left.
+        async function refreshLatest() {
+            try {
+                const data = await fetchPage();
+                if (!data.prices || data.prices.length === 0) return;
+
+                const newPricePoints = data.prices.map(p => ({
+                    time: parseTime(p.time),
+                    value: p.close,
+                }));
+                priceData = mergeSorted(priceData, newPricePoints);
+                priceSeries.setData(priceData);
+
+                if (data.trade_points && data.trade_points.length > 0) {
+                    const markers = data.trade_points.map(tp => ({
+                        time: parseTime(tp.time),
+                        position: tp.action.includes('buy') ? 'belowBar' : 'aboveBar',
+                        color: tp.action.includes('buy') ? colors.buyMarker : colors.sellMarker,
+                        shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
+                        text: tp.action.toUpperCase(),
+                    }));
+                    priceSeries.setMarkers(markers);
+                }
+
+                if (data.rsi && data.rsi.length > 0) {
+                    const newRsiPoints = data.rsi.map(r => ({
+                        time: parseTime(r.time),
+                        value: r.value,
+                    }));
+                    rsiData = mergeSorted(rsiData, newRsiPoints);
+                    rsiSeries.setData(rsiData);
+                    applyRsiReferenceLines();
+                }
+
+                if (priceData.length >= 2) {
+                    const today = priceData[priceData.length - 1].value;
+                    const yesterday = priceData[priceData.length - 2].value;
+                    const change = ((today - yesterday) / yesterday * 100).toFixed(2);
+                    const el = document.getElementById('today-change');
+                    if (el) {
+                        el.textContent = (change >= 0 ? '+' : '') + change + '%';
+                        el.className = 'value small ' + (change >= 0 ? 'positive' : 'negative');
+                    }
+                }
+            } catch (error) {
+                console.error('Error refreshing latest:', error);
             }
         }
 
@@ -322,16 +426,26 @@
             rsiChart.applyOptions({ width: rsiChartContainer.clientWidth });
         });
 
-        // Sync time scales
+        // Trigger lazy-load when user scrolls within 10 bars of the left edge
+        const LOAD_MORE_THRESHOLD = 10;
+        function maybeLoadMore(range) {
+            if (range && range.from < LOAD_MORE_THRESHOLD) {
+                loadMore();
+            }
+        }
+
+        // Sync time scales + lazy-load on scroll
         priceChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
             if (range) {
                 rsiChart.timeScale().setVisibleLogicalRange(range);
+                maybeLoadMore(range);
             }
         });
 
         rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
             if (range) {
                 priceChart.timeScale().setVisibleLogicalRange(range);
+                maybeLoadMore(range);
             }
         });
 
@@ -365,9 +479,9 @@
         });
 
         // Load data on page load
-        loadChartData();
+        loadInitial();
 
-        // Refresh every 60 seconds
-        setInterval(loadChartData, 60000);
+        // Refresh every 60 seconds (merge-only, preserves lazy-loaded history)
+        setInterval(refreshLatest, 60000);
     </script>
 {% endblock %}
