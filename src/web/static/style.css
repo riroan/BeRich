@@ -1172,7 +1172,12 @@ select option { background: var(--surface); color: var(--text); }
 
 /* Small mobile (≤480px) */
 @media (max-width: 480px) {
-    .header { padding: 10px 12px; }
+    .header {
+        padding: 10px 12px;
+        padding-top: calc(10px + env(safe-area-inset-top));
+        padding-left: calc(12px + env(safe-area-inset-left));
+        padding-right: calc(12px + env(safe-area-inset-right));
+    }
     .container { padding: 0 10px 12px; }
 
     /* Cards: keep 2-col on small mobile for compact layout */
