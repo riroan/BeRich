@@ -10,7 +10,7 @@ from typing import Any
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -769,6 +769,29 @@ def create_app() -> FastAPI:
     static_dir = BASE_DIR / "static"
     if static_dir.exists():
         app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+
+    # PWA: serve service worker from root scope so it can control the whole site.
+    # StaticFiles mounts at /static would scope the SW to /static/ only.
+    @app.get("/sw.js", include_in_schema=False)
+    async def service_worker():
+        sw_path = static_dir / "sw.js"
+        if not sw_path.exists():
+            raise HTTPException(status_code=404)
+        return FileResponse(
+            sw_path,
+            media_type="application/javascript",
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache",
+            },
+        )
+
+    @app.get("/manifest.webmanifest", include_in_schema=False)
+    async def manifest():
+        m_path = static_dir / "manifest.webmanifest"
+        if not m_path.exists():
+            raise HTTPException(status_code=404)
+        return FileResponse(m_path, media_type="application/manifest+json")
 
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):

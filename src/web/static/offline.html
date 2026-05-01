@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0f172a">
+    <title>BeRich — Offline</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        .offline-wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            text-align: center;
+        }
+        .offline-card {
+            max-width: 360px;
+            background: var(--surface);
+            border-radius: 12px;
+            padding: 32px 24px;
+        }
+        .offline-card h1 { font-size: 28px; margin: 0 0 8px; }
+        .offline-card h1 span { color: var(--blue); }
+        .offline-card p { color: var(--dim); margin: 12px 0 20px; line-height: 1.5; }
+        .retry-btn {
+            background: var(--blue); color: white; border: none;
+            padding: 12px 24px; border-radius: 8px; font-size: 15px;
+            cursor: pointer; font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="offline-wrap">
+        <div class="offline-card">
+            <h1>Be<span>Rich</span></h1>
+            <p>오프라인 상태입니다.<br>네트워크에 다시 연결되면 새로고침하세요.</p>
+            <button class="retry-btn" onclick="location.reload()">다시 시도</button>
+        </div>
+    </div>
+</body>
+</html>
