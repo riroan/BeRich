@@ -1,0 +1,422 @@
+{% extends "base.html" %}
+
+{% block title %}Backtest - BeRich Dashboard{% endblock %}
+
+{% block head_extra %}
+    <script src="/static/lightweight-charts.js"></script>
+    <style>
+        .bt-form { display: grid; gap: 16px; }
+        .bt-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
+        .bt-field { display: flex; flex-direction: column; gap: 4px; }
+        .bt-field label { font-size: 11px; text-transform: uppercase; color: var(--dim); letter-spacing: 0.5px; }
+        .bt-field input[type="text"], .bt-field input[type="date"], .bt-field select {
+            background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
+            padding: 8px 12px; color: var(--text); font-size: 13px;
+        }
+        .bt-slider-row { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; }
+        .bt-slider-row label { font-size: 12px; color: var(--dim); }
+        .bt-slider-row .bt-slider-val { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+        .bt-slider-row input[type="range"] { width: 100%; accent-color: var(--blue); }
+        .bt-stage-row { display: grid; grid-template-columns: 60px 80px 1fr 80px 1fr; gap: 8px; align-items: center; font-size: 12px; }
+        .bt-stage-row input[type="number"] {
+            background: var(--bg); border: 1px solid var(--card); border-radius: 6px;
+            padding: 4px 8px; color: var(--text); font-size: 12px; text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+        .bt-section-h { font-size: 12px; text-transform: uppercase; color: var(--dim); letter-spacing: 0.5px; margin-top: 8px; }
+        .bt-run-btn {
+            background: var(--blue); color: white; border: none; border-radius: 20px;
+            padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .bt-run-btn:hover:not(:disabled) { background: #2563eb; box-shadow: 0 0 16px rgba(59,130,246,0.4); }
+        .bt-run-btn:disabled { opacity: 0.5; cursor: wait; }
+        .bt-results { display: none; }
+        .bt-results.shown { display: block; animation: bt-fade 0.3s ease; }
+        @keyframes bt-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .bt-source-pill {
+            display: inline-block; padding: 3px 10px; border-radius: 20px;
+            font-size: 11px; font-weight: 600; margin-left: 8px;
+        }
+        .bt-source-kis { background: rgba(16,185,129,0.15); color: #10b981; }
+        .bt-source-yfinance { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .bt-error {
+            display: none; padding: 12px 16px; border-radius: 8px;
+            background: rgba(239,68,68,0.12); color: #ef4444; font-size: 13px;
+            border: 1px solid rgba(239,68,68,0.3);
+        }
+        .bt-error.shown { display: block; }
+    </style>
+{% endblock %}
+
+{% block content %}
+        <div class="section-title">
+            <span>Backtest — RSI Mean Reversion</span>
+        </div>
+
+        <section>
+            <div class="panel">
+                <form id="bt-form" class="bt-form" onsubmit="return false;">
+                    <div class="bt-row">
+                        <div class="bt-field">
+                            <label for="bt-symbol">Symbol</label>
+                            <input type="text" id="bt-symbol" value="005930" placeholder="e.g. 005930 or AAPL">
+                        </div>
+                        <div class="bt-field">
+                            <label for="bt-market">Market</label>
+                            <select id="bt-market">
+                                <option value="krx">KRX</option>
+                                <option value="nasdaq">NASDAQ</option>
+                                <option value="nyse">NYSE</option>
+                                <option value="amex">AMEX</option>
+                            </select>
+                        </div>
+                        <div class="bt-field">
+                            <label for="bt-start">Start Date</label>
+                            <input type="date" id="bt-start">
+                        </div>
+                        <div class="bt-field">
+                            <label for="bt-end">End Date</label>
+                            <input type="date" id="bt-end">
+                        </div>
+                    </div>
+
+                    <div class="bt-section-h">Parameters</div>
+                    <div class="bt-slider-row">
+                        <label>RSI Period</label>
+                        <input type="range" id="bt-rsi-period" min="5" max="30" value="14">
+                        <span class="bt-slider-val" id="bt-rsi-period-v">14</span>
+                    </div>
+                    <div class="bt-slider-row">
+                        <label>Stop Loss</label>
+                        <input type="range" id="bt-stop-loss" min="-50" max="-1" value="-10">
+                        <span class="bt-slider-val" id="bt-stop-loss-v">-10%</span>
+                    </div>
+                    <div class="bt-slider-row">
+                        <label>Cooldown</label>
+                        <input type="range" id="bt-cooldown" min="1" max="30" value="1">
+                        <span class="bt-slider-val" id="bt-cooldown-v">1d</span>
+                    </div>
+
+                    <div class="bt-section-h">Buy Levels (RSI ≤, % of remaining room)</div>
+                    <div class="bt-stage-row"><span>Stage 1</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-1" value="30" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-1" value="50" min="0" max="100" step="1"></div>
+                    <div class="bt-stage-row"><span>Stage 2</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-2" value="25" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-2" value="30" min="0" max="100" step="1"></div>
+                    <div class="bt-stage-row"><span>Stage 3</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-3" value="20" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-3" value="20" min="0" max="100" step="1"></div>
+
+                    <div class="bt-section-h">Sell Levels (RSI ≥, % of position)</div>
+                    <div class="bt-stage-row"><span>Stage 1</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-1" value="65" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-1" value="30" min="0" max="100" step="1"></div>
+                    <div class="bt-stage-row"><span>Stage 2</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-2" value="70" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-2" value="30" min="0" max="100" step="1"></div>
+                    <div class="bt-stage-row"><span>Stage 3</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-3" value="75" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-3" value="40" min="0" max="100" step="1"></div>
+
+                    <div>
+                        <button type="button" id="bt-run" class="bt-run-btn">▶ Run Backtest</button>
+                    </div>
+                </form>
+
+                <div id="bt-error" class="bt-error" style="margin-top: 12px;"></div>
+            </div>
+        </section>
+
+        <section id="bt-results" class="bt-results">
+            <div class="panel">
+                <div class="cards-row">
+                    <div class="card">
+                        <div class="label">Total Return</div>
+                        <div class="value small" id="bt-total"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Buy &amp; Hold</div>
+                        <div class="value small" id="bt-bh"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Alpha</div>
+                        <div class="value small" id="bt-alpha"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Trades</div>
+                        <div class="value small" id="bt-trades"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Buys</div>
+                        <div class="value small" id="bt-buys"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Sells</div>
+                        <div class="value small" id="bt-sells"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Win Rate</div>
+                        <div class="value small" id="bt-winrate"></div>
+                    </div>
+                    <div class="card">
+                        <div class="label">Data Source</div>
+                        <div class="value small"><span id="bt-source"></span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="chart-section" style="margin-top: 16px;">
+                <div class="panel">
+                    <h2>Price Chart</h2>
+                    <div id="bt-price-chart" class="chart-container-small"></div>
+                </div>
+            </div>
+
+            <div class="chart-section" style="margin-top: 16px;">
+                <div class="panel">
+                    <h2>RSI Chart</h2>
+                    <div id="bt-rsi-chart" class="chart-container-small"></div>
+                </div>
+            </div>
+        </section>
+
+        <script>
+        (function() {
+            // Default dates: today and 2 years ago
+            const today = new Date();
+            const twoYrsAgo = new Date(); twoYrsAgo.setFullYear(today.getFullYear() - 2);
+            const fmt = d => d.toISOString().slice(0, 10);
+            document.getElementById('bt-start').value = fmt(twoYrsAgo);
+            document.getElementById('bt-end').value = fmt(today);
+
+            // Slider live values
+            const wireSlider = (id, label) => {
+                const inp = document.getElementById(id);
+                const out = document.getElementById(id + '-v');
+                const update = () => out.textContent = label(inp.value);
+                inp.addEventListener('input', update);
+                update();
+            };
+            wireSlider('bt-rsi-period', v => v);
+            wireSlider('bt-stop-loss', v => v + '%');
+            wireSlider('bt-cooldown', v => v + 'd');
+
+            const colors = {
+                bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
+                oversold: '#10b981', overbought: '#ef4444',
+                buyMarker: '#10b981', sellMarker: '#ef4444', stopMarker: '#dc2626',
+            };
+
+            let priceChart = null, rsiChart = null;
+            let priceSeries = null, rsiSeries = null;
+            let oversoldLine = null, overboughtLine = null;
+
+            function ensureCharts() {
+                const isMobile = window.innerWidth <= 768;
+                if (priceChart) return;
+
+                const priceContainer = document.getElementById('bt-price-chart');
+                priceChart = LightweightCharts.createChart(priceContainer, {
+                    layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
+                    grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+                    rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
+                    width: priceContainer.clientWidth,
+                    height: isMobile ? 250 : 400,
+                    timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
+                });
+                priceSeries = priceChart.addLineSeries({ color: colors.up, lineWidth: 2 });
+
+                const rsiContainer = document.getElementById('bt-rsi-chart');
+                rsiChart = LightweightCharts.createChart(rsiContainer, {
+                    layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
+                    grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+                    rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
+                    width: rsiContainer.clientWidth,
+                    height: isMobile ? 150 : 200,
+                    timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
+                });
+                rsiSeries = rsiChart.addLineSeries({ color: colors.rsi, lineWidth: 1.5 });
+                oversoldLine = rsiChart.addLineSeries({ color: colors.oversold, lineWidth: 1, lineStyle: 2 });
+                overboughtLine = rsiChart.addLineSeries({ color: colors.overbought, lineWidth: 1, lineStyle: 2 });
+
+                // Crosshair sync (same pattern as symbol.html)
+                let syncing = false;
+                priceChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                    if (range) rsiChart.timeScale().setVisibleLogicalRange(range);
+                });
+                rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                    if (range) priceChart.timeScale().setVisibleLogicalRange(range);
+                });
+                priceChart.subscribeCrosshairMove(param => {
+                    if (syncing) return; syncing = true;
+                    if (param.time) rsiChart.setCrosshairPosition(undefined, param.time, rsiSeries);
+                    else rsiChart.clearCrosshairPosition();
+                    syncing = false;
+                });
+                rsiChart.subscribeCrosshairMove(param => {
+                    if (syncing) return; syncing = true;
+                    if (param.time) priceChart.setCrosshairPosition(undefined, param.time, priceSeries);
+                    else priceChart.clearCrosshairPosition();
+                    syncing = false;
+                });
+
+                window.addEventListener('resize', () => {
+                    priceChart.applyOptions({ width: priceContainer.clientWidth });
+                    rsiChart.applyOptions({ width: rsiContainer.clientWidth });
+                });
+            }
+
+            function buildRequest() {
+                const num = id => parseFloat(document.getElementById(id).value);
+                return {
+                    symbol: document.getElementById('bt-symbol').value.trim(),
+                    market: document.getElementById('bt-market').value,
+                    start_date: document.getElementById('bt-start').value,
+                    end_date: document.getElementById('bt-end').value,
+                    rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
+                    stop_loss: num('bt-stop-loss'),
+                    cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
+                    buy_levels: [
+                        [num('bt-buy-rsi-1'), num('bt-buy-p-1') / 100],
+                        [num('bt-buy-rsi-2'), num('bt-buy-p-2') / 100],
+                        [num('bt-buy-rsi-3'), num('bt-buy-p-3') / 100],
+                    ],
+                    sell_levels: [
+                        [num('bt-sell-rsi-1'), num('bt-sell-p-1') / 100],
+                        [num('bt-sell-rsi-2'), num('bt-sell-p-2') / 100],
+                        [num('bt-sell-rsi-3'), num('bt-sell-p-3') / 100],
+                    ],
+                };
+            }
+
+            function showError(msg) {
+                const e = document.getElementById('bt-error');
+                e.textContent = msg;
+                e.classList.add('shown');
+            }
+            function clearError() {
+                document.getElementById('bt-error').classList.remove('shown');
+            }
+
+            function errorMessage(error) {
+                const map = {
+                    'ticker_not_found': '티커를 찾을 수 없습니다 (심볼/마켓을 확인하세요)',
+                    'data_source_timeout': '데이터 소스 응답이 느립니다 (10초 초과). 잠시 후 다시 시도하세요.',
+                    'market_invalid': '잘못된 마켓 입력입니다',
+                    'internal_error': '내부 오류가 발생했습니다',
+                };
+                return map[error] || ('오류: ' + error);
+            }
+
+            function fmtPct(n) {
+                const sign = n >= 0 ? '+' : '';
+                return sign + n.toFixed(2) + '%';
+            }
+
+            function pnlClass(n) { return n >= 0 ? 'positive' : 'negative'; }
+
+            function renderResults(result) {
+                const tot = document.getElementById('bt-total');
+                tot.textContent = fmtPct(result.total_return_pct);
+                tot.className = 'value small ' + pnlClass(result.total_return_pct);
+
+                const bh = document.getElementById('bt-bh');
+                bh.textContent = fmtPct(result.buy_hold_return_pct);
+                bh.className = 'value small ' + pnlClass(result.buy_hold_return_pct);
+
+                const alpha = document.getElementById('bt-alpha');
+                alpha.textContent = fmtPct(result.alpha_pct) + 'p';
+                alpha.className = 'value small ' + pnlClass(result.alpha_pct);
+
+                document.getElementById('bt-trades').textContent = result.num_trades;
+                document.getElementById('bt-buys').textContent = result.num_buys;
+                document.getElementById('bt-sells').textContent = result.num_sells;
+                document.getElementById('bt-winrate').textContent = result.win_rate_pct.toFixed(1) + '%';
+
+                const src = document.getElementById('bt-source');
+                if (result.data_source === 'kis_db') {
+                    src.innerHTML = '<span class="bt-source-pill bt-source-kis">KIS</span>';
+                } else {
+                    src.innerHTML = '<span class="bt-source-pill bt-source-yfinance">yfinance</span>';
+                }
+
+                ensureCharts();
+
+                // Price line
+                const priceData = result.dates.map((d, i) => ({ time: d, value: result.prices[i] }));
+                priceSeries.setData(priceData);
+
+                // Markers — must be sorted ASC by time
+                const markers = [
+                    ...result.buy_trades.map(t => ({
+                        time: t.date, position: 'belowBar', color: colors.buyMarker,
+                        shape: 'arrowUp', text: 'BUY' + t.stage,
+                    })),
+                    ...result.sell_trades.map(t => ({
+                        time: t.date,
+                        position: 'aboveBar',
+                        color: t.reason === 'stop_loss' ? colors.stopMarker : colors.sellMarker,
+                        shape: 'arrowDown',
+                        text: t.reason === 'stop_loss' ? 'STOP'
+                              : t.reason === 'end_of_period' ? 'CLOSE'
+                              : 'SELL' + t.stage,
+                    })),
+                ].sort((a, b) => a.time.localeCompare(b.time));
+                priceSeries.setMarkers(markers);
+
+                // RSI line + 30/70 reference
+                const rsiData = result.dates.map((d, i) => ({ time: d, value: result.rsi_values[i] }));
+                rsiSeries.setData(rsiData);
+                if (rsiData.length >= 2) {
+                    oversoldLine.setData([
+                        { time: rsiData[0].time, value: 30 },
+                        { time: rsiData[rsiData.length - 1].time, value: 30 },
+                    ]);
+                    overboughtLine.setData([
+                        { time: rsiData[0].time, value: 70 },
+                        { time: rsiData[rsiData.length - 1].time, value: 70 },
+                    ]);
+                }
+
+                priceChart.timeScale().fitContent();
+                rsiChart.timeScale().fitContent();
+
+                document.getElementById('bt-results').classList.add('shown');
+            }
+
+            async function runBacktest() {
+                clearError();
+                const btn = document.getElementById('bt-run');
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = '분석 중...';
+
+                try {
+                    const resp = await fetch('/api/backtest', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(buildRequest()),
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) {
+                        if (resp.status === 422 && data.error) {
+                            showError(errorMessage(data.error));
+                        } else if (resp.status === 422 && data.detail) {
+                            // Pydantic validation error array
+                            const msg = Array.isArray(data.detail)
+                                ? data.detail.map(d => d.msg || d).join('; ')
+                                : String(data.detail);
+                            showError(msg);
+                        } else if (resp.status === 429) {
+                            showError('요청이 너무 잦습니다 (분당 10회 제한). 잠시 후 다시 시도하세요.');
+                        } else if (resp.status === 401) {
+                            showError('로그인이 필요합니다.');
+                        } else {
+                            showError(errorMessage(data.error || 'internal_error'));
+                        }
+                        document.getElementById('bt-results').classList.remove('shown');
+                        return;
+                    }
+                    renderResults(data);
+                } catch (e) {
+                    showError('네트워크 오류: ' + e.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+            }
+
+            document.getElementById('bt-run').addEventListener('click', runBacktest);
+        })();
+        </script>
+{% endblock %}

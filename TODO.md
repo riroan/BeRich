@@ -99,3 +99,32 @@
 4. DashboardState 잔여 코드 정리        ← cleanup
 5. Step 4, 5 배포 분리                  ← K8s 완전 독립
 ```
+
+---
+
+# Backtest UI v2 후보 (from /plan-eng-review 2026-05-01)
+
+설계 문서: `~/.gstack/projects/riroan-BeRich/riroan-main-design-20260501-231151.md`
+
+## TODO: 백테스트 데이터 세션 캐시
+**What:** `backtest_symbol_async()` 호출 시 (symbol, market, start_date, end_date) 기준 df를 세션/메모리 캐시. 동일 키로 재요청 시 yfinance/DB 재로드 생략.
+
+**Why:** yfinance fallback 종목으로 슬라이더 조정 반복 시 (RSI period만 14→15 변경) 매 요청 ~1s yfinance 다운로드 낭비. KIS DB hit 종목은 50ms라 영향 적음.
+
+**Pros:** "조정→재실행" UX 매끄러움, yfinance API 호출 횟수 감소 (rate limit 안전 마진).
+
+**Cons:** 캐시 무효화 정책 필요(일봉 업데이트는 장 마감 후 1회), 캐시 권역 선택(in-process dict vs lru_cache vs Redis).
+
+**Context:** 첫 버전은 `functools.lru_cache(maxsize=32)`로 in-process 캐시. df는 작아서 메모리 무시. 일봉 업데이트 시점(KST 장 마감 후 ~16:00) 기준 TTL 만료. 처음 메인 백테스트 디자인과 독립적이어서 별도 PR로 추가 가능.
+
+**Depends on / blocked by:** 없음 — 메인 백테스트 UI 구현 완료 후 별도로.
+
+## TODO: 라이브 strategy와 backtest 엔진 통합
+`scripts/backtest_rsi.py`의 `_run_simulation()`과 `src/strategy/builtin/rsi_mean_reversion.py`가 동일한 RSI Mean Reversion 로직을 두 곳에서 구현. 한쪽만 바뀌면 백테스트 결과와 라이브 동작이 어긋남. v2에서 strategy 모듈을 backtest-friendly하게 리팩터링하여 양쪽 한 코드.
+
+**Depends on:** 메인 백테스트 UI 구현 완료 + dogfood 후 결과 신뢰도가 라이브 의사결정 영향 줄 단계 도달 시.
+
+## TODO: 파라미터 sweep / walk-forward 모드
+2026-04-12 디자인 Approach C에서 deferred. 두 파라미터 세트 동시 실행 후 수익률 곡선 오버레이, 또는 walk-forward 검증.
+
+**Depends on:** 메인 백테스트 UI 구현 + 캐시 추가 후 (sweep은 동일 데이터 다회 시뮬레이션).

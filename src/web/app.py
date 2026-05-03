@@ -9,11 +9,11 @@ from decimal import Decimal
 from typing import Any
 from pathlib import Path
 
-from fastapi import FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
@@ -166,6 +166,39 @@ class PricePoint(BaseModel):
     low: float
     close: float
     volume: int = 0
+
+
+class BacktestRequest(BaseModel):
+    """RSI Mean Reversion backtest parameters."""
+    symbol: str = Field(..., min_length=1, max_length=20)
+    market: str = "krx"
+    start_date: str  # "YYYY-MM-DD"
+    end_date: str    # "YYYY-MM-DD"
+    rsi_period: int = Field(14, ge=5, le=30)
+    stop_loss: float = Field(-10.0, ge=-50.0, le=-1.0)
+    cooldown_days: int = Field(1, ge=1, le=30)
+    # [[rsi_threshold, portion], ...] — 3 stages each
+    buy_levels: list[list[float]] = [[30, 0.5], [25, 0.3], [20, 0.2]]
+    sell_levels: list[list[float]] = [[65, 0.3], [70, 0.3], [75, 0.4]]
+
+    @model_validator(mode="after")
+    def _validate(self):
+        try:
+            start = datetime.fromisoformat(self.start_date)
+            end = datetime.fromisoformat(self.end_date)
+        except ValueError as e:
+            raise ValueError(f"date_range_invalid: {e}")
+        if end <= start:
+            raise ValueError("date_range_invalid: end_date must be after start_date")
+        if (end - start).days > 365 * 5:
+            raise ValueError("date_range_invalid: range exceeds 5 years")
+        for name, levels in (("buy_levels", self.buy_levels), ("sell_levels", self.sell_levels)):
+            if not levels:
+                raise ValueError(f"level_invalid: {name} cannot be empty")
+            for lvl in levels:
+                if not (0 <= lvl[1] <= 1.001):
+                    raise ValueError(f"level_invalid: {name} portion {lvl[1]:.3f} must be in [0, 1]")
+        return self
 
 
 class DashboardState:
@@ -1194,6 +1227,67 @@ def create_app() -> FastAPI:
     async def get_equity_history():
         """Get equity curve data"""
         return {"data": dashboard_state.equity_history}
+
+    # ==================== Backtest ====================
+
+    @app.get("/backtest", response_class=HTMLResponse)
+    async def backtest_page(request: Request):
+        """Backtest UI — slider + price chart with buy/sell markers."""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+        return templates.TemplateResponse(
+            request=request,
+            name="backtest.html",
+            context={"active_page": "backtest"},
+        )
+
+    @app.post("/api/backtest")
+    @limiter.limit("10/minute")
+    async def run_backtest(
+        request: Request,
+        body: BacktestRequest,
+        _: None = Depends(require_auth),
+    ):
+        """Run RSI Mean Reversion backtest. KIS DB first, yfinance fallback."""
+        from scripts.backtest_rsi import backtest_symbol_async
+
+        storage = await _get_web_storage()
+        if storage is None:
+            return JSONResponse({"error": "internal_error"}, status_code=500)
+
+        try:
+            result, err = await backtest_symbol_async(
+                symbol=body.symbol,
+                market=body.market,
+                start_date=body.start_date,
+                end_date=body.end_date,
+                params={
+                    "rsi_period": body.rsi_period,
+                    "stop_loss": body.stop_loss,
+                    "cooldown_days": body.cooldown_days,
+                    "avg_down_levels": body.buy_levels,
+                    "sell_levels": body.sell_levels,
+                },
+                storage=storage,
+            )
+            if err is not None:
+                # ticker_not_found / data_source_timeout → 422
+                return JSONResponse({"error": err}, status_code=422)
+            result["alpha_pct"] = round(
+                result["total_return_pct"] - result["buy_hold_return_pct"], 4
+            )
+            # Strip trades (Trade dataclass) — frontend reads buy_trades/sell_trades payloads
+            result.pop("trades", None)
+            return result
+        except ValueError as e:
+            # Market.from_string raises ValueError for unknown markets
+            logger.warning(f"Backtest validation error: {e}")
+            return JSONResponse({"error": "market_invalid", "detail": str(e)}, status_code=422)
+        except Exception as e:
+            logger.error(f"Backtest error: {e}", exc_info=True)
+            return JSONResponse({"error": "internal_error"}, status_code=500)
+        finally:
+            await storage.close()
 
     # ==================== Trading Control ====================
 
