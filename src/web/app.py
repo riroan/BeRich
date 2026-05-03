@@ -177,6 +177,7 @@ class BacktestRequest(BaseModel):
     rsi_period: int = Field(14, ge=5, le=30)
     stop_loss: float = Field(-10.0, ge=-50.0, le=-1.0)
     cooldown_days: int = Field(1, ge=1, le=30)
+    initial_capital: float = Field(10_000_000, gt=0, le=1e12)
     # [[rsi_threshold, portion], ...] — 3 stages each
     buy_levels: list[list[float]] = [[30, 0.5], [25, 0.3], [20, 0.2]]
     sell_levels: list[list[float]] = [[65, 0.3], [70, 0.3], [75, 0.4]]
@@ -1269,6 +1270,7 @@ def create_app() -> FastAPI:
                     "sell_levels": body.sell_levels,
                 },
                 storage=storage,
+                initial_capital=body.initial_capital,
             )
             if err is not None:
                 # ticker_not_found / data_source_timeout → 422

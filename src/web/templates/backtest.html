@@ -13,6 +13,7 @@
             background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
             padding: 8px 12px; color: var(--text); font-size: 13px;
         }
+        .bt-field input.bt-num { font-variant-numeric: tabular-nums; text-align: right; }
         .bt-slider-row { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; }
         .bt-slider-row label { font-size: 12px; color: var(--dim); }
         .bt-slider-row .bt-slider-val { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
@@ -79,6 +80,10 @@
                             <label for="bt-end">End Date</label>
                             <input type="date" id="bt-end">
                         </div>
+                        <div class="bt-field">
+                            <label for="bt-capital">Initial Capital</label>
+                            <input type="text" inputmode="numeric" id="bt-capital" class="bt-num" value="10,000,000">
+                        </div>
                     </div>
 
                     <div class="bt-section-h">Parameters</div>
@@ -123,14 +128,17 @@
                     <div class="card">
                         <div class="label">Total Return</div>
                         <div class="value small" id="bt-total"></div>
+                        <div class="delta dim" id="bt-total-amt"></div>
                     </div>
                     <div class="card">
                         <div class="label">Buy &amp; Hold</div>
                         <div class="value small" id="bt-bh"></div>
+                        <div class="delta dim" id="bt-bh-amt"></div>
                     </div>
                     <div class="card">
                         <div class="label">Alpha</div>
                         <div class="value small" id="bt-alpha"></div>
+                        <div class="delta dim" id="bt-alpha-amt"></div>
                     </div>
                     <div class="card">
                         <div class="label">Trades</div>
@@ -190,6 +198,20 @@
             wireSlider('bt-rsi-period', v => v);
             wireSlider('bt-stop-loss', v => v + '%');
             wireSlider('bt-cooldown', v => v + 'd');
+
+            // Initial capital — strip non-digits and reformat with thousands separators while typing
+            const capitalInp = document.getElementById('bt-capital');
+            const parseCapital = () => {
+                const n = parseInt((capitalInp.value || '').replace(/[^\d]/g, ''), 10);
+                return Number.isFinite(n) ? n : 0;
+            };
+            capitalInp.addEventListener('input', () => {
+                const caretFromEnd = capitalInp.value.length - capitalInp.selectionStart;
+                const n = parseCapital();
+                capitalInp.value = n > 0 ? n.toLocaleString() : '';
+                const pos = Math.max(0, capitalInp.value.length - caretFromEnd);
+                capitalInp.setSelectionRange(pos, pos);
+            });
 
             const colors = {
                 bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
@@ -266,6 +288,7 @@
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
+                    initial_capital: parseCapital(),
                     buy_levels: [
                         [num('bt-buy-rsi-1'), num('bt-buy-p-1') / 100],
                         [num('bt-buy-rsi-2'), num('bt-buy-p-2') / 100],
@@ -305,18 +328,34 @@
 
             function pnlClass(n) { return n >= 0 ? 'positive' : 'negative'; }
 
-            function renderResults(result) {
+            function fmtMoney(n, market, signed) {
+                if (n == null || !Number.isFinite(n)) return '';
+                const sym = market === 'krx' ? '₩' : '$';
+                const rounded = market === 'krx' ? Math.round(n) : Math.round(n * 100) / 100;
+                const sign = signed ? (n > 0 ? '+' : (n < 0 ? '-' : '')) : '';
+                return sign + sym + Math.abs(rounded).toLocaleString();
+            }
+
+            function renderResults(result, requestedInitial) {
+                const market = result.market;
+                const initial = Number(requestedInitial) || 0;
+                const finalCap = Number(result.final_capital);
+                const bhFinal = initial > 0 ? initial * (1 + result.buy_hold_return_pct / 100) : NaN;
+
                 const tot = document.getElementById('bt-total');
                 tot.textContent = fmtPct(result.total_return_pct);
                 tot.className = 'value small ' + pnlClass(result.total_return_pct);
+                document.getElementById('bt-total-amt').textContent = fmtMoney(finalCap, market);
 
                 const bh = document.getElementById('bt-bh');
                 bh.textContent = fmtPct(result.buy_hold_return_pct);
                 bh.className = 'value small ' + pnlClass(result.buy_hold_return_pct);
+                document.getElementById('bt-bh-amt').textContent = fmtMoney(bhFinal, market);
 
                 const alpha = document.getElementById('bt-alpha');
                 alpha.textContent = fmtPct(result.alpha_pct) + 'p';
                 alpha.className = 'value small ' + pnlClass(result.alpha_pct);
+                document.getElementById('bt-alpha-amt').textContent = fmtMoney(finalCap - bhFinal, market, true);
 
                 document.getElementById('bt-trades').textContent = result.num_trades;
                 document.getElementById('bt-buys').textContent = result.num_buys;
@@ -382,10 +421,11 @@
                 btn.textContent = '분석 중...';
 
                 try {
+                    const reqBody = buildRequest();
                     const resp = await fetch('/api/backtest', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(buildRequest()),
+                        body: JSON.stringify(reqBody),
                     });
                     const data = await resp.json();
                     if (!resp.ok) {
@@ -407,7 +447,7 @@
                         document.getElementById('bt-results').classList.remove('shown');
                         return;
                     }
-                    renderResults(data);
+                    renderResults(data, reqBody.initial_capital);
                 } catch (e) {
                     showError('네트워크 오류: ' + e.message);
                 } finally {
