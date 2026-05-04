@@ -119,20 +119,28 @@ class DashboardSyncMixin:
             if hasattr(self, alert_attr):
                 delattr(self, alert_attr)
 
+    async def _fetch_and_apply_balance(
+        self: "TradingBot", market: Market,
+    ) -> dict:
+        """Fetch balance for market and update corresponding dashboard fields"""
+        balance = await self.broker.get_account_balance(market)
+        logger.debug(f"{market.value} balance response: {balance}")
+        if market == Market.KRX:
+            self.dashboard.balance_krw = balance.get("total_eval", Decimal("0"))
+            self.dashboard.cash_krw = balance.get("cash", Decimal("0"))
+            self.dashboard.pnl_krw = balance.get("profit_loss", Decimal("0"))
+        else:
+            self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
+            self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
+            self.dashboard.pnl_usd = balance.get("profit_loss", Decimal("0"))
+        return balance
+
     async def _update_balances(self: "TradingBot") -> None:
         """Update account balances"""
         try:
-            krw_balance = await self.broker.get_account_balance(Market.KRX)
-            self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
-            self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
-
+            await self._fetch_and_apply_balance(Market.KRX)
             await asyncio.sleep(1)
-
-            usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
-            self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
-            self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
+            await self._fetch_and_apply_balance(Market.NASDAQ)
 
             await self._save_equity_snapshot()
             await self._check_low_cash_alert()

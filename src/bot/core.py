@@ -1,7 +1,6 @@
 """Core TradingBot class"""
 
 import asyncio
-import importlib
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
@@ -20,6 +19,7 @@ from src.utils.scheduler import TradingScheduler
 from src.utils.notifier import DiscordNotifier
 from src.web.app import get_dashboard_state
 
+from src.bot._utils import build_strategy, extract_symbols
 from src.bot.warmup import WarmupManager
 from src.bot.tick_handler import TickHandlerMixin
 from src.bot.dashboard_sync import DashboardSyncMixin
@@ -204,18 +204,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Get account balances
         try:
-            krw_balance = await self.broker.get_account_balance(Market.KRX)
-            logger.debug(f"KRW balance response: {krw_balance}")
-            self.dashboard.balance_krw = krw_balance.get("total_eval", Decimal("0"))
-            self.dashboard.cash_krw = krw_balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_krw = krw_balance.get("profit_loss", Decimal("0"))
+            krw_balance = await self._fetch_and_apply_balance(Market.KRX)
 
             try:
-                usd_balance = await self.broker.get_account_balance(Market.NASDAQ)
-                logger.debug(f"USD balance response: {usd_balance}")
-                self.dashboard.balance_usd = usd_balance.get("total_eval", Decimal("0"))
-                self.dashboard.cash_usd = usd_balance.get("cash", Decimal("0"))
-                self.dashboard.pnl_usd = usd_balance.get("profit_loss", Decimal("0"))
+                await self._fetch_and_apply_balance(Market.NASDAQ)
             except Exception as e:
                 logger.warning(f"Failed to get USD balance: {e}")
 
@@ -266,35 +258,17 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
     def _register_strategy_from_config(self, cfg: dict) -> None:
         """Create and register a strategy instance from DB config"""
         try:
-            class_path = cfg["class_path"]
-            module_path, class_name = class_path.rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            strategy_class = getattr(module, class_name)
-
-            market = Market.from_string(cfg["market"])
-
-            # Extract symbol strings from objects
-            symbols = [
-                s["symbol"] if isinstance(s, dict) else s
-                for s in cfg["symbols"]
-            ]
-
-            if not symbols:
+            if not extract_symbols(cfg["symbols"]):
                 logger.warning(
                     f"No symbols for {cfg['name']}, skipping"
                 )
                 return
 
-            strategy = strategy_class(
-                symbols=symbols,
-                market=market,
-                params=cfg["params"],
-            )
-
+            strategy = build_strategy(cfg)
             self.strategy_engine.register_strategy(strategy)
             logger.info(
                 f"Strategy loaded: {cfg['name']} "
-                f"({len(symbols)} symbols)"
+                f"({len(strategy.symbols)} symbols)"
             )
 
         except Exception as e:
@@ -330,34 +304,17 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
             # Changed or new — create fresh instance
             try:
-                class_path = cfg["class_path"]
-                module_path, class_name = class_path.rsplit(
-                    ".", 1,
-                )
-                module = importlib.import_module(module_path)
-                strategy_class = getattr(module, class_name)
-                market = Market.from_string(cfg["market"])
-
-                symbols = [
-                    s["symbol"] if isinstance(s, dict) else s
-                    for s in cfg["symbols"]
-                ]
-
-                strategy = strategy_class(
-                    symbols=symbols,
-                    market=market,
-                    params=cfg["params"],
-                )
+                strategy = build_strategy(cfg)
 
                 # Initialize new/changed strategy
                 try:
                     historical_bars = {}
-                    for symbol in symbols:
+                    for symbol in strategy.symbols:
                         await asyncio.sleep(0.5)
                         bars = (
                             await self.broker.get_historical_bars(
                                 symbol=symbol,
-                                market=market,
+                                market=strategy.market,
                                 days=strategy.required_history,
                             )
                         )
@@ -391,17 +348,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self, strategy, cfg: dict,
     ) -> bool:
         """Check if a strategy config matches the running instance"""
-        import json
-        symbols = [
-            s["symbol"] if isinstance(s, dict) else s
-            for s in cfg["symbols"]
-        ]
         return (
-            sorted(strategy.symbols) == sorted(symbols)
+            sorted(strategy.symbols) == sorted(extract_symbols(cfg["symbols"]))
             and strategy.params == cfg["params"]
-            and strategy.market == Market.from_string(
-                cfg["market"],
-            )
+            and strategy.market == Market.from_string(cfg["market"])
         )
 
     async def start(self) -> None:

@@ -3,6 +3,8 @@
 from typing import TYPE_CHECKING
 import logging
 
+from src.bot._utils import extract_symbols
+
 if TYPE_CHECKING:
     from src.bot.core import TradingBot
 
@@ -42,16 +44,11 @@ class DataLoaderMixin:
             configs = (
                 await self.storage.get_all_strategy_configs()
             )
-            enabled_symbols = set()
-            for cfg in configs:
-                if not cfg["enabled"]:
-                    continue
-                for s in cfg["symbols"]:
-                    sym = (
-                        s["symbol"]
-                        if isinstance(s, dict) else s
-                    )
-                    enabled_symbols.add(sym)
+            enabled_symbols = {
+                sym
+                for cfg in configs if cfg["enabled"]
+                for sym in extract_symbols(cfg["symbols"])
+            }
 
             all_symbols = await self.storage.get_all_symbols_with_history()
             symbols = [s for s in all_symbols if s in enabled_symbols]

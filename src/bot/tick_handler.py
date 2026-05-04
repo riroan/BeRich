@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 import logging
 
+from src.bot._utils import extract_symbols
 from src.core.events import Event, EventType
 from src.core.types import Bar
 
@@ -53,12 +54,9 @@ class TickHandlerMixin:
             for cfg in configs:
                 if not cfg["enabled"]:
                     continue
-                for s in cfg["symbols"]:
-                    sym = (
-                        s["symbol"]
-                        if isinstance(s, dict) else s
-                    )
-                    symbols_by_strategy[cfg["name"]].add(sym)
+                symbols_by_strategy[cfg["name"]].update(
+                    extract_symbols(cfg["symbols"])
+                )
 
             for strategy in self.strategy_engine.get_strategies():
                 name = strategy.name_with_market
