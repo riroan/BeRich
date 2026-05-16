@@ -1,7 +1,8 @@
 import aiohttp
+import asyncio
 from typing import AsyncIterator
 from datetime import datetime
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_EVEN
 import logging
 
 from src.core.types import (
@@ -22,6 +23,14 @@ from .websocket import KISWebSocket
 logger = logging.getLogger("TradingBot")
 
 
+def _format_overseas_price(price: Decimal | None) -> str:
+    # KIS overseas tick size: 0.01 for ≥$1, 0.0001 for <$1
+    if not price:
+        return "0"
+    tick = Decimal("0.01") if price >= 1 else Decimal("0.0001")
+    return str(price.quantize(tick, rounding=ROUND_HALF_EVEN))
+
+
 class KISBroker:
     """Korea Investment & Securities API Client"""
 
@@ -36,6 +45,7 @@ class KISBroker:
         app_secret: str,
         account_no: str,
         paper_trading: bool = True,
+        hts_id: str = "",
     ):
         self.event_bus = event_bus
         self.paper_trading = paper_trading
@@ -52,6 +62,11 @@ class KISBroker:
         self._mapper = KISMapper()
         self._connected = False
         self._orders: dict[str, Order] = {}
+
+        self._hts_id = hts_id
+        self._exec_listener_task: asyncio.Task | None = None
+        self._exec_poll_task: asyncio.Task | None = None
+        self._stopping = False
 
     @property
     def is_connected(self) -> bool:
@@ -86,8 +101,35 @@ class KISBroker:
             )
         )
 
+        # Start execution-notice listener + polling fallback
+        if self._hts_id:
+            self._stopping = False
+            self._exec_listener_task = asyncio.create_task(
+                self._execution_listener(),
+            )
+            self._exec_poll_task = asyncio.create_task(
+                self._open_orders_poller(),
+            )
+            logger.info("Execution notice listener + poller started")
+        else:
+            logger.warning(
+                "KIS_HTS_ID not set — execution notices disabled, "
+                "orders will remain SUBMITTED in DB until manually synced",
+            )
+
     async def disconnect(self) -> None:
         """Disconnect from KIS API"""
+        self._stopping = True
+        for task in (self._exec_listener_task, self._exec_poll_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
+        self._exec_listener_task = None
+        self._exec_poll_task = None
+
         if self._websocket:
             await self._websocket.disconnect()
         if self._session:
@@ -324,9 +366,28 @@ class KISBroker:
             if data.get("rt_cd") != "0":
                 raise BrokerError(f"Failed to get overseas positions: {data.get('msg1')}")
 
+            output1 = data.get("output1", []) or []
+            summary = [
+                {
+                    "pdno": i.get("ovrs_pdno") or i.get("pdno"),
+                    "cblc": i.get("ovrs_cblc_qty"),
+                    "ccld": i.get("ccld_qty"),
+                }
+                for i in output1
+            ]
+            logger.info(
+                f"Overseas positions [{market.value}] "
+                f"count={len(output1)} items={summary}",
+            )
+
             positions = []
-            for item in data.get("output1", []):
-                qty = int(item.get("ccld_qty", "0") or item.get("ord_qty", "0"))
+            for item in output1:
+                qty = int(
+                    item.get("ovrs_cblc_qty", "0")
+                    or item.get("ccld_qty", "0")
+                    or item.get("ord_qty", "0")
+                    or "0"
+                )
                 if qty > 0:
                     positions.append(self._mapper.map_overseas_position(item, market))
 
@@ -406,7 +467,7 @@ class KISBroker:
             "OVRS_EXCG_CD": exchange_map.get(order.market, "NASD"),
             "PDNO": order.symbol,
             "ORD_QTY": str(order.quantity),
-            "OVRS_ORD_UNPR": str(order.price) if order.price else "0",
+            "OVRS_ORD_UNPR": _format_overseas_price(order.price),
             "ORD_SVR_DVSN_CD": "0",
             "ORD_DVSN": "00" if order.price else "01",  # 00: limit, 01: market
         }
@@ -717,3 +778,202 @@ class KISBroker:
                     source="KISBroker",
                 )
             )
+
+    # ============== Execution-notice listener + polling ==============
+
+    async def _execution_listener(self) -> None:
+        """Supervisor: hold WS connection open, dispatch execution notices.
+
+        Auto-reconnects with exponential backoff (1s → 60s cap). On every
+        successful subscribe the backoff resets. Cancelled cleanly via
+        ``disconnect()``.
+        """
+        backoff = 1.0
+        while not self._stopping:
+            try:
+                await self._websocket.connect(self._session)
+                await self._websocket.subscribe_executions(self._hts_id)
+                backoff = 1.0
+                async for notice in self._websocket.receive_executions():
+                    try:
+                        await self._apply_execution_notice(notice)
+                    except Exception:
+                        logger.exception(
+                            "Failed to apply execution notice",
+                        )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning(
+                    f"Execution WS listener error: {e!r} "
+                    f"(retry in {backoff:.0f}s)",
+                )
+
+            # Tear down before retrying to ensure clean state
+            try:
+                if self._websocket:
+                    await self._websocket.disconnect()
+            except Exception:
+                pass
+
+            if self._stopping:
+                break
+            try:
+                await asyncio.sleep(backoff)
+            except asyncio.CancelledError:
+                break
+            backoff = min(backoff * 2, 60.0)
+
+    async def _apply_execution_notice(self, notice) -> None:
+        """Translate ExecutionNotice → order.status update + ORDER_FILLED."""
+        order = self._orders.get(notice.order_no)
+        if not order:
+            # KIS sometimes zero-pads ODNO, sometimes doesn't
+            order = self._orders.get(notice.order_no.zfill(10))
+        if not order:
+            logger.debug(
+                f"Execution notice for unknown order_no={notice.order_no}; "
+                f"likely placed outside the bot",
+            )
+            return
+
+        if notice.is_rejected:
+            order.status = OrderStatus.REJECTED
+        elif notice.revise_cancel == "2":
+            order.status = OrderStatus.CANCELLED
+        elif notice.is_filled and notice.qty > 0:
+            order.filled_quantity = (order.filled_quantity or 0) + notice.qty
+            order.filled_avg_price = notice.price
+            if order.filled_quantity >= order.quantity:
+                order.status = OrderStatus.FILLED
+            else:
+                order.status = OrderStatus.PARTIAL_FILLED
+        else:
+            # accepted-only (CNTG_YN=N, no fill); nothing to emit
+            return
+
+        logger.info(
+            f"Order {notice.order_no} {notice.symbol} → "
+            f"{order.status.value} (qty={notice.qty}, price={notice.price})",
+        )
+        await self._emit_order_event(order)
+
+    async def _open_orders_poller(self) -> None:
+        """Periodic REST fallback for orders the WS listener may have missed.
+
+        Runs every 5 minutes. Cheaper than the WS path and idempotent — if
+        the WS already updated the order, the order won't be in `stuck` and
+        the poll skips it.
+        """
+        POLL_INTERVAL = 300
+        while not self._stopping:
+            try:
+                await asyncio.sleep(POLL_INTERVAL)
+            except asyncio.CancelledError:
+                break
+            try:
+                await self._sync_open_orders()
+            except Exception as e:
+                logger.warning(f"Open orders polling failed: {e!r}")
+
+    async def _sync_open_orders(self) -> None:
+        stuck = [
+            o for o in self._orders.values()
+            if o.status in (
+                OrderStatus.SUBMITTED, OrderStatus.PARTIAL_FILLED,
+            )
+        ]
+        if not stuck:
+            return
+        logger.info(f"Polling KIS for {len(stuck)} open order(s)")
+        for order in stuck:
+            try:
+                if order.market == Market.KRX:
+                    # Domestic polling not implemented (KRX strategy disabled)
+                    continue
+                await self._poll_overseas_order(order)
+            except Exception as e:
+                logger.warning(
+                    f"Poll failed for {order.order_id}: {e!r}",
+                )
+
+    async def _poll_overseas_order(self, order: Order) -> None:
+        """Query KIS overseas inquire-ccnl for a single open order"""
+        tr_id = "VTTS3035R" if self.paper_trading else "TTTS3035R"
+        endpoint = "/uapi/overseas-stock/v1/trading/inquire-ccnl"
+        headers = self._auth.get_headers(tr_id)
+
+        exchange_map = {
+            Market.NYSE: "NYSE",
+            Market.NASDAQ: "NASD",
+            Market.AMEX: "AMEX",
+        }
+        today = datetime.now().strftime("%Y%m%d")
+
+        params = {
+            "CANO": self._auth.account_no[:8],
+            "ACNT_PRDT_CD": self._auth.account_no[9:],
+            "PDNO": order.symbol,
+            "ORD_STRT_DT": today,
+            "ORD_END_DT": today,
+            "SLL_BUY_DVSN": "00",
+            "CCLD_NCCS_DVSN": "00",
+            "OVRS_EXCG_CD": exchange_map.get(order.market, "NASD"),
+            "SORT_SQN": "DS",
+            "ORD_DT": "",
+            "ORD_GNO_BRNO": "",
+            "ODNO": order.order_id or "",
+            "CTX_AREA_FK200": "",
+            "CTX_AREA_NK200": "",
+        }
+
+        async with self._session.get(
+            f"{self.base_url}{endpoint}",
+            headers=headers, params=params,
+        ) as resp:
+            data = await resp.json()
+
+        if data.get("rt_cd") != "0":
+            logger.warning(
+                f"inquire-ccnl rt_cd={data.get('rt_cd')} "
+                f"msg={data.get('msg1')}",
+            )
+            return
+
+        for row in data.get("output", []) or []:
+            if row.get("odno") != order.order_id:
+                continue
+
+            ft_ccld_qty = int(row.get("ft_ccld_qty", "0") or "0")
+            nccs_qty = int(row.get("nccs_qty", "0") or "0")
+            try:
+                ft_ccld_unpr = Decimal(
+                    row.get("ft_ccld_unpr3")
+                    or row.get("avg_prvs")
+                    or "0",
+                )
+            except Exception:
+                ft_ccld_unpr = Decimal("0")
+
+            prev_filled = order.filled_quantity or 0
+            if ft_ccld_qty <= prev_filled:
+                return  # nothing new
+
+            order.filled_quantity = ft_ccld_qty
+            if ft_ccld_unpr > 0:
+                order.filled_avg_price = ft_ccld_unpr
+            if nccs_qty == 0 and ft_ccld_qty >= order.quantity:
+                order.status = OrderStatus.FILLED
+            else:
+                order.status = OrderStatus.PARTIAL_FILLED
+
+            logger.info(
+                f"[POLL] Order {order.order_id} → {order.status.value} "
+                f"(filled {ft_ccld_qty}/{order.quantity} @ {ft_ccld_unpr})",
+            )
+            await self._emit_order_event(order)
+            return
+
+        logger.debug(
+            f"Order {order.order_id} not in inquire-ccnl response",
+        )

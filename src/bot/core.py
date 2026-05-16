@@ -175,6 +175,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             app_secret=kis_config["app_secret"],
             account_no=kis_config["account_no"],
             paper_trading=kis_config["paper_trading"],
+            hts_id=kis_config.get("hts_id", ""),
         )
 
         # Use PaperBroker if KIS_PAPER_TRADING=true

@@ -71,6 +71,7 @@ class Config:
             "app_secret": os.getenv("KIS_APP_SECRET", ""),
             "account_no": os.getenv("KIS_ACCOUNT_NO", ""),
             "paper_trading": os.getenv("KIS_PAPER_TRADING", "true").lower() == "true",
+            "hts_id": os.getenv("KIS_HTS_ID", ""),
         }
 
     def get_risk_config(self) -> dict:

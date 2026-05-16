@@ -120,7 +120,12 @@ class KISMapper:
     @staticmethod
     def map_overseas_position(data: dict, market: Market) -> Position:
         """Map overseas stock position response"""
-        quantity = int(data.get("ccld_qty", "0") or data.get("ord_qty", "0"))
+        quantity = int(
+            data.get("ovrs_cblc_qty", "0")
+            or data.get("ccld_qty", "0")
+            or data.get("ord_qty", "0")
+            or "0"
+        )
         avg_price = Decimal(data.get("avg_unpr3", "0") or data.get("pchs_avg_pric", "0"))
         current_price = Decimal(data.get("ovrs_now_pric1", "0") or data.get("now_pric2", "0"))
         eval_pnl = Decimal(data.get("frcr_evlu_pfls_amt", "0") or "0")
