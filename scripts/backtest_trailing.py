@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.utils.config import Config
+from scripts._backtest_seed import BACKTEST_STRATEGIES
 
 
 @dataclass
@@ -213,9 +213,6 @@ def backtest_symbol(
 
 
 def main():
-    config = Config("config")
-    config.load()
-
     # Backtest period: 2020-2023 (COVID crash + 2022 bear market)
     start_date = datetime(2020, 1, 1)
     end_date = datetime(2023, 1, 1)
@@ -228,7 +225,7 @@ def main():
 
     all_results = []
 
-    for strategy_config in config.strategies:
+    for strategy_config in BACKTEST_STRATEGIES:
         if not strategy_config.get("enabled"):
             continue
 

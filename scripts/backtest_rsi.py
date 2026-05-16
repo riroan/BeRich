@@ -19,7 +19,7 @@ import yfinance as yf
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.types import Market
-from src.utils.config import Config
+from scripts._backtest_seed import BACKTEST_STRATEGIES
 
 if TYPE_CHECKING:
     from src.data.storage import Storage
@@ -379,9 +379,6 @@ async def backtest_symbol_async(
 
 
 def main():
-    config = Config("config")
-    config.load()
-
     start_date = datetime(2020, 1, 1)
     end_date = datetime(2023, 1, 1)
 
@@ -391,7 +388,7 @@ def main():
     print("=" * 60)
 
     all_results = []
-    for strategy_config in config.strategies:
+    for strategy_config in BACKTEST_STRATEGIES:
         if not strategy_config.get("enabled"):
             continue
         market = strategy_config.get("market", "krx")

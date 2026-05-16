@@ -34,7 +34,6 @@ class TestTradingBot:
             "enabled": False,
             "webhook_url": None,
         })
-        config.strategies = []
         return config
 
     @pytest.fixture

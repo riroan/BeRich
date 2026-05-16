@@ -94,8 +94,7 @@ docker logs quant-bot -f
 ```
 BeRich/
 ├── config/
-│   ├── settings.yaml        # 봇 설정 (워밍업, 리스크)
-│   └── strategies.yaml      # 전략 및 종목 설정 (초기 시딩용)
+│   └── settings.yaml        # 봇 설정 (워밍업, 리스크)
 ├── src/
 │   ├── bot/                  # 봇 코어 (틱 처리, 대시보드 동기화)
 │   ├── broker/
@@ -121,7 +120,7 @@ BeRich/
 
 ### 종목 관리
 
-처음 실행 시 `config/strategies.yaml`에서 DB로 자동 시딩. 이후 웹 `/symbols` 페이지에서 관리.
+전략·종목은 DB(`strategy_configs` 테이블)에서 관리. 웹 `/symbols` 페이지에서 추가/수정.
 - 종목 추가 시 KIS API로 유효성 검증
 - 종목별 최대 포트폴리오 비중(%) 설정 가능
 - 활성/비활성 전환 시 재시작 없이 즉시 반영

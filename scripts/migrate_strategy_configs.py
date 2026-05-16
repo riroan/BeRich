@@ -1,7 +1,7 @@
 """
 Migration: WatchedSymbol + StrategyParams → StrategyConfig
 
-Run this BEFORE removing strategies.yaml and old models.
+One-time migration off the legacy WatchedSymbol/StrategyParams tables.
 Usage: python -m scripts.migrate_strategy_configs
 """
 
@@ -13,7 +13,7 @@ from src.data.storage import Storage
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Hardcoded from current strategies.yaml (DB doesn't have class_path/market)
+# Hardcoded strategy metadata (legacy DB tables lack class_path/market)
 STRATEGY_METADATA = {
     "KRX_RSI_MeanReversion": {
         "class_path": "src.strategy.builtin.rsi_mean_reversion.RSIMeanReversionStrategy",
