@@ -5,7 +5,9 @@ import pytest
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.broker.kis.client import KISBroker
+from src.broker.kis.client import (
+    KISBroker, _canon_odno, _marketable_limit_price,
+)
 from src.core.types import (
     Order, OrderSide, OrderType, OrderStatus, Market,
 )
@@ -121,3 +123,34 @@ class TestReconcileOpenOrders:
         assert changed == []
         assert "O3" not in broker._orders
         broker._query_overseas_fill.assert_not_awaited()
+
+
+class TestOdnoMatching:
+    """ODNO is sometimes zero-padded by KIS — matching must tolerate it."""
+
+    def test_canon_strips_leading_zeros(self):
+        assert _canon_odno("0000123456") == "123456"
+        assert _canon_odno("123456") == "123456"
+        assert _canon_odno("") == "0"
+        assert _canon_odno(None) == "0"
+
+    def test_find_order_by_odno_tolerates_padding(self):
+        b = _make_broker(hts_id="")
+        o = _open_order("0000123456")
+        b._orders["0000123456"] = o
+        # padded stored, unpadded query (the poller/reconcile bug class)
+        assert b._find_order_by_odno("123456") is o
+        assert b._find_order_by_odno("0000123456") is o
+        assert b._find_order_by_odno("999") is None
+
+
+class TestMarketableLimit:
+    """B1.2 — orders priced through the market by the slippage buffer."""
+
+    def test_buy_pays_up_sell_gives_up(self):
+        assert _marketable_limit_price(
+            Decimal("100"), OrderSide.BUY, 0.01
+        ) == Decimal("101.00")
+        assert _marketable_limit_price(
+            Decimal("100"), OrderSide.SELL, 0.01
+        ) == Decimal("99.00")

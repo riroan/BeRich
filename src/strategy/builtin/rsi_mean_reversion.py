@@ -260,6 +260,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                             "reason": f"staged_sell_{stage + 1}",
                             "pnl": pnl,
                             "pnl_pct": pnl_pct,
+                            "avg_price": float(avg_price),
                             "sell_portion": portion,
                             "stage": stage + 1,
                             "total_stages": len(sell_levels),

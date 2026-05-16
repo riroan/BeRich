@@ -31,6 +31,28 @@ def _format_overseas_price(price: Decimal | None) -> str:
     return str(price.quantize(tick, rounding=ROUND_HALF_EVEN))
 
 
+def _marketable_limit_price(
+    price: Decimal, side: OrderSide, buffer: float,
+) -> Decimal:
+    """Marketable limit: price through the market by ``buffer`` so the
+    order fills near-immediately while capping slippage. BUY pays up,
+    SELL gives up. Used instead of a raw market order so a stop-loss
+    reliably executes without unbounded slippage.
+    """
+    if side == OrderSide.BUY:
+        factor = Decimal(str(1 + buffer))
+    else:
+        factor = Decimal(str(1 - buffer))
+    return price * factor
+
+
+def _canon_odno(odno: str | None) -> str:
+    """KIS ODNO is sometimes zero-padded, sometimes not. Canonicalize
+    (strip leading zeros) for matching; keep the raw value for API calls.
+    """
+    return (odno or "").lstrip("0") or "0"
+
+
 class KISBroker:
     """Korea Investment & Securities API Client"""
 
@@ -46,9 +68,11 @@ class KISBroker:
         account_no: str,
         paper_trading: bool = True,
         hts_id: str = "",
+        slippage_buffer: float = 0.01,
     ):
         self.event_bus = event_bus
         self.paper_trading = paper_trading
+        self._slippage_buffer = slippage_buffer
         self.base_url = self.BASE_URL_PAPER if paper_trading else self.BASE_URL_REAL
 
         self._auth = KISAuth(
@@ -463,15 +487,28 @@ class KISBroker:
             Market.AMEX: "AMEX",
         }
 
+        # Marketable limit: KIS overseas market orders are unreliable
+        # (venue/session restricted), so submit a limit priced through
+        # the market by _slippage_buffer. Fills near-immediately yet a
+        # stop-loss can't slip beyond the buffer.
+        if order.price:
+            limit_price = _marketable_limit_price(
+                order.price, order.side, self._slippage_buffer,
+            )
+            ord_dvsn = "00"  # limit
+        else:
+            limit_price = None
+            ord_dvsn = "01"  # market (fallback; price unknown)
+
         body = {
             "CANO": self._auth.account_no[:8],
             "ACNT_PRDT_CD": self._auth.account_no[9:],
             "OVRS_EXCG_CD": exchange_map.get(order.market, "NASD"),
             "PDNO": order.symbol,
             "ORD_QTY": str(order.quantity),
-            "OVRS_ORD_UNPR": _format_overseas_price(order.price),
+            "OVRS_ORD_UNPR": _format_overseas_price(limit_price),
             "ORD_SVR_DVSN_CD": "0",
-            "ORD_DVSN": "00" if order.price else "01",  # 00: limit, 01: market
+            "ORD_DVSN": ord_dvsn,
         }
 
         async with self._session.post(
@@ -826,12 +863,19 @@ class KISBroker:
                 break
             backoff = min(backoff * 2, 60.0)
 
+    def _find_order_by_odno(self, odno: str):
+        """Match an order by ODNO, tolerant of KIS zero-padding."""
+        if (order := self._orders.get(odno)) is not None:
+            return order
+        target = _canon_odno(odno)
+        for oid, o in self._orders.items():
+            if _canon_odno(oid) == target:
+                return o
+        return None
+
     async def _apply_execution_notice(self, notice) -> None:
         """Translate ExecutionNotice → order.status update + ORDER_FILLED."""
-        order = self._orders.get(notice.order_no)
-        if not order:
-            # KIS sometimes zero-pads ODNO, sometimes doesn't
-            order = self._orders.get(notice.order_no.zfill(10))
+        order = self._find_order_by_odno(notice.order_no)
         if not order:
             logger.debug(
                 f"Execution notice for unknown order_no={notice.order_no}; "
@@ -992,7 +1036,7 @@ class KISBroker:
             return False
 
         for row in data.get("output", []) or []:
-            if row.get("odno") != order.order_id:
+            if _canon_odno(row.get("odno")) != _canon_odno(order.order_id):
                 continue
 
             ft_ccld_qty = int(row.get("ft_ccld_qty", "0") or "0")

@@ -175,6 +175,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             account_no=kis_config["account_no"],
             paper_trading=kis_config["paper_trading"],
             hts_id=kis_config.get("hts_id", ""),
+            slippage_buffer=float(
+                self.config.get("trading.slippage_buffer_pct", 0.01)
+            ),
         )
 
         # Use PaperBroker if KIS_PAPER_TRADING=true

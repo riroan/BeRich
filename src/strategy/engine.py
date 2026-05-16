@@ -25,6 +25,9 @@ class StrategyEngine:
         self.notifier = notifier
         self._strategies: list[BaseStrategy] = []
         self._running = False
+        # order_id → cumulative qty already applied to strategies.
+        # Makes fills idempotent and lets partials be applied as deltas.
+        self._applied_fills: dict[str, int] = {}
 
     def register_strategy(self, strategy: BaseStrategy) -> None:
         """Register a strategy"""
@@ -61,6 +64,7 @@ class StrategyEngine:
         self.event_bus.subscribe(EventType.BAR_UPDATE, self._on_bar)
         self.event_bus.subscribe(EventType.QUOTE_UPDATE, self._on_quote)
         self.event_bus.subscribe(EventType.ORDER_FILLED, self._on_fill)
+        self.event_bus.subscribe(EventType.ORDER_PARTIAL_FILLED, self._on_fill)
 
         logger.info("Strategy engine started")
 
@@ -106,21 +110,38 @@ class StrategyEngine:
                         )
 
     async def _on_fill(self, event: Event) -> None:
-        """Handle fill events"""
+        """Apply fills to strategies exactly once, as incremental deltas.
+
+        Routes both ORDER_FILLED and ORDER_PARTIAL_FILLED here.
+        ``order.filled_quantity`` is CUMULATIVE; we apply only the delta
+        versus what was already applied for this order_id. This makes a
+        duplicate/redelivered event a no-op (no position double-count)
+        and accounts partial fills as they happen, so a
+        partial-then-cancelled order still tracks the real shares.
+        """
         order = event.data
+        if not hasattr(order, "symbol"):
+            return
+
+        order_id = order.order_id or ""
+        cumulative = order.filled_quantity or 0
+        applied = self._applied_fills.get(order_id, 0)
+        delta = cumulative - applied
+        if delta <= 0:
+            return  # duplicate event or no new shares
+        self._applied_fills[order_id] = cumulative
+
+        from src.core.types import Fill
+        from decimal import Decimal
 
         for strategy in self._strategies:
-            if hasattr(order, "symbol") and order.symbol in strategy.symbols:
-                # Create a simple fill-like object for the strategy
-                from src.core.types import Fill
-                from decimal import Decimal
-
+            if order.symbol in strategy.symbols:
                 fill = Fill(
-                    order_id=order.order_id or "",
+                    order_id=order_id,
                     symbol=order.symbol,
                     market=order.market,
                     side=order.side,
-                    quantity=order.filled_quantity,
+                    quantity=delta,
                     price=order.filled_avg_price or Decimal("0"),
                     commission=Decimal("0"),
                     timestamp=datetime.now(),

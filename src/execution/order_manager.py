@@ -5,6 +5,7 @@ import logging
 
 from src.core.types import (
     Order,
+    Fill,
     Signal,
     SignalType,
     OrderSide,
@@ -58,6 +59,8 @@ class OrderManager:
         self.event_bus.subscribe(EventType.SIGNAL_GENERATED, self._on_signal)
         self.event_bus.subscribe(EventType.ORDER_FILLED, self._on_fill)
         self.event_bus.subscribe(EventType.ORDER_PARTIAL_FILLED, self._on_partial_fill)
+        self.event_bus.subscribe(EventType.ORDER_CANCELLED, self._on_order_closed)
+        self.event_bus.subscribe(EventType.ORDER_REJECTED, self._on_order_closed)
         logger.info("Order manager started")
 
     async def stop(self) -> None:
@@ -437,33 +440,77 @@ class OrderManager:
         return cancelled
 
     async def _on_fill(self, event: Event) -> None:
-        """Handle fill events"""
+        """Confirmed (full) fill: persist, account PnL, save fill, notify.
+
+        The meta.pop() gates this to orders we submitted and makes a
+        duplicate/redelivered ORDER_FILLED a no-op — no double PnL,
+        no duplicate fill row, no duplicate notification.
+        """
         order: Order = event.data
         if order.order_id in self._active_orders:
             del self._active_orders[order.order_id]
-
-        # Record PnL
-        if order.filled_avg_price and order.side == OrderSide.SELL:
-            pnl = getattr(order, "realized_pnl", None)
-            if pnl is not None:
-                self.risk_manager.record_trade(Decimal(str(pnl)))
-            else:
-                self.risk_manager.record_trade(Decimal("0"))
-
         await self.storage.save_order(order)
 
-        # Confirmed fill — notify with the real fill price/qty. pop() gates
-        # to orders we submitted and makes a duplicate ORDER_FILLED a no-op.
         meta = self._order_meta.pop(order.order_id, None)
-        if meta is not None:
-            await self._send_trade_notification(
-                order, meta,
-                order.filled_avg_price or order.price,
-                order.filled_quantity or order.quantity,
-                submitted=False,
-            )
+        if meta is None:
+            return  # not ours, or already processed
+
+        # Realized PnL from the ACTUAL fill price, not the signal-time
+        # estimate. Needs the position's avg cost (carried in the sell
+        # signal metadata); fall back to the estimate if absent.
+        realized: Decimal | None = None
+        if order.side == OrderSide.SELL and order.filled_avg_price:
+            avg_cost = meta.get("avg_price")
+            if avg_cost:
+                realized = (
+                    Decimal(str(order.filled_avg_price))
+                    - Decimal(str(avg_cost))
+                ) * (order.filled_quantity or 0)
+            else:
+                est = getattr(order, "realized_pnl", None)
+                realized = (
+                    Decimal(str(est)) if est is not None else Decimal("0")
+                )
+            order.realized_pnl = realized
+            self.risk_manager.record_trade(realized)
+
+        # Persist the fill — the live path never did (only PaperBroker's
+        # in-memory list), so the fills table / analytics were empty.
+        await self.storage.save_fill(Fill(
+            order_id=order.order_id or "",
+            symbol=order.symbol,
+            market=order.market,
+            side=order.side,
+            quantity=order.filled_quantity or order.quantity,
+            price=order.filled_avg_price or order.price or Decimal("0"),
+            commission=Decimal("0"),
+            timestamp=datetime.now(),
+            pnl=realized,
+            rsi=meta.get("rsi"),
+        ))
+
+        await self._send_trade_notification(
+            order, meta,
+            order.filled_avg_price or order.price,
+            order.filled_quantity or order.quantity,
+            submitted=False,
+        )
 
     async def _on_partial_fill(self, event: Event) -> None:
         """Handle partial fill events"""
         order: Order = event.data
+        await self.storage.save_order(order)
+
+    async def _on_order_closed(self, event: Event) -> None:
+        """Broker-side CANCELLED/REJECTED: free per-order state.
+
+        OrderManager had no handler for these, so _active_orders /
+        _order_meta leaked for every externally cancelled/rejected
+        order. Persist the terminal status too.
+        """
+        order: Order = event.data
+        oid = order.order_id
+        if oid in self._active_orders:
+            del self._active_orders[oid]
+        self._order_meta.pop(oid, None)
         await self.storage.save_order(order)

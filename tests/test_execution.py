@@ -376,7 +376,7 @@ class TestStart:
     ):
         await order_manager.start()
 
-        assert event_bus.subscribe.call_count == 3
+        assert event_bus.subscribe.call_count == 5
         subscribed = [
             c.args[0]
             for c in event_bus.subscribe.call_args_list
@@ -384,6 +384,8 @@ class TestStart:
         assert EventType.SIGNAL_GENERATED in subscribed
         assert EventType.ORDER_FILLED in subscribed
         assert EventType.ORDER_PARTIAL_FILLED in subscribed
+        assert EventType.ORDER_CANCELLED in subscribed
+        assert EventType.ORDER_REJECTED in subscribed
 
 
 def _make_order(
@@ -516,3 +518,82 @@ class TestTradeNotification:
             is True
         )
         notifier.notify_buy_executed.assert_not_awaited()
+
+
+class TestFillAccounting:
+    """B2.4/B2.5/B2.2 — fill persisted, PnL from fill price, idempotent."""
+
+    @pytest.fixture
+    def om(self, event_bus, broker, risk_manager, storage):
+        return OrderManager(
+            event_bus=event_bus, broker=broker,
+            risk_manager=risk_manager, storage=storage,
+            notifier=AsyncMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_sell_pnl_from_actual_fill_price(self, om):
+        order = _make_order(side=OrderSide.SELL, quantity=10,
+                            price=Decimal("100"), order_id="order-123")
+        order.filled_avg_price = Decimal("104")
+        order.filled_quantity = 10
+        om._order_meta["order-123"] = {
+            "reason": "staged_sell_1", "avg_price": 100.0, "rsi": 72.0,
+        }
+        ev = Event(event_type=EventType.ORDER_FILLED, data=order,
+                   timestamp=datetime.now(), source="t")
+
+        await om._on_fill(ev)
+
+        # realized = (104 - 100) × 10 = 40, from the REAL fill price
+        om.risk_manager.record_trade.assert_called_once_with(Decimal("40"))
+        om.storage.save_fill.assert_awaited_once()
+        saved = om.storage.save_fill.call_args.args[0]
+        assert saved.price == Decimal("104")
+        assert saved.quantity == 10
+        assert saved.pnl == Decimal("40")
+
+    @pytest.mark.asyncio
+    async def test_duplicate_fill_no_double_pnl_or_fill(self, om):
+        order = _make_order(side=OrderSide.SELL, quantity=5,
+                            price=Decimal("50"), order_id="o1")
+        order.filled_avg_price = Decimal("60")
+        order.filled_quantity = 5
+        om._order_meta["o1"] = {"reason": "staged_sell_1", "avg_price": 50.0}
+        ev = Event(event_type=EventType.ORDER_FILLED, data=order,
+                   timestamp=datetime.now(), source="t")
+
+        await om._on_fill(ev)
+        await om._on_fill(ev)  # redelivered
+
+        assert om.risk_manager.record_trade.call_count == 1
+        assert om.storage.save_fill.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_sell_pnl_falls_back_to_estimate(self, om):
+        order = _make_order(side=OrderSide.SELL, quantity=4,
+                            price=Decimal("10"), order_id="o2")
+        order.filled_avg_price = Decimal("11")
+        order.filled_quantity = 4
+        order.realized_pnl = Decimal("7")  # signal-time estimate
+        om._order_meta["o2"] = {"reason": "staged_sell_1"}  # no avg_price
+        ev = Event(event_type=EventType.ORDER_FILLED, data=order,
+                   timestamp=datetime.now(), source="t")
+
+        await om._on_fill(ev)
+
+        om.risk_manager.record_trade.assert_called_once_with(Decimal("7"))
+
+    @pytest.mark.asyncio
+    async def test_cancelled_order_frees_state(self, om):
+        order = _make_order(order_id="c1")
+        om._active_orders["c1"] = order
+        om._order_meta["c1"] = {"reason": "x"}
+        ev = Event(event_type=EventType.ORDER_CANCELLED, data=order,
+                   timestamp=datetime.now(), source="t")
+
+        await om._on_order_closed(ev)
+
+        assert "c1" not in om._active_orders
+        assert "c1" not in om._order_meta
+        om.storage.save_order.assert_awaited()
