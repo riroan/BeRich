@@ -23,11 +23,18 @@ class DashboardSyncMixin:
         try:
             strategy_states = self._get_strategy_states()
 
-            for market in [Market.KRX, Market.NASDAQ, Market.NYSE, Market.AMEX]:
+            # Skip KRX entirely when running US-only — fetching KRX
+            # positions/balance every tick is pure wasted API there.
+            us_only = bool(self.scheduler and self.scheduler.us_only)
+            markets = [Market.NASDAQ, Market.NYSE, Market.AMEX]
+            if not us_only:
+                markets.insert(0, Market.KRX)
+
+            for market in markets:
                 await self._update_market_positions(market, strategy_states)
                 await asyncio.sleep(1)
 
-            await self._update_balances()
+            await self._update_balances(us_only)
 
         except Exception as e:
             logger.debug(f"Error updating dashboard positions: {e}")
@@ -135,11 +142,14 @@ class DashboardSyncMixin:
             self.dashboard.pnl_usd = balance.get("profit_loss", Decimal("0"))
         return balance
 
-    async def _update_balances(self: "TradingBot") -> None:
+    async def _update_balances(
+        self: "TradingBot", us_only: bool = False,
+    ) -> None:
         """Update account balances"""
         try:
-            await self._fetch_and_apply_balance(Market.KRX)
-            await asyncio.sleep(1)
+            if not us_only:
+                await self._fetch_and_apply_balance(Market.KRX)
+                await asyncio.sleep(1)
             await self._fetch_and_apply_balance(Market.NASDAQ)
 
             await self._save_equity_snapshot()
