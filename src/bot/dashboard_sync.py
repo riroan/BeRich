@@ -152,6 +152,13 @@ class DashboardSyncMixin:
                 await asyncio.sleep(1)
             await self._fetch_and_apply_balance(Market.NASDAQ)
 
+            # Keep risk equity tracking live USD balance so the
+            # equity-pct limits scale intraday.
+            if self.risk_manager and self.dashboard.balance_usd > 0:
+                self.risk_manager.update_account_value(
+                    self.dashboard.balance_usd
+                )
+
             await self._save_equity_snapshot()
             await self._check_low_cash_alert()
 

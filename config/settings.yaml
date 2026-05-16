@@ -15,6 +15,7 @@ trading:
   check_interval: 120  # Price check interval in seconds
   paper_cash_usd: 10000  # Initial paper trading cash (USD)
   paper_cash_krw: 0      # Initial paper trading cash (KRW)
+  slippage_buffer_pct: 0.01  # Marketable-limit buffer: BUY +1%, SELL -1%
 
 # Database
 database:
@@ -22,12 +23,13 @@ database:
 
 # Risk Management
 risk:
-  max_daily_loss: 1000000          # Maximum daily loss (KRW)
+  # Money limits are FRACTIONS of account equity (USD), not absolute
+  # amounts — currency-correct and auto-scaling with the account.
+  max_daily_loss_pct: 0.03         # Halt for the day at -3% of equity
   max_daily_trades: 50             # Maximum trades per day
-  max_position_value: 10000000     # Maximum position value per stock
-  max_total_exposure: 100000000    # Maximum total exposure
-  max_concentration: 0.25          # Maximum single stock concentration (25%)
-  max_drawdown: 5000000            # Maximum drawdown
+  max_position_pct: 0.25           # Max 25% of equity per single stock
+  max_total_exposure_pct: 1.0      # Max 100% of equity invested
+  max_drawdown_pct: 0.15           # 15% of equity (reporting only)
 
   position_sizing:
     method: "fixed_risk"           # fixed, fixed_risk, kelly

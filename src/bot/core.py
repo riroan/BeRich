@@ -102,20 +102,19 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Initialize broker first (needed for account balance)
         await self._initialize_broker()
 
-        # FIX-005: Use actual account balance instead of hardcoded 100M
+        # US-only bot: risk equity = USD overseas total eval, already
+        # fetched into the dashboard by _initialize_broker above. If it's
+        # 0 we FAIL SAFE — the equity-pct risk gates then reject every
+        # order — rather than fall back to a phantom KRW figure that
+        # silently disables all risk limits.
         risk_config = self.config.get_risk_config()
         limits = RiskLimits.from_config(risk_config)
-        try:
-            balances = await self.broker.get_account_balance()
-            account_value = Decimal(str(
-                balances.get("total_usd", 0) + balances.get("total_krw", 0)
-            ))
-            if account_value <= 0:
-                account_value = Decimal("100000000")
-                logger.warning("Account balance is 0, using fallback 100M for risk limits")
-        except Exception as e:
-            account_value = Decimal("100000000")
-            logger.warning(f"Failed to get account balance, using fallback 100M: {e}")
+        account_value = self.dashboard.balance_usd or Decimal("0")
+        if account_value <= 0:
+            logger.critical(
+                "Account value is 0 — risk limits will reject ALL orders "
+                "until a valid USD balance is available",
+            )
         self.risk_manager = RiskManager(
             limits=limits,
             account_value=account_value,
@@ -203,17 +202,15 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         await self.broker.connect()
 
-        # Get account balances
+        # Get account balances (populates dashboard.balance_usd/krw;
+        # risk_manager equity is derived from balance_usd after this).
         try:
-            krw_balance = await self._fetch_and_apply_balance(Market.KRX)
+            await self._fetch_and_apply_balance(Market.KRX)
 
             try:
                 await self._fetch_and_apply_balance(Market.NASDAQ)
             except Exception as e:
                 logger.warning(f"Failed to get USD balance: {e}")
-
-            total_eval = krw_balance.get("total_eval", Decimal("100000000"))
-            self.risk_manager.update_account_value(total_eval)
 
             logger.info(
                 f"Account balance - KRW: {self.dashboard.balance_krw:,.0f}, "

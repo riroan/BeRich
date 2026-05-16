@@ -34,29 +34,47 @@ class RiskManager:
         """Update position state"""
         self._positions = {p.symbol: p for p in positions}
 
+    def _pct(self, fraction: float) -> Decimal:
+        """Absolute limit = current equity × fraction.
+
+        Equity ≤ 0 (unknown balance) ⇒ 0 ⇒ every priced order is
+        rejected. Fail-safe: never trade on unknown equity.
+        """
+        equity = self.account_value if self.account_value > 0 else Decimal("0")
+        return equity * Decimal(str(fraction))
+
     def validate_order(self, order: Order) -> tuple[bool, str | None]:
         """Validate order against risk limits"""
         self._check_daily_reset()
 
-        # 1. Daily loss limit
-        if self._daily_pnl < -self.limits.max_daily_loss:
-            return False, f"Daily loss limit exceeded: {self._daily_pnl}"
+        # 1. Daily loss limit (fraction of equity)
+        max_daily_loss = self._pct(self.limits.max_daily_loss_pct)
+        if self._daily_pnl < -max_daily_loss:
+            return False, (
+                f"Daily loss limit exceeded: {self._daily_pnl} "
+                f"(limit -{max_daily_loss})"
+            )
 
         # 2. Daily trade count
         if self._daily_trades >= self.limits.max_daily_trades:
             return False, f"Daily trade limit exceeded: {self._daily_trades}"
 
-        # 3. Position value limit
+        # 3. Position value limit (fraction of equity, per symbol)
         if order.price:
             position_value = order.quantity * order.price
-            if position_value > self.limits.max_position_value:
-                return False, f"Position value too large: {position_value}"
+            max_position_value = self._pct(self.limits.max_position_pct)
+            if position_value > max_position_value:
+                return False, (
+                    f"Position value too large: {position_value} "
+                    f"(limit {max_position_value})"
+                )
 
-            # 4. Total exposure limit
+            # 4. Total exposure limit (fraction of equity)
             total_exposure = sum(
                 abs(p.quantity * p.current_price) for p in self._positions.values()
             )
-            if total_exposure + position_value > self.limits.max_total_exposure:
+            max_total_exposure = self._pct(self.limits.max_total_exposure_pct)
+            if total_exposure + position_value > max_total_exposure:
                 return False, "Total exposure limit exceeded"
 
         # 5. Position quantity limit
@@ -93,10 +111,11 @@ class RiskManager:
         # Apply limits
         quantity = min(quantity, self.limits.max_position_quantity)
 
-        # Check position value limit
+        # Check position value limit (fraction of equity)
+        max_position_value = self._pct(self.limits.max_position_pct)
         position_value = quantity * price
-        if position_value > self.limits.max_position_value:
-            quantity = int(self.limits.max_position_value / price)
+        if position_value > max_position_value:
+            quantity = int(max_position_value / price)
 
         return max(0, quantity)
 
@@ -117,9 +136,10 @@ class RiskManager:
 
     def get_daily_stats(self) -> dict:
         """Get daily statistics"""
+        max_daily_loss = self._pct(self.limits.max_daily_loss_pct)
         return {
             "daily_pnl": self._daily_pnl,
             "daily_trades": self._daily_trades,
             "remaining_trades": self.limits.max_daily_trades - self._daily_trades,
-            "remaining_loss_budget": self.limits.max_daily_loss + self._daily_pnl,
+            "remaining_loss_budget": max_daily_loss + self._daily_pnl,
         }
