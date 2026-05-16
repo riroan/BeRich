@@ -43,6 +43,11 @@ class OrderManager:
 
         self._pending_orders: dict[str, Order] = {}
         self._active_orders: dict[str, Order] = {}
+        # Signal metadata kept per order_id from submit until fill, so the
+        # fill notification can include rsi/stage/reason. Doubles as the
+        # gate that limits fill notifications to orders we submitted and
+        # makes them idempotent (pop on first ORDER_FILLED).
+        self._order_meta: dict[str, dict] = {}
         # FIX-001: Duplicate order prevention
         # Key: (symbol, side) → timestamp of last order
         self._recent_orders: dict[tuple[str, str], datetime] = {}
@@ -265,6 +270,7 @@ class OrderManager:
             # FIX-003: Register in active_orders BEFORE submit to prevent lost fills
             order_id = await self.broker.submit_order(order)
             self._active_orders[order_id] = order
+            self._order_meta[order_id] = signal_metadata or {}
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
 
@@ -307,54 +313,12 @@ class OrderManager:
                 "price": float(order.price),
             })
 
-            # Send Discord notification based on order type
-            if self.notifier:
-                market_type = "KRX" if order.market.value == "krx" else "USD"
-
-                if order.side == OrderSide.BUY:
-                    # Buy execution notification
-                    stage = signal_metadata.get("stage", 1) if signal_metadata else 1
-                    total_stages = signal_metadata.get("total_stages", 3) if signal_metadata else 3
-                    await self.notifier.notify_buy_executed(
-                        symbol=order.symbol,
-                        price=order.price,
-                        quantity=order.quantity,
-                        rsi=rsi or 0,
-                        stage=stage,
-                        total_stages=total_stages,
-                        market=market_type,
-                    )
-                elif action == "stop_loss":
-                    # Stop loss execution notification (HIGH PRIORITY)
-                    pnl = signal_metadata.get("pnl", Decimal("0")) if signal_metadata else Decimal("0")
-                    pnl_pct = signal_metadata.get("pnl_pct", 0) if signal_metadata else 0
-                    await self.notifier.notify_stop_loss_executed(
-                        symbol=order.symbol,
-                        price=order.price,
-                        quantity=order.quantity,
-                        pnl=pnl,
-                        pnl_pct=pnl_pct,
-                        market=market_type,
-                    )
-                else:
-                    # Sell execution notification
-                    stage = signal_metadata.get("stage", 1) if signal_metadata else 1
-                    total_stages = signal_metadata.get("total_stages", 3) if signal_metadata else 3
-                    pnl = signal_metadata.get("pnl", Decimal("0")) if signal_metadata else Decimal("0")
-                    pnl_pct = signal_metadata.get("pnl_pct", 0) if signal_metadata else 0
-                    is_partial = action == "partial_sell"
-                    await self.notifier.notify_sell_executed(
-                        symbol=order.symbol,
-                        price=order.price,
-                        quantity=order.quantity,
-                        rsi=rsi or 0,
-                        pnl=pnl,
-                        pnl_pct=pnl_pct,
-                        stage=stage,
-                        total_stages=total_stages,
-                        is_partial=is_partial,
-                        market=market_type,
-                    )
+            # Order accepted by broker — estimated price, fill not confirmed
+            await self._send_trade_notification(
+                order, signal_metadata,
+                order.price, order.quantity,
+                submitted=True,
+            )
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
 
@@ -387,6 +351,68 @@ class OrderManager:
                 )
             )
 
+    async def _send_trade_notification(
+        self,
+        order: Order,
+        signal_metadata: dict | None,
+        price: Decimal,
+        quantity: int,
+        *,
+        submitted: bool,
+    ) -> None:
+        """Dispatch the buy / sell / stop-loss Discord notification.
+
+        ``submitted=True`` fires at broker acceptance with the estimated
+        price; ``submitted=False`` fires on the confirmed fill with the
+        real fill price/qty. Branching mirrors the dashboard ``action``
+        logic (stop_loss / staged_sell from signal reason).
+        """
+        if not self.notifier:
+            return
+
+        meta = signal_metadata or {}
+        market_type = "KRX" if order.market.value == "krx" else "USD"
+        reason = str(meta.get("reason", ""))
+        rsi = meta.get("rsi") or 0
+        stage = meta.get("stage", 1)
+        total_stages = meta.get("total_stages", 3)
+
+        if order.side == OrderSide.BUY:
+            await self.notifier.notify_buy_executed(
+                symbol=order.symbol,
+                price=price,
+                quantity=quantity,
+                rsi=rsi,
+                stage=stage,
+                total_stages=total_stages,
+                market=market_type,
+                submitted=submitted,
+            )
+        elif reason == "stop_loss":
+            await self.notifier.notify_stop_loss_executed(
+                symbol=order.symbol,
+                price=price,
+                quantity=quantity,
+                pnl=meta.get("pnl", Decimal("0")),
+                pnl_pct=meta.get("pnl_pct", 0),
+                market=market_type,
+                submitted=submitted,
+            )
+        else:
+            await self.notifier.notify_sell_executed(
+                symbol=order.symbol,
+                price=price,
+                quantity=quantity,
+                rsi=rsi,
+                pnl=meta.get("pnl", Decimal("0")),
+                pnl_pct=meta.get("pnl_pct", 0),
+                stage=stage,
+                total_stages=total_stages,
+                is_partial="staged_sell" in reason,
+                market=market_type,
+                submitted=submitted,
+            )
+
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel an order"""
         order = self._active_orders.get(order_id)
@@ -396,6 +422,7 @@ class OrderManager:
         success = await self.broker.cancel_order(order_id, order.market)
         if success:
             del self._active_orders[order_id]
+            self._order_meta.pop(order_id, None)
             await self.storage.save_order(order)
         return success
 
@@ -424,6 +451,17 @@ class OrderManager:
                 self.risk_manager.record_trade(Decimal("0"))
 
         await self.storage.save_order(order)
+
+        # Confirmed fill — notify with the real fill price/qty. pop() gates
+        # to orders we submitted and makes a duplicate ORDER_FILLED a no-op.
+        meta = self._order_meta.pop(order.order_id, None)
+        if meta is not None:
+            await self._send_trade_notification(
+                order, meta,
+                order.filled_avg_price or order.price,
+                order.filled_quantity or order.quantity,
+                submitted=False,
+            )
 
     async def _on_partial_fill(self, event: Event) -> None:
         """Handle partial fill events"""

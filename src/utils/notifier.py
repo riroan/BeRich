@@ -221,19 +221,26 @@ class DiscordNotifier:
         stage: int,
         total_stages: int,
         market: str = "USD",
+        submitted: bool = False,
     ) -> bool:
-        """Notify buy order executed"""
+        """Notify buy order submitted (submitted=True) or actually filled"""
         stage_text = f"{stage}차 매수" if stage > 0 else "매수"
-        value = price * quantity
+        title = f"{stage_text} 주문 접수" if submitted else f"{stage_text} 체결"
+        price_label = "예상가" if submitted else "체결가"
         price_fmt = f"${price:,.2f}" if market != "KRX" else f"{price:,.0f}원"
-        value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
+
+        amount_line = ""
+        if not submitted:
+            value = price * quantity
+            value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
+            amount_line = f"금액     : {value_fmt}\n"
 
         message = (
-            f"**[{symbol}] {stage_text} 체결**\n"
+            f"**[{symbol}] {title}**\n"
             f"```\n"
-            f"가격     : {price_fmt}\n"
+            f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
-            f"금액     : {value_fmt}\n"
+            f"{amount_line}"
             f"RSI      : {rsi:.1f}\n"
             f"단계     : {stage}/{total_stages}\n"
             f"```"
@@ -252,26 +259,34 @@ class DiscordNotifier:
         total_stages: int,
         is_partial: bool = False,
         market: str = "USD",
+        submitted: bool = False,
     ) -> bool:
-        """Notify sell order executed"""
+        """Notify sell order submitted (submitted=True) or actually filled"""
         if is_partial:
             stage_text = f"{stage}차 부분 매도"
         else:
             stage_text = "전량 매도"
-
-        value = price * quantity
+        title = f"{stage_text} 주문 접수" if submitted else f"{stage_text} 체결"
+        price_label = "예상가" if submitted else "체결가"
         price_fmt = f"${price:,.2f}" if market != "KRX" else f"{price:,.0f}원"
-        value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
-        pnl_fmt = f"${pnl:+,.2f}" if market != "KRX" else f"{pnl:+,.0f}원"
+
+        amount_line = ""
+        pnl_line = ""
+        if not submitted:
+            value = price * quantity
+            value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
+            pnl_fmt = f"${pnl:+,.2f}" if market != "KRX" else f"{pnl:+,.0f}원"
+            amount_line = f"금액     : {value_fmt}\n"
+            pnl_line = f"수익     : {pnl_fmt} ({pnl_pct:+.1f}%)\n"
 
         message = (
-            f"**[{symbol}] {stage_text} 체결**\n"
+            f"**[{symbol}] {title}**\n"
             f"```\n"
-            f"가격     : {price_fmt}\n"
+            f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
-            f"금액     : {value_fmt}\n"
+            f"{amount_line}"
             f"RSI      : {rsi:.1f}\n"
-            f"수익     : {pnl_fmt} ({pnl_pct:+.1f}%)\n"
+            f"{pnl_line}"
             f"단계     : {stage}/{total_stages}\n"
             f"```"
         )
@@ -286,20 +301,29 @@ class DiscordNotifier:
         pnl: Decimal,
         pnl_pct: float,
         market: str = "USD",
+        submitted: bool = False,
     ) -> bool:
-        """Notify stop loss executed - HIGH PRIORITY"""
-        value = price * quantity
+        """Notify stop loss submitted (submitted=True) or executed - HIGH PRIORITY"""
+        title = "손절 주문 접수" if submitted else "손절 실행"
+        price_label = "예상가" if submitted else "체결가"
         price_fmt = f"${price:,.2f}" if market != "KRX" else f"{price:,.0f}원"
-        value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
-        pnl_fmt = f"${pnl:+,.2f}" if market != "KRX" else f"{pnl:+,.0f}원"
+
+        detail_lines = ""
+        if not submitted:
+            value = price * quantity
+            value_fmt = f"${value:,.2f}" if market != "KRX" else f"{value:,.0f}원"
+            pnl_fmt = f"${pnl:+,.2f}" if market != "KRX" else f"{pnl:+,.0f}원"
+            detail_lines = (
+                f"금액     : {value_fmt}\n"
+                f"손실     : {pnl_fmt} ({pnl_pct:+.1f}%)\n"
+            )
 
         message = (
-            f"🚨 **[{symbol}] 손절 실행** 🚨\n"
+            f"🚨 **[{symbol}] {title}** 🚨\n"
             f"```\n"
-            f"가격     : {price_fmt}\n"
+            f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
-            f"금액     : {value_fmt}\n"
-            f"손실     : {pnl_fmt} ({pnl_pct:+.1f}%)\n"
+            f"{detail_lines}"
             f"```"
         )
         return await self.send(message, color=COLOR_RED)

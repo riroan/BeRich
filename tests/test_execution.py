@@ -9,6 +9,7 @@ from src.core.types import (
     Signal,
     SignalType,
     Market,
+    Order,
     OrderSide,
     OrderType,
 )
@@ -383,3 +384,135 @@ class TestStart:
         assert EventType.SIGNAL_GENERATED in subscribed
         assert EventType.ORDER_FILLED in subscribed
         assert EventType.ORDER_PARTIAL_FILLED in subscribed
+
+
+def _make_order(
+    symbol="BAC",
+    market=Market.NYSE,
+    side=OrderSide.BUY,
+    quantity=3,
+    price=Decimal("49.50"),
+    order_id=None,
+):
+    return Order(
+        symbol=symbol,
+        market=market,
+        side=side,
+        order_type=OrderType.MARKET,
+        quantity=quantity,
+        price=price,
+        order_id=order_id,
+    )
+
+
+class TestTradeNotification:
+    """Submit-time vs fill-time notification semantics"""
+
+    @pytest.fixture
+    def om_with_notifier(self, event_bus, broker, risk_manager, storage):
+        notifier = AsyncMock()
+        om = OrderManager(
+            event_bus=event_bus,
+            broker=broker,
+            risk_manager=risk_manager,
+            storage=storage,
+            notifier=notifier,
+        )
+        return om, notifier
+
+    @pytest.mark.asyncio
+    async def test_submit_notifies_submitted_with_estimated_price(
+        self, om_with_notifier,
+    ):
+        """_submit_order fires submitted=True with the order's est. price"""
+        om, notifier = om_with_notifier
+        order = _make_order(price=Decimal("49.50"), quantity=3)
+        meta = {
+            "reason": "avg_down_stage_1",
+            "rsi": 33.5, "stage": 1, "total_stages": 3,
+        }
+
+        with patch(PATCH_DASHBOARD, return_value=MagicMock()):
+            await om._submit_order(order, signal_metadata=meta)
+
+        notifier.notify_buy_executed.assert_awaited_once()
+        kw = notifier.notify_buy_executed.call_args.kwargs
+        assert kw["submitted"] is True
+        assert kw["price"] == Decimal("49.50")
+        assert kw["quantity"] == 3
+        # metadata retained for the eventual fill notification
+        assert om._order_meta["order-123"]["rsi"] == 33.5
+
+    @pytest.mark.asyncio
+    async def test_fill_notifies_with_real_price_and_is_idempotent(
+        self, om_with_notifier,
+    ):
+        """_on_fill fires submitted=False with the actual fill price/qty,
+        once only even if ORDER_FILLED is delivered twice."""
+        om, notifier = om_with_notifier
+        order = _make_order(
+            price=Decimal("49.50"), quantity=3, order_id="order-123",
+        )
+        order.filled_avg_price = Decimal("49.48")
+        order.filled_quantity = 3
+        om._order_meta["order-123"] = {
+            "reason": "avg_down_stage_1",
+            "rsi": 33.5, "stage": 1, "total_stages": 3,
+        }
+        event = Event(
+            event_type=EventType.ORDER_FILLED,
+            data=order,
+            timestamp=datetime.now(),
+            source="test",
+        )
+
+        await om._on_fill(event)
+        await om._on_fill(event)  # duplicate delivery
+
+        notifier.notify_buy_executed.assert_awaited_once()
+        kw = notifier.notify_buy_executed.call_args.kwargs
+        assert kw["submitted"] is False
+        assert kw["price"] == Decimal("49.48")  # real fill, not 49.50
+        assert kw["quantity"] == 3
+        assert "order-123" not in om._order_meta
+
+    @pytest.mark.asyncio
+    async def test_fill_for_unknown_order_does_not_notify(
+        self, om_with_notifier,
+    ):
+        """Orders not submitted by us (no meta) get no fill notification"""
+        om, notifier = om_with_notifier
+        order = _make_order(order_id="external-999")
+        order.filled_avg_price = Decimal("10")
+        order.filled_quantity = 1
+        event = Event(
+            event_type=EventType.ORDER_FILLED,
+            data=order,
+            timestamp=datetime.now(),
+            source="test",
+        )
+
+        await om._on_fill(event)
+
+        notifier.notify_buy_executed.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_stop_loss_submit_routes_to_stop_loss_notifier(
+        self, om_with_notifier,
+    ):
+        """reason=stop_loss on a SELL routes to notify_stop_loss_executed"""
+        om, notifier = om_with_notifier
+        order = _make_order(
+            side=OrderSide.SELL, quantity=10, price=Decimal("45"),
+        )
+        meta = {"reason": "stop_loss", "pnl": Decimal("-50"), "pnl_pct": -10}
+
+        with patch(PATCH_DASHBOARD, return_value=MagicMock()):
+            await om._submit_order(order, signal_metadata=meta)
+
+        notifier.notify_stop_loss_executed.assert_awaited_once()
+        assert (
+            notifier.notify_stop_loss_executed.call_args.kwargs["submitted"]
+            is True
+        )
+        notifier.notify_buy_executed.assert_not_awaited()
