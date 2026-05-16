@@ -101,20 +101,22 @@ class KISBroker:
             )
         )
 
-        # Start execution-notice listener + polling fallback
+        # REST polling fallback always runs — it only needs account_no +
+        # order_id. Real-time WS execution notices additionally need the
+        # HTS ID (used as the subscribe tr_key), so the listener stays gated.
+        self._stopping = False
+        self._exec_poll_task = asyncio.create_task(
+            self._open_orders_poller(),
+        )
         if self._hts_id:
-            self._stopping = False
             self._exec_listener_task = asyncio.create_task(
                 self._execution_listener(),
             )
-            self._exec_poll_task = asyncio.create_task(
-                self._open_orders_poller(),
-            )
-            logger.info("Execution notice listener + poller started")
+            logger.info("Execution WS listener + REST poller started")
         else:
             logger.warning(
-                "KIS_HTS_ID not set — execution notices disabled, "
-                "orders will remain SUBMITTED in DB until manually synced",
+                "KIS_HTS_ID not set — real-time WS execution notices "
+                "disabled; fills detected via 5-min REST polling only",
             )
 
     async def disconnect(self) -> None:
