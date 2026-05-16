@@ -5,7 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
 import logging
 
-from src.core.types import Bar, Order, Fill, Market
+from src.core.types import Bar, Order, Fill, Market, OrderStatus
 from .models import (
     Base, BarModel, OrderModel, FillModel,
     PriceRSIModel, EquitySnapshot,
@@ -194,6 +194,45 @@ class Storage:
                     Decimal(str(row.filled_avg_price)) if row.filled_avg_price else None
                 ),
             )
+
+    async def get_open_orders(self) -> list[Order]:
+        """Orders still SUBMITTED/PARTIAL_FILLED.
+
+        Used at startup to re-reconcile orders that were open when a
+        previous process exited (otherwise they stay SUBMITTED forever
+        since KISBroker._orders is memory-only).
+        """
+        async with self.async_session() as session:
+            query = select(OrderModel).where(
+                OrderModel.status.in_(
+                    [OrderStatus.SUBMITTED, OrderStatus.PARTIAL_FILLED]
+                )
+            )
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            return [
+                Order(
+                    symbol=row.symbol,
+                    market=row.market,
+                    side=row.side,
+                    order_type=(
+                        row.order_type
+                        if hasattr(row, "order_type") else None
+                    ),
+                    quantity=row.quantity,
+                    price=Decimal(str(row.price)) if row.price else None,
+                    order_id=row.order_id,
+                    status=row.status,
+                    created_at=row.created_at,
+                    filled_quantity=row.filled_quantity,
+                    filled_avg_price=(
+                        Decimal(str(row.filled_avg_price))
+                        if row.filled_avg_price else None
+                    ),
+                )
+                for row in rows
+            ]
 
     # ==================== Fills ====================
 

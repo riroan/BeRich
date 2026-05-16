@@ -900,7 +900,56 @@ class KISBroker:
                 )
 
     async def _poll_overseas_order(self, order: Order) -> None:
-        """Query KIS overseas inquire-ccnl for a single open order"""
+        """Live poll: query one open order and emit ORDER_* on change"""
+        if await self._query_overseas_fill(order):
+            logger.info(
+                f"[POLL] Order {order.order_id} → {order.status.value} "
+                f"(filled {order.filled_quantity}/{order.quantity} "
+                f"@ {order.filled_avg_price})",
+            )
+            await self._emit_order_event(order)
+
+    async def reconcile_open_orders(
+        self, orders: list[Order],
+    ) -> list[Order]:
+        """One-shot startup reconciliation for orders left open by a
+        previous process.
+
+        Historical fills are detected and returned to the caller for
+        DB persistence, but NOT emitted as ORDER_FILLED — the strategy
+        position is restored independently via sync_positions(), so
+        replaying the fill through the event path would double-count.
+        Orders that are still genuinely open are registered into the
+        live poller set so this session keeps tracking them.
+        """
+        changed: list[Order] = []
+        for order in orders:
+            try:
+                if order.market == Market.KRX:
+                    continue  # domestic polling not implemented
+                if await self._query_overseas_fill(order):
+                    changed.append(order)
+                elif order.order_id:
+                    self._orders[order.order_id] = order
+            except Exception as e:
+                logger.warning(
+                    f"Reconcile failed for {order.order_id}: {e!r}",
+                )
+        if changed:
+            logger.info(
+                f"Reconciled {len(changed)} stale order(s) to terminal "
+                f"state at startup",
+            )
+        return changed
+
+    async def _query_overseas_fill(self, order: Order) -> bool:
+        """Query KIS overseas inquire-ccnl for one order.
+
+        Mutates ``order`` (filled_quantity / filled_avg_price / status)
+        in place and returns True iff the order advanced. Pure query —
+        emits no event, so it is safe to call during startup
+        reconciliation as well as from the live poller.
+        """
         tr_id = "VTTS3035R" if self.paper_trading else "TTTS3035R"
         endpoint = "/uapi/overseas-stock/v1/trading/inquire-ccnl"
         headers = self._auth.get_headers(tr_id)
@@ -940,7 +989,7 @@ class KISBroker:
                 f"inquire-ccnl rt_cd={data.get('rt_cd')} "
                 f"msg={data.get('msg1')}",
             )
-            return
+            return False
 
         for row in data.get("output", []) or []:
             if row.get("odno") != order.order_id:
@@ -959,7 +1008,7 @@ class KISBroker:
 
             prev_filled = order.filled_quantity or 0
             if ft_ccld_qty <= prev_filled:
-                return  # nothing new
+                return False  # nothing new
 
             order.filled_quantity = ft_ccld_qty
             if ft_ccld_unpr > 0:
@@ -968,14 +1017,9 @@ class KISBroker:
                 order.status = OrderStatus.FILLED
             else:
                 order.status = OrderStatus.PARTIAL_FILLED
-
-            logger.info(
-                f"[POLL] Order {order.order_id} → {order.status.value} "
-                f"(filled {ft_ccld_qty}/{order.quantity} @ {ft_ccld_unpr})",
-            )
-            await self._emit_order_event(order)
-            return
+            return True
 
         logger.debug(
             f"Order {order.order_id} not in inquire-ccnl response",
         )
+        return False

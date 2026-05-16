@@ -355,6 +355,27 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             and strategy.market == Market.from_string(cfg["market"])
         )
 
+    async def _reconcile_open_orders(self) -> None:
+        """Reconcile orders left SUBMITTED/PARTIAL by a previous process.
+
+        KISBroker._orders is memory-only, so without this an order that
+        filled while the bot was down would stay SUBMITTED in the DB
+        forever. Terminal-state changes are persisted here; the strategy
+        position itself is restored separately by sync_positions().
+        """
+        try:
+            open_orders = await self.storage.get_open_orders()
+            if not open_orders:
+                return
+            logger.info(
+                f"Reconciling {len(open_orders)} open order(s) from DB"
+            )
+            changed = await self.broker.reconcile_open_orders(open_orders)
+            for order in changed:
+                await self.storage.save_order(order)
+        except Exception as e:
+            logger.warning(f"Open-order reconciliation failed: {e!r}")
+
     async def start(self) -> None:
         """Start the bot"""
         logger.info("Starting Trading Bot...")
@@ -367,6 +388,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         await self.event_bus.start()
         await self.strategy_engine.start()
         await self.order_manager.start()
+
+        # Reconcile DB orders left open by a previous process before
+        # sync_positions restores strategy state from the broker.
+        await self._reconcile_open_orders()
 
         # FIX-004: Sync positions BEFORE initialize so strategies know existing positions
         await self.strategy_engine.sync_positions()

@@ -110,6 +110,32 @@ class TestSaveOrder:
         result = await storage.get_order("NONEXISTENT")
         assert result is None
 
+    async def test_get_open_orders_only_returns_open(
+        self, storage: Storage,
+    ):
+        """get_open_orders returns SUBMITTED/PARTIAL_FILLED, not terminal"""
+        statuses = {
+            "OPEN-S": OrderStatus.SUBMITTED,
+            "OPEN-P": OrderStatus.PARTIAL_FILLED,
+            "DONE-F": OrderStatus.FILLED,
+            "DONE-C": OrderStatus.CANCELLED,
+        }
+        for oid, status in statuses.items():
+            await storage.save_order(Order(
+                symbol="AAPL",
+                market=Market.NASDAQ,
+                side=OrderSide.BUY,
+                order_type=OrderType.MARKET,
+                quantity=5,
+                price=Decimal("100"),
+                order_id=oid,
+                status=status,
+            ))
+
+        open_orders = await storage.get_open_orders()
+        ids = {o.order_id for o in open_orders}
+        assert ids == {"OPEN-S", "OPEN-P"}
+
 
 
 class TestStrategyParams:
