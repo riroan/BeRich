@@ -888,8 +888,16 @@ class KISBroker:
         elif notice.revise_cancel == "2":
             order.status = OrderStatus.CANCELLED
         elif notice.is_filled and notice.qty > 0:
-            order.filled_quantity = (order.filled_quantity or 0) + notice.qty
-            order.filled_avg_price = notice.price
+            prev_q = order.filled_quantity or 0
+            prev_avg = order.filled_avg_price or Decimal("0")
+            order.filled_quantity = prev_q + notice.qty
+            # Keep filled_avg_price as the CUMULATIVE average (the REST
+            # poller already does), so downstream avg-cost math is the
+            # same whether a fill is detected via WS or polling.
+            order.filled_avg_price = (
+                (prev_avg * prev_q + notice.price * notice.qty)
+                / order.filled_quantity
+            )
             if order.filled_quantity >= order.quantity:
                 order.status = OrderStatus.FILLED
             else:

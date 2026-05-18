@@ -210,10 +210,26 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         try:
             await self._fetch_and_apply_balance(Market.KRX)
 
-            try:
-                await self._fetch_and_apply_balance(Market.NASDAQ)
-            except Exception as e:
-                logger.warning(f"Failed to get USD balance: {e}")
+            # USD balance drives risk equity — a zero here means every
+            # order is rejected (fail-safe), so retry before giving up.
+            for attempt in range(3):
+                try:
+                    await self._fetch_and_apply_balance(Market.NASDAQ)
+                except Exception as e:
+                    logger.warning(
+                        f"USD balance fetch failed "
+                        f"(attempt {attempt + 1}/3): {e}"
+                    )
+                if self.dashboard.balance_usd > 0:
+                    break
+                await asyncio.sleep(2)
+
+            if self.dashboard.balance_usd <= 0:
+                logger.critical(
+                    "USD balance still unavailable after retries — risk "
+                    "equity will be 0 and ALL orders rejected until a "
+                    "balance is obtained on a later tick",
+                )
 
             logger.info(
                 f"Account balance - KRW: {self.dashboard.balance_krw:,.0f}, "

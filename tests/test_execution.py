@@ -597,3 +597,66 @@ class TestFillAccounting:
         assert "c1" not in om._active_orders
         assert "c1" not in om._order_meta
         om.storage.save_order.assert_awaited()
+
+
+class TestPartialCancelAccounting:
+    """A/B — accounting must survive the cancel handler clearing meta."""
+
+    @pytest.fixture
+    def om(self, event_bus, broker, risk_manager, storage):
+        return OrderManager(
+            event_bus=event_bus, broker=broker,
+            risk_manager=risk_manager, storage=storage,
+            notifier=AsyncMock(),
+        )
+
+    @pytest.mark.asyncio
+    async def test_partial_then_cancel_books_filled_portion_once(self, om):
+        order = _make_order(side=OrderSide.SELL, quantity=100,
+                            price=Decimal("100"), order_id="pc1")
+        order.filled_avg_price = Decimal("92")   # 60 sold @ 92
+        order.filled_quantity = 60
+        om._order_meta["pc1"] = {
+            "reason": "staged_sell_1", "avg_price": 100.0, "rsi": 70.0,
+        }
+        cancelled = Event(event_type=EventType.ORDER_CANCELLED, data=order,
+                          timestamp=datetime.now(), source="t")
+
+        await om._on_order_closed(cancelled)
+        await om._on_order_closed(cancelled)  # idempotent
+
+        # realized = (92 - 100) * 60 = -480, booked exactly once
+        om.risk_manager.record_trade.assert_called_once_with(Decimal("-480"))
+        assert om.storage.save_fill.await_count == 1
+        assert "pc1" not in om._order_meta
+
+    @pytest.mark.asyncio
+    async def test_full_fill_then_late_cancel_not_double_booked(self, om):
+        order = _make_order(side=OrderSide.SELL, quantity=10,
+                            price=Decimal("50"), order_id="fc1")
+        order.filled_avg_price = Decimal("55")
+        order.filled_quantity = 10
+        om._order_meta["fc1"] = {"reason": "staged_sell_1", "avg_price": 50.0}
+        filled = Event(event_type=EventType.ORDER_FILLED, data=order,
+                       timestamp=datetime.now(), source="t")
+        cancelled = Event(event_type=EventType.ORDER_CANCELLED, data=order,
+                          timestamp=datetime.now(), source="t")
+
+        await om._on_fill(filled)        # accounts once
+        await om._on_order_closed(cancelled)  # late cancel → no re-book
+
+        om.risk_manager.record_trade.assert_called_once_with(Decimal("50"))
+        assert om.storage.save_fill.await_count == 1
+
+    @pytest.mark.asyncio
+    async def test_cancel_with_no_fill_books_nothing(self, om):
+        order = _make_order(order_id="z1")  # filled_quantity defaults 0
+        om._order_meta["z1"] = {"reason": "x"}
+        ev = Event(event_type=EventType.ORDER_CANCELLED, data=order,
+                   timestamp=datetime.now(), source="t")
+
+        await om._on_order_closed(ev)
+
+        om.risk_manager.record_trade.assert_not_called()
+        om.storage.save_fill.assert_not_awaited()
+        assert "z1" not in om._order_meta

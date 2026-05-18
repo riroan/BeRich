@@ -158,6 +158,24 @@ class DashboardSyncMixin:
                 self.risk_manager.update_account_value(
                     self.dashboard.balance_usd
                 )
+                self._zero_equity_ticks = 0
+            elif self.risk_manager:
+                # Risk equity is 0 → every order rejected (fail-safe).
+                # Make the otherwise-silent deadlock loud (throttled).
+                n = getattr(self, "_zero_equity_ticks", 0) + 1
+                self._zero_equity_ticks = n
+                if n == 1 or n == 5 or n % 30 == 0:
+                    logger.critical(
+                        f"USD balance unavailable for {n} tick(s) — bot is "
+                        f"rejecting ALL orders (risk equity = 0)"
+                    )
+                    if self.notifier:
+                        await self.notifier.notify_account_error(
+                            error=(
+                                f"USD balance unavailable for {n} ticks — "
+                                f"all orders rejected (risk equity = 0)"
+                            ),
+                        )
 
             await self._save_equity_snapshot()
             await self._check_low_cash_alert()

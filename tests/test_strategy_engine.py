@@ -33,14 +33,15 @@ def _engine_with(strategy) -> StrategyEngine:
     return eng
 
 
-def _order(order_id, filled_qty, symbol="AAPL", side=OrderSide.BUY):
+def _order(order_id, filled_qty, symbol="AAPL", side=OrderSide.BUY,
+           cum_avg=Decimal("10")):
     o = Order(
         symbol=symbol, market=Market.NASDAQ, side=side,
         order_type=OrderType.MARKET, quantity=100,
         price=Decimal("10"), order_id=order_id,
     )
     o.filled_quantity = filled_qty
-    o.filled_avg_price = Decimal("10")
+    o.filled_avg_price = cum_avg  # CUMULATIVE avg (both WS & poller)
     return o
 
 
@@ -82,3 +83,38 @@ async def test_fill_for_unrelated_symbol_ignored():
     await eng._on_fill(_ev(_order("o3", 10, symbol="AAPL")))
 
     assert s.fills == []
+
+
+@pytest.mark.asyncio
+async def test_delta_marginal_price_reconstructs_cumulative_avg():
+    """D: filled_avg_price is the CUMULATIVE avg; the engine must hand
+    the strategy the delta's MARGINAL price so an incremental
+    weighted-average reconstructs the true cumulative cost."""
+    s = _StubStrategy(["AAPL"])
+    eng = _engine_with(s)
+
+    # Partial 1: 40 sh, cumulative avg $100
+    await eng._on_fill(_ev(_order("o1", 40, cum_avg=Decimal("100")),
+                            EventType.ORDER_PARTIAL_FILLED))
+    # Partial 2: now 100 sh total, cumulative avg $106
+    await eng._on_fill(_ev(_order("o1", 100, cum_avg=Decimal("106")),
+                            EventType.ORDER_FILLED))
+
+    qtys = [f.quantity for f in s.fills]
+    prices = [f.price for f in s.fills]
+    assert qtys == [40, 60]
+    # marginal of delta-2 = (106*100 - 100*40)/60 = 110
+    assert prices == [Decimal("100"), Decimal("110")]
+    # strategy-side weighted avg = (100*40 + 110*60)/100 = 106 (true)
+    recon = (prices[0] * qtys[0] + prices[1] * qtys[1]) / sum(qtys)
+    assert recon == Decimal("106")
+
+
+@pytest.mark.asyncio
+async def test_single_full_fill_price_unchanged():
+    """Common case: one full fill → marginal == cumulative avg."""
+    s = _StubStrategy(["AAPL"])
+    eng = _engine_with(s)
+    await eng._on_fill(_ev(_order("o9", 100, cum_avg=Decimal("123.45"))))
+    assert s.fills[0].quantity == 100
+    assert s.fills[0].price == Decimal("123.45")

@@ -1,8 +1,9 @@
 import asyncio
 from datetime import datetime
+from decimal import Decimal
 import logging
 
-from src.core.types import Bar, Quote, Signal, Market, Position
+from src.core.types import Bar, Quote, Signal, Market, Position, Fill
 from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
 from src.utils.notifier import DiscordNotifier
@@ -25,9 +26,13 @@ class StrategyEngine:
         self.notifier = notifier
         self._strategies: list[BaseStrategy] = []
         self._running = False
-        # order_id → cumulative qty already applied to strategies.
-        # Makes fills idempotent and lets partials be applied as deltas.
+        # order_id → cumulative qty / cumulative avg price already
+        # applied to strategies. Makes fills idempotent, lets partials
+        # apply as deltas, and lets us hand the strategy the delta's
+        # MARGINAL price so its incremental weighted-average cost is
+        # correct on both the WS and REST-poller paths.
         self._applied_fills: dict[str, int] = {}
+        self._applied_avg: dict[str, Decimal] = {}
 
     def register_strategy(self, strategy: BaseStrategy) -> None:
         """Register a strategy"""
@@ -124,15 +129,25 @@ class StrategyEngine:
             return
 
         order_id = order.order_id or ""
-        cumulative = order.filled_quantity or 0
-        applied = self._applied_fills.get(order_id, 0)
-        delta = cumulative - applied
+        cum_q = order.filled_quantity or 0
+        cum_avg = order.filled_avg_price or Decimal("0")
+        prev_q = self._applied_fills.get(order_id, 0)
+        prev_avg = self._applied_avg.get(order_id, Decimal("0"))
+        delta = cum_q - prev_q
         if delta <= 0:
             return  # duplicate event or no new shares
-        self._applied_fills[order_id] = cumulative
 
-        from src.core.types import Fill
-        from decimal import Decimal
+        # filled_avg_price is now the CUMULATIVE average on both the WS
+        # and poller paths. Hand the strategy the delta's MARGINAL price
+        # so its incremental weighted-average entry cost reconstructs the
+        # true cumulative average exactly (and equals cum_avg on the
+        # common single-fill case).
+        if cum_q > 0:
+            marginal = (cum_avg * cum_q - prev_avg * prev_q) / delta
+        else:
+            marginal = cum_avg
+        self._applied_fills[order_id] = cum_q
+        self._applied_avg[order_id] = cum_avg
 
         for strategy in self._strategies:
             if order.symbol in strategy.symbols:
@@ -142,7 +157,7 @@ class StrategyEngine:
                     market=order.market,
                     side=order.side,
                     quantity=delta,
-                    price=order.filled_avg_price or Decimal("0"),
+                    price=marginal,
                     commission=Decimal("0"),
                     timestamp=datetime.now(),
                 )

@@ -44,11 +44,15 @@ class OrderManager:
 
         self._pending_orders: dict[str, Order] = {}
         self._active_orders: dict[str, Order] = {}
-        # Signal metadata kept per order_id from submit until fill, so the
-        # fill notification can include rsi/stage/reason. Doubles as the
-        # gate that limits fill notifications to orders we submitted and
-        # makes them idempotent (pop on first ORDER_FILLED).
+        # Signal metadata kept per order_id from submit until the order is
+        # accounted, so the fill notification/PnL can include
+        # rsi/stage/reason and the cost basis. Presence = "an order we
+        # submitted" (ownership). Idempotency is tracked separately so a
+        # cancel handler clearing meta can't suppress fill accounting.
         self._order_meta: dict[str, dict] = {}
+        # order_ids whose realized fill has been fully accounted
+        # (PnL recorded + fill persisted + notified) — exactly once.
+        self._accounted_orders: set[str] = set()
         # FIX-001: Duplicate order prevention
         # Key: (symbol, side) → timestamp of last order
         self._recent_orders: dict[tuple[str, str], datetime] = {}
@@ -439,25 +443,11 @@ class OrderManager:
                 cancelled += 1
         return cancelled
 
-    async def _on_fill(self, event: Event) -> None:
-        """Confirmed (full) fill: persist, account PnL, save fill, notify.
-
-        The meta.pop() gates this to orders we submitted and makes a
-        duplicate/redelivered ORDER_FILLED a no-op — no double PnL,
-        no duplicate fill row, no duplicate notification.
+    async def _account_fill(self, order: Order, meta: dict) -> None:
+        """Record realized PnL (from the ACTUAL fill price), persist the
+        Fill, and send the fill notification. Caller guarantees this runs
+        exactly once per order via _accounted_orders.
         """
-        order: Order = event.data
-        if order.order_id in self._active_orders:
-            del self._active_orders[order.order_id]
-        await self.storage.save_order(order)
-
-        meta = self._order_meta.pop(order.order_id, None)
-        if meta is None:
-            return  # not ours, or already processed
-
-        # Realized PnL from the ACTUAL fill price, not the signal-time
-        # estimate. Needs the position's avg cost (carried in the sell
-        # signal metadata); fall back to the estimate if absent.
         realized: Decimal | None = None
         if order.side == OrderSide.SELL and order.filled_avg_price:
             avg_cost = meta.get("avg_price")
@@ -496,21 +486,51 @@ class OrderManager:
             submitted=False,
         )
 
-    async def _on_partial_fill(self, event: Event) -> None:
-        """Handle partial fill events"""
-        order: Order = event.data
-        await self.storage.save_order(order)
+    async def _on_fill(self, event: Event) -> None:
+        """Confirmed (full) fill: persist, then account exactly once.
 
-    async def _on_order_closed(self, event: Event) -> None:
-        """Broker-side CANCELLED/REJECTED: free per-order state.
-
-        OrderManager had no handler for these, so _active_orders /
-        _order_meta leaked for every externally cancelled/rejected
-        order. Persist the terminal status too.
+        Idempotency is tracked via _accounted_orders (NOT by popping
+        meta) so the cancel/reject handler clearing meta can never
+        suppress a fill's PnL/fill-row/notification.
         """
         order: Order = event.data
         oid = order.order_id
         if oid in self._active_orders:
             del self._active_orders[oid]
-        self._order_meta.pop(oid, None)
         await self.storage.save_order(order)
+
+        if oid in self._accounted_orders:
+            return  # duplicate / redelivered ORDER_FILLED
+        meta = self._order_meta.get(oid)
+        if meta is None:
+            return  # not an order we submitted
+        self._accounted_orders.add(oid)
+        self._order_meta.pop(oid, None)
+        await self._account_fill(order, meta)
+
+    async def _on_partial_fill(self, event: Event) -> None:
+        """Persist partial-fill status. Realized PnL/Fill for the filled
+        portion is booked at the terminal event (full fill, or cancel
+        with a non-zero filled quantity — see _on_order_closed)."""
+        order: Order = event.data
+        await self.storage.save_order(order)
+
+    async def _on_order_closed(self, event: Event) -> None:
+        """Broker-side CANCELLED/REJECTED: free per-order state, but
+        first account any real shares that filled before the cancel
+        (partial-then-cancel) so their realized PnL/Fill aren't lost.
+        """
+        order: Order = event.data
+        oid = order.order_id
+        if oid in self._active_orders:
+            del self._active_orders[oid]
+        await self.storage.save_order(order)
+
+        meta = self._order_meta.pop(oid, None)
+        if (
+            meta is not None
+            and oid not in self._accounted_orders
+            and (order.filled_quantity or 0) > 0
+        ):
+            self._accounted_orders.add(oid)
+            await self._account_fill(order, meta)
