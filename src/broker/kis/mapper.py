@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from datetime import datetime
 
 from src.core.types import (
@@ -9,6 +9,30 @@ from src.core.types import (
     OrderType,
     OrderStatus,
 )
+
+
+def _first_num(data: dict, *keys: str, default: str = "0") -> str:
+    """First key whose value parses to a non-zero number.
+
+    KIS names the same value differently across response variants, so
+    a missing/empty/zero field must fall through to the next candidate.
+    ``data.get(k, "0") or data.get(alt, "0")`` cannot do this: the
+    string "0" is truthy in Python, so the chain short-circuits on the
+    first (often absent) key and the real field is never read.
+    """
+    for k in keys:
+        raw = data.get(k)
+        if raw is None:
+            continue
+        s = str(raw).strip()
+        if not s:
+            continue
+        try:
+            if Decimal(s) != 0:
+                return s
+        except (InvalidOperation, ValueError):
+            continue
+    return default
 
 
 class KISMapper:
@@ -121,13 +145,12 @@ class KISMapper:
     def map_overseas_position(data: dict, market: Market) -> Position:
         """Map overseas stock position response"""
         quantity = int(
-            data.get("ovrs_cblc_qty", "0")
-            or data.get("ccld_qty", "0")
-            or data.get("ord_qty", "0")
-            or "0"
+            Decimal(_first_num(data, "ovrs_cblc_qty", "ccld_qty", "ord_qty"))
         )
-        avg_price = Decimal(data.get("avg_unpr3", "0") or data.get("pchs_avg_pric", "0"))
-        current_price = Decimal(data.get("ovrs_now_pric1", "0") or data.get("now_pric2", "0"))
+        avg_price = Decimal(_first_num(data, "avg_unpr3", "pchs_avg_pric"))
+        current_price = Decimal(
+            _first_num(data, "ovrs_now_pric1", "now_pric2")
+        )
         eval_pnl = Decimal(data.get("frcr_evlu_pfls_amt", "0") or "0")
 
         return Position(

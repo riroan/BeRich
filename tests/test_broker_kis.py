@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from src.broker.kis.client import (
     KISBroker, _canon_odno, _marketable_limit_price,
 )
+from src.broker.kis.mapper import KISMapper
 from src.core.types import (
     Order, OrderSide, OrderType, OrderStatus, Market,
 )
@@ -154,3 +155,113 @@ class TestMarketableLimit:
         assert _marketable_limit_price(
             Decimal("100"), OrderSide.SELL, 0.01
         ) == Decimal("99.00")
+
+
+class TestMapOverseasPositionFallback:
+    """Regression: portfolio showed QTY but $0.00 avg/current price.
+
+    KIS overseas inquire-balance (TTTS3012R) output1 carries
+    `pchs_avg_pric` / `now_pric2`, NOT `avg_unpr3` / `ovrs_now_pric1`.
+    The old `data.get(k, "0") or data.get(alt, "0")` chain short-
+    circuited on the truthy string "0", so the real price fields were
+    never read and value/invested collapsed to 0.
+    """
+
+    def test_real_inquire_balance_row_keeps_prices(self):
+        row = {
+            "ovrs_pdno": "BAC",
+            "ovrs_item_name": "BANK OF AMERICA",
+            "ovrs_cblc_qty": "3",
+            "ord_psbl_qty": "3",
+            "pchs_avg_pric": "27.5500",
+            "now_pric2": "28.1000",
+            "frcr_evlu_pfls_amt": "1.65",
+            "ovrs_excg_cd": "NYSE",
+        }
+        pos = KISMapper.map_overseas_position(row, Market.NYSE)
+
+        assert pos.symbol == "BAC"
+        assert pos.market == Market.NYSE
+        assert pos.quantity == 3
+        assert pos.avg_entry_price == Decimal("27.5500")
+        assert pos.current_price == Decimal("28.1000")
+        assert pos.unrealized_pnl == Decimal("1.65")
+
+    def test_primary_price_keys_still_win_when_present(self):
+        row = {
+            "ovrs_pdno": "AAPL",
+            "ovrs_cblc_qty": "10",
+            "avg_unpr3": "190.00",
+            "pchs_avg_pric": "0",
+            "ovrs_now_pric1": "205.50",
+            "now_pric2": "0",
+        }
+        pos = KISMapper.map_overseas_position(row, Market.NASDAQ)
+
+        assert pos.avg_entry_price == Decimal("190.00")
+        assert pos.current_price == Decimal("205.50")
+
+    def test_qty_falls_through_to_filled_when_balance_zero(self):
+        # Just filled, not yet settled into ovrs_cblc_qty.
+        row = {
+            "ovrs_pdno": "MSFT",
+            "ovrs_cblc_qty": "0",
+            "ccld_qty": "5",
+            "pchs_avg_pric": "410.00",
+            "now_pric2": "412.30",
+        }
+        pos = KISMapper.map_overseas_position(row, Market.NASDAQ)
+
+        assert pos.quantity == 5
+        assert pos.avg_entry_price == Decimal("410.00")
+
+
+class _FakeResp:
+    """Minimal async-context-manager stand-in for aiohttp's response."""
+
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+class TestGetOverseasPositionsFilter:
+    """Same truthy-"0" bug class as the mapper, in the include guard:
+    a just-filled (unsettled) position must not be silently dropped."""
+
+    @pytest.mark.asyncio
+    async def test_just_filled_position_not_dropped(self):
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        payload = {
+            "rt_cd": "0",
+            "output1": [
+                # balance not yet settled, but 3 shares filled
+                {
+                    "ovrs_pdno": "BAC", "ovrs_cblc_qty": "0",
+                    "ccld_qty": "3", "pchs_avg_pric": "27.55",
+                    "now_pric2": "28.10",
+                },
+                # genuinely empty row — must be excluded
+                {
+                    "ovrs_pdno": "ZZZ", "ovrs_cblc_qty": "0",
+                    "ccld_qty": "0", "ord_qty": "0",
+                },
+            ],
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        out = await broker._get_overseas_positions(Market.NYSE)
+
+        assert [p.symbol for p in out] == ["BAC"]
+        assert out[0].quantity == 3
+        assert out[0].avg_entry_price == Decimal("27.55")
+        assert out[0].current_price == Decimal("28.10")

@@ -406,16 +406,16 @@ class KISBroker:
                 f"count={len(output1)} items={summary}",
             )
 
-            positions = []
-            for item in output1:
-                qty = int(
-                    item.get("ovrs_cblc_qty", "0")
-                    or item.get("ccld_qty", "0")
-                    or item.get("ord_qty", "0")
-                    or "0"
-                )
-                if qty > 0:
-                    positions.append(self._mapper.map_overseas_position(item, market))
+            # Map first, then filter on the mapper's qty — the mapper is
+            # the single source of truth for KIS field fallback. Parsing
+            # qty here too risked the same truthy-"0" short-circuit and
+            # could drop a just-filled (unsettled) position.
+            positions = [
+                pos
+                for item in output1
+                if (pos := self._mapper.map_overseas_position(item, market))
+                .quantity > 0
+            ]
 
             return positions
 
