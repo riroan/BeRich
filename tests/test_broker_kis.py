@@ -9,6 +9,7 @@ from src.broker.kis.client import (
     KISBroker, _canon_odno, _marketable_limit_price,
 )
 from src.broker.kis.mapper import KISMapper
+from src.core.exceptions import BrokerError
 from src.core.types import (
     Order, OrderSide, OrderType, OrderStatus, Market,
 )
@@ -265,3 +266,138 @@ class TestGetOverseasPositionsFilter:
         assert out[0].quantity == 3
         assert out[0].avg_entry_price == Decimal("27.55")
         assert out[0].current_price == Decimal("28.10")
+
+
+class TestGetOverseasBalanceUsesSummary:
+    """Regression: dashboard Invested/P&L stuck at $0 every tick.
+
+    KIS present-balance (CTRP6504R) output1 does NOT carry
+    evlu_amt / evlu_pfls_amt, so summing output1 gave stock_eval=0
+    and profit_loss=0 forever. The authoritative USD totals live in
+    output3 (evlu_amt_smtl / evlu_pfls_amt_smtl).
+    """
+
+    @pytest.mark.asyncio
+    async def test_stock_eval_and_pnl_come_from_output3(self):
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        # Payload mirrors a real logged response: output1 rows lack
+        # evlu_amt; the USD totals are only in output3.
+        payload = {
+            "rt_cd": "0",
+            "msg1": "조회되었습니다",
+            "output1": [
+                {"pdno": "BAC", "ovrs_cblc_qty": "3"},
+                {"pdno": "IAU", "ovrs_cblc_qty": "1"},
+                {"pdno": "XBI", "ovrs_cblc_qty": "2"},
+            ],
+            "output2": [
+                {"crcy_cd": "USD", "frcr_dncl_amt_2": "4352.390000"},
+            ],
+            "output3": {
+                "pchs_amt_smtl": "485",
+                "evlu_amt_smtl": "491",
+                "evlu_pfls_amt_smtl": "6",
+            },
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        bal = await broker._get_overseas_balance()
+
+        assert bal["cash"] == Decimal("4352.390000")
+        assert bal["stocks_eval"] == Decimal("491")
+        assert bal["profit_loss"] == Decimal("6")
+        assert bal["total_eval"] == Decimal("4843.390000")
+        # Dashboard derives INVESTED = total_eval - cash
+        assert bal["total_eval"] - bal["cash"] == Decimal("491")
+
+    @pytest.mark.asyncio
+    async def test_output3_as_single_element_list(self):
+        # KIS sometimes wraps output3 in a list.
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        payload = {
+            "rt_cd": "0",
+            "output1": [],
+            "output2": [{"crcy_cd": "USD", "frcr_dncl_amt_2": "1000"}],
+            "output3": [{"evlu_amt_smtl": "250", "evlu_pfls_amt_smtl": "-12"}],
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        bal = await broker._get_overseas_balance()
+
+        assert bal["stocks_eval"] == Decimal("250")
+        assert bal["profit_loss"] == Decimal("-12")
+        assert bal["total_eval"] == Decimal("1250")
+
+
+class TestQueryOverseasFillPriceFallback:
+    """Audit MEDIUM: ft_ccld_unpr3 or avg_prvs or "0" stopped on the
+    truthy string "0", so a 0-priced primary field hid avg_prvs."""
+
+    @pytest.mark.asyncio
+    async def test_zero_primary_falls_through_to_avg_prvs(self):
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        order = _open_order("123")  # quantity=5, filled_quantity=0
+        payload = {
+            "rt_cd": "0",
+            "output": [{
+                "odno": "123", "ft_ccld_qty": "5", "nccs_qty": "0",
+                "ft_ccld_unpr3": "0", "avg_prvs": "27.55",
+            }],
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        advanced = await broker._query_overseas_fill(order)
+
+        assert advanced is True
+        assert order.filled_quantity == 5
+        assert order.filled_avg_price == Decimal("27.55")
+        assert order.status == OrderStatus.FILLED
+
+    @pytest.mark.asyncio
+    async def test_primary_price_used_when_present(self):
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        order = _open_order("123")
+        payload = {
+            "rt_cd": "0",
+            "output": [{
+                "odno": "123", "ft_ccld_qty": "5", "nccs_qty": "0",
+                "ft_ccld_unpr3": "30.10", "avg_prvs": "27.55",
+            }],
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        await broker._query_overseas_fill(order)
+
+        assert order.filled_avg_price == Decimal("30.10")
+
+
+class TestOverseasBalanceFallbackFailsSafe:
+    """Audit HIGH: fallback used to return cash=0/total=0, overwriting a
+    good balance and tripping 'USD unavailable -> reject all orders'.
+    It must raise so the caller keeps the last known-good balance."""
+
+    @pytest.mark.asyncio
+    async def test_fallback_raises(self):
+        broker = _make_broker(hts_id="")
+        with pytest.raises(BrokerError):
+            await broker._get_overseas_balance_fallback()
+
+    @pytest.mark.asyncio
+    async def test_present_balance_failure_propagates_not_zeroed(self):
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        payload = {"rt_cd": "1", "msg1": "API down"}
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        # Must raise (caller keeps last balance), NOT return zeros.
+        with pytest.raises(BrokerError):
+            await broker._get_overseas_balance()

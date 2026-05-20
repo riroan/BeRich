@@ -17,7 +17,7 @@ from src.core.types import (
 from src.core.events import EventBus, Event, EventType
 from src.core.exceptions import BrokerError, OrderError
 from .auth import KISAuth
-from .mapper import KISMapper
+from .mapper import KISMapper, _first_num
 from .websocket import KISWebSocket
 
 logger = logging.getLogger("TradingBot")
@@ -261,15 +261,18 @@ class KISBroker:
                         usd_cash = Decimal(currency_balance.get("frcr_dncl_amt_2", "0") or "0")
                         break
 
-            # output1 has individual stock positions - sum up evaluation amounts
-            # evlu_amt: 평가금액 (USD)
-            stock_eval = Decimal("0")
-            total_profit_loss = Decimal("0")
-            for position in output1:
-                eval_amt = Decimal(position.get("evlu_amt", "0") or "0")
-                pfls_amt = Decimal(position.get("evlu_pfls_amt", "0") or "0")
-                stock_eval += eval_amt
-                total_profit_loss += pfls_amt
+            # Stock eval + P/L come from the output3 summary, NOT a per-row
+            # output1 sum: CTRP6504R's output1 does not carry evlu_amt /
+            # evlu_pfls_amt, so the old loop always produced 0 and the
+            # dashboard's Invested/P&L were pinned at $0 every tick. The
+            # authoritative USD totals are evlu_amt_smtl / evlu_pfls_amt_smtl.
+            summary = output3[0] if isinstance(output3, list) and output3 else output3
+            if not isinstance(summary, dict):
+                summary = {}
+            stock_eval = Decimal(summary.get("evlu_amt_smtl", "0") or "0")
+            total_profit_loss = Decimal(
+                summary.get("evlu_pfls_amt_smtl", "0") or "0"
+            )
 
             logger.info(f"Account balance - USD cash: {usd_cash:,.2f}, stocks: {stock_eval:,.2f}")
 
@@ -281,37 +284,18 @@ class KISBroker:
             }
 
     async def _get_overseas_balance_fallback(self) -> dict:
-        """Fallback overseas balance API"""
-        tr_id = "VTTS3012R" if self.paper_trading else "TTTS3012R"
-        endpoint = "/uapi/overseas-stock/v1/trading/inquire-balance"
-        headers = self._auth.get_headers(tr_id)
+        """Fail-safe when the present-balance API is unavailable.
 
-        params = {
-            "CANO": self._auth.account_no[:8],
-            "ACNT_PRDT_CD": self._auth.account_no[9:],
-            "OVRS_EXCG_CD": "NASD",
-            "TR_CRCY_CD": "USD",
-            "CTX_AREA_FK200": "",
-            "CTX_AREA_NK200": "",
-        }
-
-        async with self._session.get(
-            f"{self.base_url}{endpoint}", headers=headers, params=params
-        ) as resp:
-            data = await resp.json()
-
-            if data.get("rt_cd") != "0":
-                return {"total_eval": Decimal("0"), "cash": Decimal("0"), "stocks_eval": Decimal("0"), "profit_loss": Decimal("0")}
-
-            output2 = data.get("output2", {})
-            profit_loss = Decimal(output2.get("ovrs_tot_pfls", "0") or "0")
-
-            return {
-                "total_eval": Decimal("0"),
-                "cash": Decimal("0"),
-                "stocks_eval": Decimal("0"),
-                "profit_loss": profit_loss,
-            }
+        The legacy inquire-balance TR gives no reliable USD cash/total,
+        so the old fallback returned zeros — which overwrote a good
+        balance with 0 and tripped the "USD balance unavailable → reject
+        ALL orders" fail-safe. Raise instead: the caller's handler logs
+        the failure and KEEPS the last known-good balance.
+        """
+        raise BrokerError(
+            "Overseas present-balance API failed; no reliable USD "
+            "cash/total fallback — keeping last-known balance"
+        )
 
     # ==================== Positions ====================
 
@@ -1049,14 +1033,11 @@ class KISBroker:
 
             ft_ccld_qty = int(row.get("ft_ccld_qty", "0") or "0")
             nccs_qty = int(row.get("nccs_qty", "0") or "0")
-            try:
-                ft_ccld_unpr = Decimal(
-                    row.get("ft_ccld_unpr3")
-                    or row.get("avg_prvs")
-                    or "0",
-                )
-            except Exception:
-                ft_ccld_unpr = Decimal("0")
+            # _first_num falls through "0"/empty to the next key — a bare
+            # `a or b or "0"` chain stops on the truthy string "0".
+            ft_ccld_unpr = Decimal(
+                _first_num(row, "ft_ccld_unpr3", "avg_prvs")
+            )
 
             prev_filled = order.filled_quantity or 0
             if ft_ccld_qty <= prev_filled:
