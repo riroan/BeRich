@@ -447,22 +447,11 @@ class DashboardState:
             market = position.market if position else "Unknown"
             current_price = position.current_price if position else 0
 
-            # Buy candidates: RSI approaching 30
-            if rsi <= 35:
-                threshold = 30
-                distance = rsi - threshold
-                candidates.append(SignalCandidate(
-                    symbol=symbol,
-                    market=market,
-                    signal_type="buy_candidate",
-                    rsi=rsi,
-                    threshold=threshold,
-                    distance=distance,
-                    current_price=current_price,
-                    reason=f"RSI {rsi:.1f} approaching oversold",
-                ))
-
-            # Additional buy candidates: RSI approaching 25
+            # Buy candidates by oversold severity. Bands are mutually
+            # exclusive so a symbol appears at most once: RSI <= 30 used to
+            # match BOTH the <=35 and <=30 branches, and the render filter
+            # (`"buy" in signal_type`) caught both → duplicate rows in the
+            # Buy Candidate list. Deep oversold (<=30) takes precedence.
             if rsi <= 30:
                 threshold = 25
                 distance = rsi - threshold
@@ -475,6 +464,19 @@ class DashboardState:
                     distance=distance,
                     current_price=current_price,
                     reason=f"RSI {rsi:.1f} deep oversold candidate",
+                ))
+            elif rsi <= 35:
+                threshold = 30
+                distance = rsi - threshold
+                candidates.append(SignalCandidate(
+                    symbol=symbol,
+                    market=market,
+                    signal_type="buy_candidate",
+                    rsi=rsi,
+                    threshold=threshold,
+                    distance=distance,
+                    current_price=current_price,
+                    reason=f"RSI {rsi:.1f} approaching oversold",
                 ))
 
             # Sell candidates: RSI approaching 70
