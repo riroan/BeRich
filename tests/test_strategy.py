@@ -60,39 +60,95 @@ class TestRSIMeanReversionStrategy:
         df = strategy._daily_bars["AAPL"]
         assert len(df) == 50
 
-    def test_update_daily_close_same_day(self, strategy, sample_bars):
-        """Test updating daily close on same day"""
+    def test_update_daily_close_layers_live_not_base(self, strategy, sample_bars):
+        """C': live price layers into get_daily_dataframe as the most
+        recent point and never mutates the confirmed base."""
         strategy.initialize({"AAPL": sample_bars})
+        base_len = len(strategy._daily_bars["AAPL"])
+        base_last_close = strategy._daily_bars["AAPL"].iloc[-1]["close"]
 
-        # Update with new price
         strategy.update_daily_close("AAPL", 105.0)
 
-        df = strategy._daily_bars["AAPL"]
-        assert df.iloc[-1]["close"] == 105.0
+        # Confirmed base is untouched (no clock-based slide).
+        base = strategy._daily_bars["AAPL"]
+        assert len(base) == base_len
+        assert base.iloc[-1]["close"] == base_last_close
 
-    def test_update_daily_close_new_day(self, strategy, sample_bars):
-        """Test updating daily close on new day"""
-        # Create bars from yesterday
+        # The live forming row shows up as the latest point in the view.
+        view = strategy.get_daily_dataframe("AAPL")
+        assert len(view) == base_len + 1
+        assert view.iloc[-1]["close"] == 105.0
+
+    def test_update_daily_close_never_slides_on_clock(self, strategy):
+        """C': successive ticks on different days do NOT append base rows —
+        only confirm_daily_bar slides the window."""
         old_bars = []
         for i in range(30):
             bar = MagicMock()
             bar.timestamp = datetime.now() - timedelta(days=31 - i)
-            bar.open = 100.0
-            bar.high = 101.0
-            bar.low = 99.0
-            bar.close = 100.0
+            bar.open = bar.high = bar.low = bar.close = 100.0
             bar.volume = 1000000
             old_bars.append(bar)
 
         strategy.initialize({"AAPL": old_bars})
         initial_len = len(strategy._daily_bars["AAPL"])
 
-        # Update with today's price
         strategy.update_daily_close("AAPL", 105.0)
+        strategy.update_daily_close("AAPL", 106.0)
 
-        df = strategy._daily_bars["AAPL"]
-        assert len(df) == initial_len + 1
-        assert df.iloc[-1]["close"] == 105.0
+        # Base length unchanged; only the live slot moves.
+        assert len(strategy._daily_bars["AAPL"]) == initial_len
+        view = strategy.get_daily_dataframe("AAPL")
+        assert len(view) == initial_len + 1
+        assert view.iloc[-1]["close"] == 106.0
+
+    def test_confirm_daily_bar_appends_on_newer_date(self, strategy, sample_bars):
+        """A confirmed bar with a newer date slides the base."""
+        strategy.initialize({"AAPL": sample_bars})
+        base_len = len(strategy._daily_bars["AAPL"])
+        last = strategy.last_confirmed_date("AAPL")
+
+        bar = Bar(
+            symbol="AAPL", market=Market.NASDAQ,
+            open=Decimal("110"), high=Decimal("111"), low=Decimal("109"),
+            close=Decimal("110"), volume=0,
+            timestamp=datetime.now() + timedelta(days=1), timeframe="1d",
+        )
+        assert strategy.confirm_daily_bar("AAPL", bar) == "appended"
+        assert len(strategy._daily_bars["AAPL"]) == base_len + 1
+        assert strategy._daily_bars["AAPL"].iloc[-1]["close"] == 110.0
+        assert strategy.last_confirmed_date("AAPL") > last
+
+    def test_confirm_daily_bar_refreshes_same_date(self, strategy, sample_bars):
+        """A confirmed bar with the same date refreshes (final close)
+        without growing the base."""
+        strategy.initialize({"AAPL": sample_bars})
+        base_len = len(strategy._daily_bars["AAPL"])
+        same_ts = strategy._daily_bars["AAPL"].index[-1]
+
+        bar = Bar(
+            symbol="AAPL", market=Market.NASDAQ,
+            open=Decimal("99"), high=Decimal("120"), low=Decimal("98"),
+            close=Decimal("118"), volume=0,
+            timestamp=same_ts, timeframe="1d",
+        )
+        assert strategy.confirm_daily_bar("AAPL", bar) == "refreshed"
+        assert len(strategy._daily_bars["AAPL"]) == base_len
+        assert strategy._daily_bars["AAPL"].iloc[-1]["close"] == 118.0
+
+    def test_confirm_daily_bar_skips_stale_date(self, strategy, sample_bars):
+        """An older-dated bar is ignored."""
+        strategy.initialize({"AAPL": sample_bars})
+        base_len = len(strategy._daily_bars["AAPL"])
+
+        bar = Bar(
+            symbol="AAPL", market=Market.NASDAQ,
+            open=Decimal("50"), high=Decimal("50"), low=Decimal("50"),
+            close=Decimal("50"), volume=0,
+            timestamp=datetime.now() - timedelta(days=5), timeframe="1d",
+        )
+        assert strategy.confirm_daily_bar("AAPL", bar) == "skipped"
+        assert len(strategy._daily_bars["AAPL"]) == base_len
 
     def test_calculate_rsi(self, strategy):
         """Test RSI calculation"""
@@ -243,19 +299,24 @@ class TestRSIMeanReversionStrategy:
         assert "AAPL" not in strategy._sell_stages
         assert "AAPL" not in strategy._last_buy_time
 
+    def _fill(self, side, qty, price, metadata=None):
+        fill = MagicMock()
+        fill.symbol = "AAPL"
+        fill.side = MagicMock()
+        fill.side.value = side
+        fill.quantity = qty
+        fill.price = Decimal(str(price))
+        fill.metadata = metadata or {}
+        return fill
+
     @pytest.mark.asyncio
     async def test_on_fill_buy(self, strategy, sample_bars):
         """Test on_fill for buy order"""
         strategy.initialize({"AAPL": sample_bars})
 
-        fill = MagicMock()
-        fill.symbol = "AAPL"
-        fill.side = MagicMock()
-        fill.side.value = "buy"
-        fill.quantity = 50
-        fill.price = Decimal("100")
-
-        await strategy.on_fill(fill)
+        await strategy.on_fill(
+            self._fill("buy", 50, 100, {"stage": 1, "reason": "avg_down_stage_1"})
+        )
 
         assert strategy._entry_prices["AAPL"] == Decimal("100")
         assert strategy._sell_stages["AAPL"] == 0
@@ -270,14 +331,75 @@ class TestRSIMeanReversionStrategy:
         strategy._entry_prices["AAPL"] = Decimal("100")
 
         # Second buy at lower price
-        fill = MagicMock()
-        fill.symbol = "AAPL"
-        fill.side = MagicMock()
-        fill.side.value = "buy"
-        fill.quantity = 50
-        fill.price = Decimal("80")
-
-        await strategy.on_fill(fill)
+        await strategy.on_fill(self._fill("buy", 50, 80, {"stage": 2}))
 
         # Average should be (50*100 + 50*80) / 100 = 90
         assert strategy._entry_prices["AAPL"] == Decimal("90")
+
+    @pytest.mark.asyncio
+    async def test_on_fill_buy_advances_stage_on_fill(self, strategy, sample_bars):
+        """C' #8: buy stage counter advances on the actual fill, idempotent
+        via target stage (set, not increment)."""
+        strategy.initialize({"AAPL": sample_bars})
+
+        # Partial fills of the same stage-1 order → counter stays at 1.
+        await strategy.on_fill(self._fill("buy", 30, 100, {"stage": 1}))
+        await strategy.on_fill(self._fill("buy", 20, 100, {"stage": 1}))
+
+        assert strategy._buy_stages["AAPL"] == 1
+        assert "AAPL" in strategy._last_buy_time
+        assert strategy._sell_stages["AAPL"] == 0
+
+    @pytest.mark.asyncio
+    async def test_on_fill_sell_advances_sell_stage(self, strategy, sample_bars):
+        """Staged-sell counter advances on the fill."""
+        strategy.initialize({"AAPL": sample_bars})
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("100")
+
+        await strategy.on_fill(
+            self._fill("sell", 30, 110, {"stage": 1, "reason": "staged_sell_1"})
+        )
+
+        assert strategy._sell_stages["AAPL"] == 1
+        # Non-final sell: position reduced but state kept.
+        assert strategy._positions["AAPL"] == 70
+        assert "AAPL" in strategy._entry_prices
+
+    @pytest.mark.asyncio
+    async def test_on_fill_stop_loss_resets_only_when_flat(self, strategy, sample_bars):
+        """A partial stop-loss fill must NOT wipe state; reset happens only
+        once the position is fully flat."""
+        strategy.initialize({"AAPL": sample_bars})
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("100")
+        strategy._buy_stages["AAPL"] = 2
+
+        # Partial stop-loss fill → still holding 40 → no reset.
+        await strategy.on_fill(self._fill("sell", 60, 90, {"reason": "stop_loss"}))
+        assert strategy._positions["AAPL"] == 40
+        assert "AAPL" in strategy._entry_prices
+
+        # Remaining fills → flat → reset everything.
+        await strategy.on_fill(self._fill("sell", 40, 90, {"reason": "stop_loss"}))
+        assert strategy.get_position("AAPL") <= 0
+        assert "AAPL" not in strategy._entry_prices
+        assert "AAPL" not in strategy._buy_stages
+
+    @pytest.mark.asyncio
+    async def test_on_fill_final_sell_resets(self, strategy, sample_bars):
+        """Final staged sell resets state to restart the cycle on the
+        residual holding."""
+        strategy.initialize({"AAPL": sample_bars})
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("100")
+        strategy._buy_stages["AAPL"] = 2
+
+        await strategy.on_fill(self._fill(
+            "sell", 50, 120,
+            {"stage": 3, "reason": "staged_sell_3", "is_final": True},
+        ))
+
+        assert "AAPL" not in strategy._entry_prices
+        assert "AAPL" not in strategy._buy_stages
+        assert "AAPL" not in strategy._sell_stages

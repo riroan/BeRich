@@ -16,11 +16,23 @@ from src.core.types import (
 )
 from src.core.events import EventBus, Event, EventType
 from src.core.exceptions import BrokerError, OrderError
+from src.utils.scheduler import Session, get_current_session
 from .auth import KISAuth
 from .mapper import KISMapper, _first_num
 from .websocket import KISWebSocket
 
 logger = logging.getLogger("TradingBot")
+
+# ⚠️ UNVERIFIED KIS daytime-trading (주간거래) constants — confirm against
+# the KIS Open API docs / a real account BEFORE live trading. Paper mode
+# never reaches these (PaperBroker simulates fills), so they execute only
+# on the live path. Order submission fails loudly (rt_cd != "0") if wrong.
+_KIS_DAYTIME_ORDER_ENDPOINT = "/uapi/overseas-stock/v1/trading/daytime-order"
+_KIS_DAYTIME_BUY_TR = "TTTS6036U"
+_KIS_DAYTIME_SELL_TR = "TTTS6037U"
+# Extended-hours (pre/after) limit-order code on the regular order endpoint.
+# 시간외 시장가(01) 차단 — extended sessions are limit-only.
+_KIS_EXTENDED_ORD_DVSN = "00"  # UNVERIFIED — confirm extended-hours code
 
 
 def _format_overseas_price(price: Decimal | None) -> str:
@@ -413,10 +425,18 @@ class KISBroker:
             return await self._retry_on_token_expiry(
                 self._submit_domestic_order, order,
             )
-        else:
+
+        # US 24h: route by the current session. Daytime (주간거래) uses a
+        # dedicated TR/endpoint; pre/regular/after share the regular
+        # overseas endpoint (with session-specific ORD_DVSN handling).
+        session = get_current_session(datetime.now())
+        if session == Session.DAY_MARKET:
             return await self._retry_on_token_expiry(
-                self._submit_overseas_order, order,
+                self._submit_overseas_day_order, order,
             )
+        return await self._retry_on_token_expiry(
+            self._submit_overseas_order, order, session,
+        )
 
     async def _submit_domestic_order(self, order: Order) -> str:
         """Submit domestic stock order"""
@@ -455,8 +475,10 @@ class KISBroker:
                 order.status = OrderStatus.REJECTED
                 raise OrderError(f"Order rejected: {data.get('msg1')}")
 
-    async def _submit_overseas_order(self, order: Order) -> str:
-        """Submit overseas stock order"""
+    async def _submit_overseas_order(
+        self, order: Order, session: "Session | None" = None,
+    ) -> str:
+        """Submit overseas stock order (regular / pre / after sessions)."""
         if order.side == OrderSide.BUY:
             tr_id = "VTTT1002U" if self.paper_trading else "TTTT1002U"
         else:
@@ -471,6 +493,8 @@ class KISBroker:
             Market.AMEX: "AMEX",
         }
 
+        extended = session in (Session.PRE, Session.AFTER)
+
         # Marketable limit: KIS overseas market orders are unreliable
         # (venue/session restricted), so submit a limit priced through
         # the market by _slippage_buffer. Fills near-immediately yet a
@@ -479,10 +503,18 @@ class KISBroker:
             limit_price = _marketable_limit_price(
                 order.price, order.side, self._slippage_buffer,
             )
-            ord_dvsn = "00"  # limit
+            ord_dvsn = _KIS_EXTENDED_ORD_DVSN if extended else "00"  # limit
+        elif extended:
+            # 시간외 시장가(01) 차단: extended sessions are limit-only, so a
+            # priceless order has no safe fallback — reject rather than send
+            # a market order that the venue won't accept.
+            raise OrderError(
+                f"Extended-hours ({session.value}) order for {order.symbol} "
+                f"requires a limit price (market orders blocked)"
+            )
         else:
             limit_price = None
-            ord_dvsn = "01"  # market (fallback; price unknown)
+            ord_dvsn = "01"  # market (regular-session fallback; price unknown)
 
         body = {
             "CANO": self._auth.account_no[:8],
@@ -512,6 +544,72 @@ class KISBroker:
             else:
                 order.status = OrderStatus.REJECTED
                 raise OrderError(f"Overseas order rejected: {data.get('msg1')}")
+
+    async def _submit_overseas_day_order(self, order: Order) -> str:
+        """Submit a US daytime (주간거래) order.
+
+        ⚠️ Uses UNVERIFIED daytime TR IDs/endpoint (see module top) —
+        confirm against KIS docs before live use. Daytime trading is
+        limit-only, so a priceless order is rejected rather than sent as
+        a market order. Paper mode never reaches here (PaperBroker fills).
+        """
+        if self.paper_trading:
+            # 모의투자 generally does not support 주간거래; fail clearly.
+            raise OrderError(
+                "Daytime (주간거래) orders are not supported in paper mode"
+            )
+
+        tr_id = (
+            _KIS_DAYTIME_BUY_TR if order.side == OrderSide.BUY
+            else _KIS_DAYTIME_SELL_TR
+        )
+        headers = self._auth.get_headers(tr_id)
+
+        exchange_map = {
+            Market.NYSE: "NYSE",
+            Market.NASDAQ: "NASD",
+            Market.AMEX: "AMEX",
+        }
+
+        if not order.price:
+            raise OrderError(
+                f"Daytime order for {order.symbol} requires a limit price"
+            )
+        limit_price = _marketable_limit_price(
+            order.price, order.side, self._slippage_buffer,
+        )
+
+        body = {
+            "CANO": self._auth.account_no[:8],
+            "ACNT_PRDT_CD": self._auth.account_no[9:],
+            "OVRS_EXCG_CD": exchange_map.get(order.market, "NASD"),
+            "PDNO": order.symbol,
+            "ORD_QTY": str(order.quantity),
+            "OVRS_ORD_UNPR": _format_overseas_price(limit_price),
+            "ORD_SVR_DVSN_CD": "0",
+            "ORD_DVSN": "00",  # limit
+        }
+
+        async with self._session.post(
+            f"{self.base_url}{_KIS_DAYTIME_ORDER_ENDPOINT}",
+            headers=headers, json=body,
+        ) as resp:
+            data = await resp.json()
+
+            if data.get("rt_cd") == "0":
+                order_id = data["output"]["ODNO"]
+                order.order_id = order_id
+                order.status = OrderStatus.SUBMITTED
+                self._orders[order_id] = order
+
+                await self._emit_order_event(order)
+                logger.info(f"Daytime order submitted: {order_id}")
+                return order_id
+            else:
+                order.status = OrderStatus.REJECTED
+                raise OrderError(
+                    f"Daytime order rejected: {data.get('msg1')}"
+                )
 
     async def cancel_order(self, order_id: str, market: Market = Market.KRX) -> bool:
         """Cancel an order"""

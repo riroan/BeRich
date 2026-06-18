@@ -87,6 +87,9 @@ class Order:
     created_at: datetime = field(default_factory=datetime.now)
     filled_quantity: int = 0
     filled_avg_price: Decimal | None = None
+    # Originating signal metadata (rsi/reason/stage/...). Rides the same
+    # Order object through the broker so fills can advance stage counters.
+    metadata: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -127,3 +130,6 @@ class Fill:
     timestamp: datetime
     pnl: Decimal | None = None
     rsi: float | None = None
+    # Originating signal metadata, propagated from the Order so the
+    # strategy can advance stage counters on the actual fill.
+    metadata: dict = field(default_factory=dict)

@@ -11,7 +11,7 @@ Current price updates today's daily close for real-time RSI estimation.
 """
 
 from decimal import Decimal
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 import pandas as pd
 import logging
 
@@ -34,10 +34,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._sell_stages: dict[str, int] = {}
         # Track last buy time for cooldown reset
         self._last_buy_time: dict[str, datetime] = {}
-        # Track whether RSI recovered since last full buy cycle
-        self._rsi_recovered: dict[str, bool] = {}
-        # Store daily bars separately for RSI calculation
+        # CONFIRMED regular-session daily bars (immutable base for RSI)
         self._daily_bars: dict[str, pd.DataFrame] = {}
+        # Live/forming price — updated every tick in ALL sessions; layered
+        # on top of the confirmed base as the most recent RSI point.
+        self._live_price: dict[str, float] = {}
+        # Date of the last confirmed bar, for confirmation-driven slide.
+        self._last_confirmed_date: dict[str, date] = {}
 
     @property
     def name(self) -> str:
@@ -67,43 +70,95 @@ class RSIMeanReversionStrategy(BaseStrategy):
             ])
             df.set_index("timestamp", inplace=True)
             self._daily_bars[symbol] = df
+            if len(df):
+                self._last_confirmed_date[symbol] = (
+                    self._bar_date(df.index[-1])
+                )
             logger.info(f"[{symbol}] Loaded {len(df)} daily bars for RSI")
 
+    @staticmethod
+    def _bar_date(index_value) -> date:
+        return index_value.date() if hasattr(index_value, "date") else index_value
+
     def update_daily_close(self, symbol: str, current_price: float) -> None:
-        """Update today's close price for RSI calculation"""
-        if symbol not in self._daily_bars:
-            return
+        """Update the live/forming price for RSI.
 
-        df = self._daily_bars[symbol]
-        if len(df) == 0:
-            return
-
-        today = datetime.now().date()
-        last_date = df.index[-1].date() if hasattr(df.index[-1], 'date') else df.index[-1]
-
-        if last_date == today:
-            # Update today's close
-            df.iloc[-1, df.columns.get_loc("close")] = current_price
-            # Update high/low if needed
-            if current_price > df.iloc[-1]["high"]:
-                df.iloc[-1, df.columns.get_loc("high")] = current_price
-            if current_price < df.iloc[-1]["low"]:
-                df.iloc[-1, df.columns.get_loc("low")] = current_price
-        else:
-            # Add new row for today
-            new_row = pd.DataFrame([{
-                "timestamp": datetime.now(),
-                "open": current_price,
-                "high": current_price,
-                "low": current_price,
-                "close": current_price,
-                "volume": 0,
-            }]).set_index("timestamp")
-            self._daily_bars[symbol] = pd.concat([df, new_row]).tail(100)
+        C': the live slot is refreshed every tick in EVERY session. The
+        confirmed base never slides here — sliding happens only when a new
+        regular-session daily bar is confirmed (see confirm_daily_bar),
+        not on the wall clock.
+        """
+        self._live_price[symbol] = float(current_price)
 
     def get_daily_dataframe(self, symbol: str) -> pd.DataFrame:
-        """Get daily DataFrame for RSI calculation"""
-        return self._daily_bars.get(symbol, pd.DataFrame())
+        """Confirmed base + the live forming row as the most recent point.
+
+        Returns a fresh frame each call so the confirmed base is never
+        mutated by downstream RSI computation.
+        """
+        base = self._daily_bars.get(symbol)
+        if base is None or len(base) == 0:
+            return pd.DataFrame()
+
+        live = self._live_price.get(symbol)
+        if live is None:
+            return base
+
+        forming = pd.DataFrame([{
+            "open": live,
+            "high": live,
+            "low": live,
+            "close": live,
+            "volume": 0,
+        }], index=[datetime.now()])
+        return pd.concat([base, forming])
+
+    def confirm_daily_bar(self, symbol: str, bar) -> str:
+        """Fold a newly-confirmed regular-session daily bar into the base.
+
+        This is the ONLY thing that slides the RSI window. Called by the
+        post-close confirmation poll.
+
+        Returns: "appended" (true slide to a newer date), "refreshed"
+        (final close for the same date folded in), or "skipped" (stale).
+        """
+        if symbol not in self._daily_bars:
+            return "skipped"
+
+        d = bar.timestamp.date() if hasattr(bar.timestamp, "date") else bar.timestamp
+        last = self._last_confirmed_date.get(symbol)
+
+        row = {
+            "open": float(bar.open),
+            "high": float(bar.high),
+            "low": float(bar.low),
+            "close": float(bar.close),
+            "volume": bar.volume,
+        }
+
+        if last is None or d > last:
+            new_row = pd.DataFrame([row], index=[bar.timestamp])
+            self._daily_bars[symbol] = pd.concat(
+                [self._daily_bars[symbol], new_row]
+            ).tail(100)
+            self._last_confirmed_date[symbol] = d
+            logger.info(
+                f"[{symbol}] RSI base slid → confirmed close {row['close']} "
+                f"({d})"
+            )
+            return "appended"
+
+        if d == last:
+            df = self._daily_bars[symbol]
+            for col, val in row.items():
+                df.iloc[-1, df.columns.get_loc(col)] = val
+            return "refreshed"
+
+        return "skipped"
+
+    def last_confirmed_date(self, symbol: str) -> date | None:
+        """Date of the last confirmed regular-session bar (for the poll)."""
+        return self._last_confirmed_date.get(symbol)
 
     async def on_bar(self, bar) -> Signal | None:
         """Override to skip update_bar (we use daily data via update_daily_close)"""
@@ -148,26 +203,18 @@ class RSIMeanReversionStrategy(BaseStrategy):
         current_buy_stage = self._buy_stages.get(symbol, 0)
         current_sell_stage = self._sell_stages.get(symbol, 0)
 
-        # Track RSI recovery (RSI >= 50 after completing all buy stages)
-        recovery_rsi = self.params.get("recovery_rsi", 50)
-        if current_buy_stage >= len(avg_down_levels):
-            if current_rsi >= recovery_rsi:
-                self._rsi_recovered[symbol] = True
-
-        # Check cooldown reset for buy stages
-        # Requires: cooldown elapsed AND RSI recovered once
+        # Check cooldown reset for buy stages.
+        # C' (confirmed 2026-06-18): cooldown elapsed is the ONLY gate —
+        # the "RSI must recover to >= 50" condition was removed. After a
+        # stop-loss, once cooldown_days pass a fresh cycle may start even
+        # while still oversold (mean-reversion "bottom-fishing").
         if symbol in self._last_buy_time:
             time_since_last_buy = datetime.now() - self._last_buy_time[symbol]
-            rsi_recovered = self._rsi_recovered.get(symbol, False)
-            if time_since_last_buy >= timedelta(days=cooldown_days) and rsi_recovered:
+            if time_since_last_buy >= timedelta(days=cooldown_days):
                 self._buy_stages[symbol] = 0
                 self._sell_stages[symbol] = 0
-                self._rsi_recovered[symbol] = False
                 current_buy_stage = 0
-                logger.info(
-                    f"[{symbol}] Buy/sell stages reset "
-                    f"(cooldown + RSI recovery)"
-                )
+                logger.info(f"[{symbol}] Buy/sell stages reset (cooldown)")
 
         # Check stop loss first (if in position)
         if current_position > 0 and symbol in self._entry_prices:
@@ -184,7 +231,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     f"PnL: {pnl_pct:.1f}% <= {stop_loss_pct}% | "
                     f"Avg: {avg_price:,} → Current: {current_price:,}"
                 )
-                self._reset_position(symbol)
+                # State reset moved to on_fill: a stop-loss that doesn't
+                # fill (e.g. extended hours) must NOT drop the position.
                 return Signal(
                     signal_type=SignalType.EXIT_LONG,
                     symbol=symbol,
@@ -227,8 +275,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
                 # Check if RSI is above threshold
                 if current_rsi >= rsi_threshold:
-                    self._sell_stages[symbol] = stage + 1
-
                     avg_price = self._entry_prices.get(symbol, current_price)
                     pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
@@ -246,10 +292,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
                         f"Portion: {portion*100:.0f}% | PnL: {pnl_pct:.1f}%"
                     )
 
-                    # If final stage, reset everything
-                    if is_final_sell:
-                        self._reset_position(symbol)
-
+                    # Stage advance + final-exit reset moved to on_fill
+                    # (target stage carried in metadata["stage"]).
                     return Signal(
                         signal_type=SignalType.EXIT_LONG,
                         symbol=symbol,
@@ -288,11 +332,11 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 continue
 
             if current_rsi <= rsi_threshold:
-                self._buy_stages[symbol] = stage + 1
-                self._last_buy_time[symbol] = datetime.now()
-
-                # Reset sell stages when buying
-                self._sell_stages[symbol] = 0
+                # Stage advance, last-buy time, and sell-stage reset all
+                # move to on_fill (target stage carried in metadata["stage"]).
+                # Counters now reflect ACTUAL fills, so an unfilled order
+                # leaves the stage retryable next tick (in-flight guard in
+                # the order manager prevents duplicate orders meanwhile).
 
                 # FIX-007: Don't set entry price on signal generation
                 # Entry price is set ONLY via on_fill() or sync_position()
@@ -363,8 +407,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._sell_stages[symbol]
         if symbol in self._last_buy_time:
             del self._last_buy_time[symbol]
-        if symbol in self._rsi_recovered:
-            del self._rsi_recovered[symbol]
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI indicator using Wilder's smoothing method"""
@@ -391,25 +433,55 @@ class RSIMeanReversionStrategy(BaseStrategy):
         return float(rsi.iloc[-1]) if not pd.isna(rsi.iloc[-1]) else None
 
     async def on_fill(self, fill) -> None:
-        """Track fills and update average price"""
+        """Advance stage counters, average price, and resets — all on the
+        ACTUAL fill (C' #8).
+
+        Moving these off signal-generation means an unfilled order (e.g.
+        extended-hours) never buries a stage or drops a still-held
+        position. The target stage rides in ``fill.metadata["stage"]`` so
+        it stays idempotent across partial fills (set, not increment).
+        The order manager's in-flight guard prevents duplicate orders
+        while a stage is pending.
+        """
         symbol = fill.symbol
+        meta = fill.metadata or {}
+        reason = str(meta.get("reason", ""))
+        target_stage = meta.get("stage")
 
         if fill.side.value == "buy":
-            # Calculate new average price before updating position
+            # Weighted average using the PRE-update position.
             old_qty = self._positions.get(symbol, 0)
             old_avg = self._entry_prices.get(symbol, Decimal("0"))
             new_qty = fill.quantity
             new_price = fill.price
 
             if old_qty > 0 and old_avg > 0:
-                # Weighted average: (old_qty * old_avg + new_qty * new_price) / total_qty
                 total_qty = old_qty + new_qty
-                new_avg = (old_avg * old_qty + new_price * new_qty) / total_qty
-                self._entry_prices[symbol] = new_avg
+                self._entry_prices[symbol] = (
+                    (old_avg * old_qty + new_price * new_qty) / total_qty
+                )
             else:
                 self._entry_prices[symbol] = new_price
 
+            if target_stage is not None:
+                self._buy_stages[symbol] = target_stage
             self._last_buy_time[symbol] = datetime.now()
             self._sell_stages[symbol] = 0
 
-        await super().on_fill(fill)
+        await super().on_fill(fill)  # updates _positions
+
+        if fill.side.value == "sell":
+            # Staged-sell counter advances on the fill.
+            if reason != "stop_loss" and target_stage is not None:
+                self._sell_stages[symbol] = target_stage
+
+            # Position-closing exits reset all tracking. A stop-loss is a
+            # full exit — reset only once the position is actually flat
+            # (a partial stop-loss fill must not wipe state). A final
+            # staged sell intentionally keeps a residual, so it resets on
+            # the fill to restart the cycle on the remaining shares.
+            if reason == "stop_loss":
+                if self.get_position(symbol) <= 0:
+                    self._reset_position(symbol)
+            elif meta.get("is_final"):
+                self._reset_position(symbol)

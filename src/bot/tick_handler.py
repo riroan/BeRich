@@ -23,6 +23,8 @@ class TickHandlerMixin:
         if getattr(self.dashboard, 'debug_freeze', False):
             return
         await self._warmup.log_status()
+        # React to US session changes: RSI base slide + stop-loss re-price.
+        await self._handle_session_transition()
         await self.update_dashboard_status()
         await self.update_dashboard_positions()
         await self._sync_enabled_symbols()

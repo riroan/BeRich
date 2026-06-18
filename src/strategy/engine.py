@@ -160,6 +160,7 @@ class StrategyEngine:
                     price=marginal,
                     commission=Decimal("0"),
                     timestamp=datetime.now(),
+                    metadata=getattr(order, "metadata", None) or {},
                 )
                 await strategy.on_fill(fill)
 

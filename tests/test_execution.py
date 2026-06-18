@@ -407,6 +407,116 @@ def _make_order(
     )
 
 
+class TestInFlightGuard:
+    """Phase 5 #8: an outstanding same-side order suppresses new signals
+    (so a fill-driven stage counter can't spawn duplicate orders)."""
+
+    def test_has_active_order_matches_symbol_and_side(self, order_manager):
+        order_manager._active_orders["o1"] = _make_order(
+            symbol="AAPL", side=OrderSide.BUY, order_id="o1",
+        )
+        assert order_manager._has_active_order("AAPL", "buy") is True
+        assert order_manager._has_active_order("AAPL", "sell") is False
+        assert order_manager._has_active_order("MSFT", "buy") is False
+
+    @pytest.mark.asyncio
+    async def test_signal_suppressed_when_order_in_flight(self, order_manager):
+        dashboard_mock = MagicMock()
+        dashboard_mock.trading_paused = False
+        order_manager._active_orders["o1"] = _make_order(
+            symbol="AAPL", side=OrderSide.BUY, order_id="o1",
+        )
+
+        signal = _make_signal(signal_type=SignalType.ENTRY_LONG, symbol="AAPL")
+        event = _make_event(signal)
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock), \
+             patch.object(
+                 order_manager, "_signal_to_order",
+                 new_callable=AsyncMock, return_value=None,
+             ) as mock_sto:
+            await order_manager._on_signal(event)
+            mock_sto.assert_not_called()  # suppressed before order creation
+
+    @pytest.mark.asyncio
+    async def test_signal_passes_when_no_in_flight_order(self, order_manager):
+        dashboard_mock = MagicMock()
+        dashboard_mock.trading_paused = False
+
+        signal = _make_signal(signal_type=SignalType.ENTRY_LONG, symbol="AAPL")
+        event = _make_event(signal)
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock), \
+             patch.object(
+                 order_manager, "_signal_to_order",
+                 new_callable=AsyncMock, return_value=None,
+             ) as mock_sto:
+            await order_manager._on_signal(event)
+            mock_sto.assert_awaited_once_with(signal)
+
+
+class TestCancelStaleStopLosses:
+    """Phase 4 #7: cancel unfilled stop-loss orders at session transitions."""
+
+    @pytest.mark.asyncio
+    async def test_cancels_unfilled_stop_loss(self, order_manager, broker):
+        order = _make_order(symbol="AAPL", side=OrderSide.SELL, order_id="sl1")
+        order.metadata = {"reason": "stop_loss"}
+        order.filled_quantity = 0
+        order_manager._active_orders["sl1"] = order
+
+        n = await order_manager.cancel_unfilled_stop_losses()
+
+        assert n == 1
+        broker.cancel_order.assert_awaited_once_with("sl1", order.market)
+        assert "sl1" not in order_manager._active_orders
+
+    @pytest.mark.asyncio
+    async def test_skips_partially_filled_stop_loss(self, order_manager, broker):
+        order = _make_order(symbol="AAPL", side=OrderSide.SELL, order_id="sl2")
+        order.metadata = {"reason": "stop_loss"}
+        order.filled_quantity = 5  # partial — leave it alone
+        order_manager._active_orders["sl2"] = order
+
+        n = await order_manager.cancel_unfilled_stop_losses()
+
+        assert n == 0
+        broker.cancel_order.assert_not_called()
+        assert "sl2" in order_manager._active_orders
+
+    @pytest.mark.asyncio
+    async def test_skips_non_stop_loss_orders(self, order_manager, broker):
+        order = _make_order(symbol="AAPL", side=OrderSide.BUY, order_id="b1")
+        order.metadata = {"reason": "avg_down_stage_1"}
+        order.filled_quantity = 0
+        order_manager._active_orders["b1"] = order
+
+        n = await order_manager.cancel_unfilled_stop_losses()
+
+        assert n == 0
+        broker.cancel_order.assert_not_called()
+
+
+class TestSignalMetadataPropagation:
+    """Phase 5 #8: signal metadata rides on the Order to the fill."""
+
+    @pytest.mark.asyncio
+    async def test_order_carries_signal_metadata(self, order_manager, broker):
+        broker.get_current_price.return_value = Decimal("50")
+        signal = _make_signal(signal_type=SignalType.ENTRY_LONG, strength=0.5)
+        signal.metadata = {"stage": 2, "reason": "avg_down_stage_2", "rsi": 24.0}
+
+        with patch.object(
+            order_manager, "_calculate_buy_quantity",
+            new_callable=AsyncMock, return_value=10,
+        ):
+            order = await order_manager._signal_to_order(signal)
+
+        assert order.metadata == {"stage": 2, "reason": "avg_down_stage_2", "rsi": 24.0}
+        # Must be a copy, not the same dict object.
+        assert order.metadata is not signal.metadata
+
+
 class TestTradeNotification:
     """Submit-time vs fill-time notification semantics"""
 

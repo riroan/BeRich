@@ -15,7 +15,7 @@ from src.execution.order_manager import OrderManager
 from src.risk.manager import RiskManager
 from src.risk.limits import RiskLimits
 from src.utils.config import Config
-from src.utils.scheduler import TradingScheduler
+from src.utils.scheduler import TradingScheduler, Session, get_current_session
 from src.utils.notifier import DiscordNotifier
 from src.web.app import get_dashboard_state
 
@@ -59,6 +59,11 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Equity snapshot settings
         self._equity_save_interval = 5  # Every 5 ticks (5 minutes)
         self._equity_save_counter = 0
+
+        # Daily-bar confirmation poll (RSI base slide on regular close)
+        self._last_session: Session | None = None
+        self._confirm_poll_task: asyncio.Task | None = None
+        self._confirm_poll_date = None
 
     async def initialize(self) -> None:
         """Initialize all components"""
@@ -392,6 +397,91 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         except Exception as e:
             logger.warning(f"Open-order reconciliation failed: {e!r}")
 
+    async def _handle_session_transition(self) -> None:
+        """React to US trading-session changes on each tick.
+
+        - REGULAR→AFTER: kick the daily-bar confirmation poll once/day
+          (RSI base slides only on KIS bar confirmation, not the clock).
+        - Any change into a tradable session: cancel stale, unfilled
+          stop-loss orders so the strategy re-emits them at the new
+          session's price next tick (Phase 4 #7). Safe because the
+          position reset is fill-driven — an unfilled stop-loss never
+          dropped the position.
+        """
+        current = get_current_session(datetime.now())
+        prev = self._last_session
+        self._last_session = current
+
+        if prev is None or prev == current:
+            return
+
+        if prev == Session.REGULAR and current == Session.AFTER:
+            today = datetime.now().date()
+            poll_running = (
+                self._confirm_poll_task
+                and not self._confirm_poll_task.done()
+            )
+            if self._confirm_poll_date != today and not poll_running:
+                self._confirm_poll_date = today
+                self._confirm_poll_task = asyncio.create_task(
+                    self._run_daily_confirm_poll()
+                )
+
+        if current != Session.CLOSED and self.order_manager:
+            try:
+                await self.order_manager.cancel_unfilled_stop_losses()
+            except Exception as e:
+                logger.warning(f"Stale stop-loss cancel failed: {e}")
+
+    async def _run_daily_confirm_poll(self) -> None:
+        """After the regular session closes, poll KIS daily bars and slide
+        each symbol's RSI base when its new confirmed bar appears.
+
+        5-min interval, up to 30 min. A symbol whose new bar never appears
+        keeps its previous-session base (no silent clock-based slide).
+        """
+        strategies = [
+            s for s in self.strategy_engine.get_strategies()
+            if hasattr(s, "confirm_daily_bar")
+        ]
+        pending = {
+            (s, sym) for s in strategies for sym in s.symbols
+        }
+        if not pending:
+            return
+        logger.info(
+            f"Daily-bar confirmation poll started ({len(pending)} symbols)"
+        )
+
+        for attempt in range(6):  # 6 × 5 min = 30 min
+            done = set()
+            for strategy, symbol in pending:
+                try:
+                    await asyncio.sleep(1)  # rate limit
+                    bars = await self.broker.get_historical_bars(
+                        symbol=symbol, market=strategy.market, days=5,
+                    )
+                    if not bars:
+                        continue
+                    if strategy.confirm_daily_bar(symbol, bars[-1]) == "appended":
+                        done.add((strategy, symbol))
+                except Exception as e:
+                    logger.warning(f"[{symbol}] confirm poll error: {e}")
+            pending -= done
+            if not pending:
+                break
+            if attempt < 5:
+                await asyncio.sleep(300)  # retry in 5 min
+
+        if pending:
+            names = sorted(sym for _, sym in pending)
+            logger.warning(
+                f"Daily-bar confirmation incomplete after 30min: {names} "
+                f"— RSI base kept at previous session (no silent slide)"
+            )
+        else:
+            logger.info("Daily-bar confirmation poll complete (all slid)")
+
     async def start(self) -> None:
         """Start the bot"""
         logger.info("Starting Trading Bot...")
@@ -464,6 +554,13 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             self._status_task.cancel()
             try:
                 await self._status_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._confirm_poll_task:
+            self._confirm_poll_task.cancel()
+            try:
+                await self._confirm_poll_task
             except asyncio.CancelledError:
                 pass
 

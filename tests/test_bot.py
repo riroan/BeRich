@@ -133,6 +133,81 @@ class TestTradingBot:
         assert bot._equity_save_interval == 5
         assert bot._equity_save_counter == 0
 
+    @pytest.mark.asyncio
+    async def test_confirm_poll_triggers_on_regular_to_after(self, bot):
+        """REGULAR→AFTER transition spawns the daily-bar confirm poll once."""
+        from src.utils.scheduler import Session
+
+        bot._last_session = Session.REGULAR
+        bot._run_daily_confirm_poll = AsyncMock()
+
+        with patch("src.bot.core.get_current_session", return_value=Session.AFTER):
+            await bot._handle_session_transition()
+            assert bot._confirm_poll_task is not None
+            await bot._confirm_poll_task  # let the spawned task run
+
+        bot._run_daily_confirm_poll.assert_awaited_once()
+        assert bot._last_session == Session.AFTER
+
+    @pytest.mark.asyncio
+    async def test_confirm_poll_no_trigger_without_transition(self, bot):
+        """No transition (AFTER→AFTER) → no poll."""
+        from src.utils.scheduler import Session
+
+        bot._last_session = Session.AFTER
+        bot._run_daily_confirm_poll = AsyncMock()
+
+        with patch("src.bot.core.get_current_session", return_value=Session.AFTER):
+            await bot._handle_session_transition()
+
+        bot._run_daily_confirm_poll.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_session_transition_cancels_stale_stop_losses(self, bot):
+        """Entering a new tradable session re-prices stale stop-losses (#7)."""
+        from src.utils.scheduler import Session
+
+        bot._last_session = Session.PRE
+        bot._run_daily_confirm_poll = AsyncMock()
+        bot.order_manager = AsyncMock()
+
+        with patch("src.bot.core.get_current_session", return_value=Session.REGULAR):
+            await bot._handle_session_transition()
+
+        bot.order_manager.cancel_unfilled_stop_losses.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_no_stop_loss_cancel_without_transition(self, bot):
+        """No session change → no stop-loss cancel."""
+        from src.utils.scheduler import Session
+
+        bot._last_session = Session.REGULAR
+        bot.order_manager = AsyncMock()
+
+        with patch("src.bot.core.get_current_session", return_value=Session.REGULAR):
+            await bot._handle_session_transition()
+
+        bot.order_manager.cancel_unfilled_stop_losses.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_confirm_poll_slides_base(self, bot):
+        """The poll folds the latest confirmed bar into each symbol."""
+        latest_bar = MagicMock()
+        strategy = MagicMock()
+        strategy.symbols = ["AAPL"]
+        strategy.market = MagicMock()
+        strategy.confirm_daily_bar = MagicMock(return_value="appended")
+
+        bot.strategy_engine = MagicMock()
+        bot.strategy_engine.get_strategies.return_value = [strategy]
+        bot.broker = AsyncMock()
+        bot.broker.get_historical_bars = AsyncMock(return_value=[latest_bar])
+
+        with patch("src.bot.core.asyncio.sleep", new=AsyncMock()):
+            await bot._run_daily_confirm_poll()
+
+        strategy.confirm_daily_bar.assert_called_once_with("AAPL", latest_bar)
+
 
 class TestDashboardSyncMixin:
     """Test cases for DashboardSyncMixin"""

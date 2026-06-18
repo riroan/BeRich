@@ -72,6 +72,19 @@ class OrderManager:
         await self.cancel_all_orders()
         logger.info("Order manager stopped")
 
+    def _has_active_order(self, symbol: str, side_key: str) -> bool:
+        """True if a not-yet-terminal order for (symbol, side) is live.
+
+        _active_orders is populated on submit and cleared on full fill /
+        cancel / reject (partial fills stay live), so this is a precise
+        in-flight check.
+        """
+        for order in self._active_orders.values():
+            order_side = "buy" if order.side == OrderSide.BUY else "sell"
+            if order.symbol == symbol and order_side == side_key:
+                return True
+        return False
+
     async def _on_signal(self, event: Event) -> None:
         """Handle signal events"""
         signal: Signal = event.data["signal"]
@@ -101,6 +114,18 @@ class OrderManager:
             logger.warning(
                 f"[DEDUP] Duplicate signal ignored: {side_key} {signal.symbol} "
                 f"(last order {(now - last_order_time).seconds}s ago)"
+            )
+            return
+
+        # In-flight guard: with stage counters now advancing on FILL (not at
+        # signal time), an unfilled order would otherwise have its stage
+        # re-emitted every tick → duplicate orders. Suppress while a same-
+        # side order for this symbol is still live; it clears on fill/cancel/
+        # reject, so the stage retries next tick if it never filled.
+        if self._has_active_order(signal.symbol, side_key):
+            logger.info(
+                f"[IN-FLIGHT] Signal suppressed: {side_key} {signal.symbol} "
+                f"(active order outstanding)"
             )
             return
 
@@ -181,6 +206,9 @@ class OrderManager:
             order_type=OrderType.MARKET,
             quantity=quantity,
             price=price,
+            # Ride the signal metadata through the broker so the strategy
+            # advances stage counters on the ACTUAL fill, not at signal time.
+            metadata=dict(signal.metadata or {}),
         )
 
     async def _calculate_buy_quantity(
@@ -441,6 +469,29 @@ class OrderManager:
                 continue
             if await self.cancel_order(order_id):
                 cancelled += 1
+        return cancelled
+
+    async def cancel_unfilled_stop_losses(self) -> int:
+        """Cancel still-open, zero-fill stop-loss orders (Phase 4 #7).
+
+        Called on session transitions: a stop-loss that didn't fill in the
+        previous session has a stale limit price. Cancelling it frees the
+        in-flight guard so the strategy re-emits the stop-loss at the new
+        session's price next tick (position is still held because the
+        reset is fill-driven). A partially-filled stop-loss is left alone.
+        """
+        cancelled = 0
+        for order_id, order in list(self._active_orders.items()):
+            if (order.filled_quantity or 0) > 0:
+                continue
+            if str(order.metadata.get("reason", "")) != "stop_loss":
+                continue
+            if await self.cancel_order(order_id):
+                cancelled += 1
+                logger.info(
+                    f"[RESUBMIT] Cancelled stale stop-loss {order_id} "
+                    f"({order.symbol}) — will re-price next tick"
+                )
         return cancelled
 
     async def _account_fill(self, order: Order, meta: dict) -> None:
