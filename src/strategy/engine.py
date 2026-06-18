@@ -4,7 +4,7 @@ import logging
 
 from src.core.types import Bar, Quote, Signal, Market, Position
 from src.core.events import EventBus, Event, EventType
-from src.broker.kis.client import KISBroker
+from src.broker.base import Broker
 from src.utils.notifier import DiscordNotifier
 from .base import BaseStrategy
 
@@ -17,7 +17,7 @@ class StrategyEngine:
     def __init__(
         self,
         event_bus: EventBus,
-        broker: KISBroker,
+        broker: Broker,
         notifier: DiscordNotifier | None = None,
     ):
         self.event_bus = event_bus

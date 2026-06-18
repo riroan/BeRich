@@ -9,9 +9,10 @@ from src.core.types import (
     SignalType,
     OrderSide,
     OrderType,
+    Market,
 )
 from src.core.events import EventBus, Event, EventType
-from src.broker.kis.client import KISBroker
+from src.broker.base import Broker
 from src.risk.manager import RiskManager
 from src.data.storage import Storage
 from src.utils.notifier import DiscordNotifier
@@ -26,7 +27,7 @@ class OrderManager:
     def __init__(
         self,
         event_bus: EventBus,
-        broker: KISBroker,
+        broker: Broker,
         risk_manager: RiskManager,
         storage: Storage,
         is_trading_enabled: Callable = None,
@@ -135,7 +136,7 @@ class OrderManager:
         # Calculate buy quantity based on portfolio weight
         if signal.signal_type == SignalType.ENTRY_LONG:
             quantity = await self._calculate_buy_quantity(
-                signal.symbol, price, signal.strength,
+                signal.symbol, signal.market, price, signal.strength,
             )
             if quantity <= 0:
                 return None
@@ -172,7 +173,7 @@ class OrderManager:
         )
 
     async def _calculate_buy_quantity(
-        self, symbol: str, price, stage_portion: float,
+        self, symbol: str, market: Market, price, stage_portion: float,
     ) -> int:
         """Calculate buy quantity based on portion of REMAINING weight room.
 
@@ -183,9 +184,11 @@ class OrderManager:
         remaining = $1,000, stage 0.5 → buy $500.
         """
         dashboard = get_dashboard_state()
-        total_value = float(dashboard.balance_usd)
+        is_krx = market == Market.KRX
+        total_value = float(dashboard.balance_krw if is_krx else dashboard.balance_usd)
+        currency_symbol = "₩" if is_krx else "$"
         if total_value <= 0:
-            logger.debug(f"[{symbol}] No portfolio value")
+            logger.debug(f"[{symbol}] No portfolio value for {market.value}")
             return 0
 
         # Get max_weight from strategy_configs DB
@@ -233,8 +236,8 @@ class OrderManager:
         remaining_room = max_symbol_value - current_value
         buy_amount = remaining_room * stage_portion
 
-        # Check available cash
-        cash = float(dashboard.cash_usd + dashboard.cash_krw)
+        # Check available cash in the signal market currency
+        cash = float(dashboard.cash_krw if is_krx else dashboard.cash_usd)
 
         # Don't exceed available cash
         buy_amount = min(buy_amount, cash)
@@ -246,10 +249,11 @@ class OrderManager:
 
         logger.info(
             f"[{symbol}] Buy calc: "
-            f"remaining ${remaining_room:,.0f} × "
-            f"{stage_portion * 100:.0f}% = ${buy_amount:,.0f} "
-            f"(max ${max_symbol_value:,.0f}, held ${current_value:,.0f}) "
-            f"→ {quantity} shares @ ${float(price):,.2f}"
+            f"remaining {currency_symbol}{remaining_room:,.0f} × "
+            f"{stage_portion * 100:.0f}% = {currency_symbol}{buy_amount:,.0f} "
+            f"(max {currency_symbol}{max_symbol_value:,.0f}, "
+            f"held {currency_symbol}{current_value:,.0f}) "
+            f"→ {quantity} shares @ {currency_symbol}{float(price):,.2f}"
         )
 
         return quantity

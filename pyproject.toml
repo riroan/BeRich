@@ -12,6 +12,7 @@ dependencies = [
     "pandas>=2.0",
     "numpy>=1.24",
     "pandas-ta>=0.4.71b0",
+    "yfinance>=0.2.50",
 
     # Database
     "sqlalchemy[asyncio]>=2.0",
