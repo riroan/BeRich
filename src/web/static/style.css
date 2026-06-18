@@ -438,7 +438,7 @@ tr:hover { background: rgba(59,130,246,0.04); }
 }
 .signal-item {
     display: grid;
-    grid-template-columns: 70px 60px 50px 1fr;
+    grid-template-columns: 70px auto 50px 1fr;
     align-items: center;
     gap: 8px;
     padding: 8px 0;
@@ -1046,7 +1046,7 @@ select option { background: var(--surface); color: var(--text); }
     .signal-card { padding: 12px; }
     .signal-card h3 { font-size: 12px; }
     .signal-item {
-        grid-template-columns: 60px 50px 40px 1fr;
+        grid-template-columns: 60px auto 40px 1fr;
         gap: 6px;
         font-size: 11px;
         padding: 6px 0;

@@ -115,7 +115,7 @@
                 {% for log in trade_logs[:5] %}
                 <div class="signal-item">
                     <span class="sym-badge">{{ log.symbol }}</span>
-                    <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">{{ log.action | upper }}</span>
+                    <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
                     <span class="trade-qty">x{{ log.quantity }}</span>
                     <span class="trade-price">${{ "{:,.2f}".format(log.price) }}</span>
                 </div>

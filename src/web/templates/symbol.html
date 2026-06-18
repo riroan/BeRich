@@ -127,7 +127,7 @@
                         {% for log in symbol_trades %}
                         <tr class="{{ log.action }}">
                             <td class="time full-width" data-label="Time">{{ log.timestamp }}</td>
-                            <td class="action {{ log.action }}" data-label="Action">{{ log.action | upper }}</td>
+                            <td class="action {{ log.action }}" data-label="Action">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</td>
                             <td class="number" data-label="Price">{{ "{:,.2f}".format(log.price) }}</td>
                             <td class="number" data-label="Qty">{{ log.quantity }}</td>
                             <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
