@@ -53,6 +53,13 @@ class Storage:
                         "ADD COLUMN rsi DECIMAL(10,4)"
                     ))
                     logger.info("Migrated: added rsi column to fills")
+                # Add reason so partial_sell / stop_loss survive restart
+                if "reason" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE fills "
+                        "ADD COLUMN reason VARCHAR(40)"
+                    ))
+                    logger.info("Migrated: added reason column to fills")
 
         await conn.run_sync(_check_and_migrate)
 
@@ -249,6 +256,7 @@ class Storage:
                 commission=fill.commission,
                 pnl=fill.pnl,
                 rsi=fill.rsi,
+                reason=fill.reason,
                 timestamp=fill.timestamp,
             )
             session.add(fill_model)
@@ -272,6 +280,7 @@ class Storage:
                     commission=Decimal(str(row.commission)),
                     pnl=Decimal(str(row.pnl)) if row.pnl else None,
                     rsi=float(row.rsi) if row.rsi else None,
+                    reason=row.reason,
                     timestamp=row.timestamp,
                 )
                 for row in rows
@@ -309,6 +318,7 @@ class Storage:
                     commission=Decimal(str(row.commission)),
                     pnl=Decimal(str(row.pnl)) if row.pnl else None,
                     rsi=float(row.rsi) if row.rsi else None,
+                    reason=row.reason,
                     timestamp=row.timestamp,
                 )
                 for row in rows

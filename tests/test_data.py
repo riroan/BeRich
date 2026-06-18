@@ -196,3 +196,36 @@ class TestStrategyParams:
         assert count == 0
 
 
+
+
+class TestFillReasonPersistence:
+    """Option 2: a fill's reason persists so partial_sell/stop_loss labels
+    survive a restart."""
+
+    @pytest.mark.asyncio
+    async def test_save_and_get_fill_reason(self, storage: Storage):
+        from src.core.types import Fill
+
+        await storage.save_fill(Fill(
+            order_id="O1", symbol="BAC", market=Market.NYSE,
+            side=OrderSide.SELL, quantity=1, price=Decimal("55.77"),
+            commission=Decimal("0"), timestamp=datetime.now(),
+            pnl=Decimal("6.27"), rsi=74.1, reason="staged_sell_1",
+        ))
+
+        fills = await storage.get_all_fills()
+        assert len(fills) == 1
+        assert fills[0].reason == "staged_sell_1"
+        assert fills[0].pnl == Decimal("6.27")
+
+    @pytest.mark.asyncio
+    async def test_fill_reason_defaults_none(self, storage: Storage):
+        from src.core.types import Fill
+
+        await storage.save_fill(Fill(
+            order_id="O2", symbol="AAPL", market=Market.NASDAQ,
+            side=OrderSide.BUY, quantity=1, price=Decimal("100"),
+            commission=Decimal("0"), timestamp=datetime.now(),
+        ))
+        fills = await storage.get_all_fills()
+        assert fills[0].reason is None

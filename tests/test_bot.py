@@ -483,3 +483,33 @@ class TestDataLoaderMixin:
 
         assert len(bot.dashboard.fills) == 1
         bot.dashboard.calculate_performance.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_load_fills_restores_partial_sell_label(self, bot_with_loader):
+        """Option 2: persisted reason restores partial_sell label + pnl on
+        reload (previously a reloaded partial sell became plain 'sell')."""
+        bot = bot_with_loader
+
+        f = MagicMock()
+        f.order_id = "O1"
+        f.symbol = "BAC"
+        f.market = MagicMock()
+        f.market.value = "NYSE"
+        f.side = MagicMock()
+        f.side.value = "sell"
+        f.quantity = 1
+        f.price = Decimal("55.77")
+        f.commission = Decimal("0")
+        f.pnl = Decimal("6.27")
+        f.rsi = 74.1
+        f.reason = "staged_sell_1"
+        f.timestamp = None
+
+        bot.storage = AsyncMock()
+        bot.storage.get_all_fills = AsyncMock(return_value=[f])
+
+        await bot.load_fills()
+
+        kwargs = bot.dashboard.add_trade_log.call_args.kwargs
+        assert kwargs["action"] == "partial_sell"
+        assert kwargs["pnl"] == 6.27

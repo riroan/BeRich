@@ -544,3 +544,26 @@ class TestFill:
             pnl=Decimal("999.00"),
         )
         assert fill.pnl == Decimal("999.00")
+
+
+class TestTradeAction:
+    """Shared trade-log action label mapping (buy/sell/partial_sell/stop_loss)."""
+
+    def test_buy_is_buy(self):
+        from src.core.types import trade_action
+        assert trade_action("buy", "avg_down_stage_1") == "buy"
+        assert trade_action("buy", None) == "buy"
+
+    def test_staged_sell_is_partial(self):
+        from src.core.types import trade_action
+        assert trade_action("sell", "staged_sell_1") == "partial_sell"
+        assert trade_action("sell", "staged_sell_3") == "partial_sell"
+
+    def test_stop_loss(self):
+        from src.core.types import trade_action
+        assert trade_action("sell", "stop_loss") == "stop_loss"
+
+    def test_plain_sell_fallback(self):
+        from src.core.types import trade_action
+        assert trade_action("sell", None) == "sell"
+        assert trade_action("sell", "manual") == "sell"

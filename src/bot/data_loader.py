@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 import logging
 
 from src.bot._utils import extract_symbols
+from src.core.types import trade_action
 
 if TYPE_CHECKING:
     from src.bot.core import TradingBot
@@ -116,10 +117,12 @@ class DataLoaderMixin:
                 for f in fills
             ]
 
-            # Populate trade_logs from fills for Trades page
+            # Populate trade_logs from fills for Trades page. The persisted
+            # `reason` restores the partial_sell / stop_loss label so it
+            # survives a restart (NULL reason on old rows → plain buy/sell).
             for f in fills:
                 side_val = f.side.value if f.side else "buy"
-                action = "buy" if side_val == "buy" else "sell"
+                action = trade_action(side_val, f.reason)
                 pnl = float(f.pnl) if f.pnl else None
                 cost = float(f.price) * f.quantity
                 pnl_pct = (pnl / cost * 100) if pnl and cost > 0 else None
@@ -130,7 +133,7 @@ class DataLoaderMixin:
                     price=float(f.price),
                     quantity=f.quantity,
                     rsi=f.rsi,
-                    trigger_rule="historical",
+                    trigger_rule=f.reason or "historical",
                     result="success",
                     pnl=pnl,
                     pnl_pct=round(pnl_pct, 2) if pnl_pct else None,

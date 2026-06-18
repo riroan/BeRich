@@ -62,6 +62,9 @@ class FillModel(Base):
     commission = Column(Numeric(20, 8), nullable=False)
     pnl = Column(Numeric(20, 8))
     rsi = Column(Numeric(10, 4))
+    # Originating signal reason (avg_down_stage_N / staged_sell_N / stop_loss)
+    # so partial_sell / stop_loss labels survive a restart (load_fills).
+    reason = Column(String(40))
     timestamp = Column(DateTime, nullable=False)
 
 

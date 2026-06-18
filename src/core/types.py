@@ -133,3 +133,22 @@ class Fill:
     # Originating signal metadata, propagated from the Order so the
     # strategy can advance stage counters on the actual fill.
     metadata: dict = field(default_factory=dict)
+    # Originating signal reason (avg_down_stage_N / staged_sell_N /
+    # stop_loss), persisted so trade-log labels survive a restart.
+    reason: str | None = None
+
+
+def trade_action(side: str, reason: str | None) -> str:
+    """Map an order side + signal reason to a dashboard trade-log action.
+
+    Single source for the buy / sell / partial_sell / stop_loss labels used
+    by both the live submit path and the DB-reload path, so they agree.
+    """
+    if side == "buy":
+        return "buy"
+    r = reason or ""
+    if r == "stop_loss":
+        return "stop_loss"
+    if "staged_sell" in r:
+        return "partial_sell"
+    return "sell"

@@ -10,6 +10,7 @@ from src.core.types import (
     SignalType,
     OrderSide,
     OrderType,
+    trade_action,
 )
 from src.core.events import EventBus, Event, EventType
 from src.broker.kis.client import KISBroker
@@ -311,12 +312,10 @@ class OrderManager:
 
             # Add to dashboard trade log
             dashboard = get_dashboard_state()
-            action = "buy" if order.side == OrderSide.BUY else "sell"
-            if signal_metadata:
-                if signal_metadata.get("reason") == "stop_loss":
-                    action = "stop_loss"
-                elif "staged_sell" in str(signal_metadata.get("reason", "")):
-                    action = "partial_sell"
+            action = trade_action(
+                order.side.value,
+                signal_metadata.get("reason") if signal_metadata else None,
+            )
 
             trigger_rule = signal_metadata.get("reason", "manual") if signal_metadata else "manual"
             rsi = signal_metadata.get("rsi") if signal_metadata else None
@@ -536,6 +535,7 @@ class OrderManager:
             timestamp=datetime.now(),
             pnl=realized,
             rsi=meta.get("rsi"),
+            reason=meta.get("reason"),
         ))
 
         await self._send_trade_notification(
