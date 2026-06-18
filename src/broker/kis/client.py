@@ -23,16 +23,13 @@ from .websocket import KISWebSocket
 
 logger = logging.getLogger("TradingBot")
 
-# ⚠️ UNVERIFIED KIS daytime-trading (주간거래) constants — confirm against
-# the KIS Open API docs / a real account BEFORE live trading. Paper mode
-# never reaches these (PaperBroker simulates fills), so they execute only
-# on the live path. Order submission fails loudly (rt_cd != "0") if wrong.
+# KIS US daytime-trading (주간거래) constants. Verified against the KIS
+# 해외주식 미국주간주문 spec (official open-trading-api repo, 2026-06):
+# daytime is limit-only (ORD_DVSN 00). Paper mode never reaches these
+# (PaperBroker simulates fills), so they execute only on the live path.
 _KIS_DAYTIME_ORDER_ENDPOINT = "/uapi/overseas-stock/v1/trading/daytime-order"
 _KIS_DAYTIME_BUY_TR = "TTTS6036U"
 _KIS_DAYTIME_SELL_TR = "TTTS6037U"
-# Extended-hours (pre/after) limit-order code on the regular order endpoint.
-# 시간외 시장가(01) 차단 — extended sessions are limit-only.
-_KIS_EXTENDED_ORD_DVSN = "00"  # UNVERIFIED — confirm extended-hours code
 
 
 def _format_overseas_price(price: Decimal | None) -> str:
@@ -426,16 +423,16 @@ class KISBroker:
                 self._submit_domestic_order, order,
             )
 
-        # US 24h: route by the current session. Daytime (주간거래) uses a
-        # dedicated TR/endpoint; pre/regular/after share the regular
-        # overseas endpoint (with session-specific ORD_DVSN handling).
+        # US: route by the current session. Daytime (주간거래) uses a
+        # dedicated TR/endpoint; pre/regular/after all go through the
+        # regular overseas endpoint with ORD_DVSN 00 (KIS routes by time).
         session = get_current_session(datetime.now())
         if session == Session.DAY_MARKET:
             return await self._retry_on_token_expiry(
                 self._submit_overseas_day_order, order,
             )
         return await self._retry_on_token_expiry(
-            self._submit_overseas_order, order, session,
+            self._submit_overseas_order, order,
         )
 
     async def _submit_domestic_order(self, order: Order) -> str:
@@ -475,10 +472,14 @@ class KISBroker:
                 order.status = OrderStatus.REJECTED
                 raise OrderError(f"Order rejected: {data.get('msg1')}")
 
-    async def _submit_overseas_order(
-        self, order: Order, session: "Session | None" = None,
-    ) -> str:
-        """Submit overseas stock order (regular / pre / after sessions)."""
+    async def _submit_overseas_order(self, order: Order) -> str:
+        """Submit overseas US order (pre / regular / after sessions).
+
+        Per the KIS 해외주식 주문 doc, pre/regular/after all use this one
+        endpoint with ORD_DVSN ``00`` (지정가) — KIS routes by submission
+        time. There is no plain market code for overseas (the scheme is
+        00/31/32/33/34/35/36, no ``01``), so a priceless order is rejected.
+        """
         if order.side == OrderSide.BUY:
             tr_id = "VTTT1002U" if self.paper_trading else "TTTT1002U"
         else:
@@ -493,28 +494,19 @@ class KISBroker:
             Market.AMEX: "AMEX",
         }
 
-        extended = session in (Session.PRE, Session.AFTER)
-
         # Marketable limit: KIS overseas market orders are unreliable
         # (venue/session restricted), so submit a limit priced through
         # the market by _slippage_buffer. Fills near-immediately yet a
         # stop-loss can't slip beyond the buffer.
-        if order.price:
-            limit_price = _marketable_limit_price(
-                order.price, order.side, self._slippage_buffer,
-            )
-            ord_dvsn = _KIS_EXTENDED_ORD_DVSN if extended else "00"  # limit
-        elif extended:
-            # 시간외 시장가(01) 차단: extended sessions are limit-only, so a
-            # priceless order has no safe fallback — reject rather than send
-            # a market order that the venue won't accept.
+        if not order.price:
             raise OrderError(
-                f"Extended-hours ({session.value}) order for {order.symbol} "
-                f"requires a limit price (market orders blocked)"
+                f"Overseas order for {order.symbol} requires a limit price "
+                f"(overseas has no plain market order type)"
             )
-        else:
-            limit_price = None
-            ord_dvsn = "01"  # market (regular-session fallback; price unknown)
+        limit_price = _marketable_limit_price(
+            order.price, order.side, self._slippage_buffer,
+        )
+        ord_dvsn = "00"  # 지정가 (limit) — pre/regular/after all use 00
 
         body = {
             "CANO": self._auth.account_no[:8],
@@ -548,10 +540,10 @@ class KISBroker:
     async def _submit_overseas_day_order(self, order: Order) -> str:
         """Submit a US daytime (주간거래) order.
 
-        ⚠️ Uses UNVERIFIED daytime TR IDs/endpoint (see module top) —
-        confirm against KIS docs before live use. Daytime trading is
-        limit-only, so a priceless order is rejected rather than sent as
-        a market order. Paper mode never reaches here (PaperBroker fills).
+        TR/endpoint verified against the KIS 미국주간주문 spec. Daytime is
+        limit-only (ORD_DVSN 00), so a priceless order is rejected. Paper
+        mode never reaches here (PaperBroker simulates fills) and 모의투자
+        does not support 주간거래, so it fails clearly if attempted.
         """
         if self.paper_trading:
             # 모의투자 generally does not support 주간거래; fail clearly.

@@ -18,13 +18,16 @@ def _at(date_tuple, h, m, dst=True):
 
 
 class TestSessionsEDT:
-    """Summer (EDT): DAY 09-17, PRE 17-22:30, REGULAR 22:30-05, AFTER 05-09."""
+    """Summer (EDT) KST: DAY 09-17, PRE 17-22:30, REGULAR 22:30-05,
+    AFTER 05-07, then CLOSED gap 07-09 (KIS regular endpoint hours)."""
 
     def test_weekday_full_cycle(self):
         assert _at(WED, 0, 0) == Session.REGULAR      # midnight carryover
         assert _at(WED, 4, 59) == Session.REGULAR
         assert _at(WED, 5, 0) == Session.AFTER
-        assert _at(WED, 8, 59) == Session.AFTER
+        assert _at(WED, 6, 59) == Session.AFTER
+        assert _at(WED, 7, 0) == Session.CLOSED       # after-market closed
+        assert _at(WED, 8, 59) == Session.CLOSED      # gap before 주간거래
         assert _at(WED, 9, 0) == Session.DAY_MARKET
         assert _at(WED, 16, 59) == Session.DAY_MARKET
         assert _at(WED, 17, 0) == Session.PRE
@@ -34,12 +37,14 @@ class TestSessionsEDT:
 
 
 class TestSessionsEST:
-    """Winter (EST) shifts every boundary +1h."""
+    """Winter (EST) shifts +1h, EXCEPT after-market close fixed at 07:00."""
 
     def test_weekday_boundaries(self):
         assert _at(WED, 5, 0, dst=False) == Session.REGULAR   # still carryover
         assert _at(WED, 6, 0, dst=False) == Session.AFTER
-        assert _at(WED, 9, 59, dst=False) == Session.AFTER
+        assert _at(WED, 6, 59, dst=False) == Session.AFTER
+        assert _at(WED, 7, 0, dst=False) == Session.CLOSED    # after close 07:00
+        assert _at(WED, 9, 59, dst=False) == Session.CLOSED   # gap before 주간거래
         assert _at(WED, 10, 0, dst=False) == Session.DAY_MARKET
         assert _at(WED, 18, 0, dst=False) == Session.PRE
         assert _at(WED, 23, 30, dst=False) == Session.REGULAR
@@ -57,7 +62,8 @@ class TestWeekendBoundaries:
         assert _at(SAT, 0, 0) == Session.REGULAR   # Fri regular tail
         assert _at(SAT, 4, 59) == Session.REGULAR
         assert _at(SAT, 5, 0) == Session.AFTER     # Fri after-hours
-        assert _at(SAT, 8, 59) == Session.AFTER
+        assert _at(SAT, 6, 59) == Session.AFTER
+        assert _at(SAT, 7, 0) == Session.CLOSED    # after-market closed
         assert _at(SAT, 9, 0) == Session.CLOSED    # no fresh Sat session
         assert _at(SAT, 12, 0) == Session.CLOSED
 

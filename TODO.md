@@ -133,8 +133,9 @@
 
 # US 24시간 트레이딩 — C' 설계 (2026-06-18 설계 확정)
 
-**상태:** 9개 항목 전부 구현 완료 (2026-06-18). 테스트 268 passed.
-**라이브 전 필수:** Phase 3의 미검증 KIS 상수 검증 (데이마켓 TR/엔드포인트, 시간외 ORD_DVSN, 데이마켓 시세 엔드포인트, 모의투자 주간거래 지원 여부). 코드 내 `⚠️ UNVERIFIED` 주석 참조.
+**상태:** 9개 항목 전부 구현 완료 + KIS API 문서로 주문 경로 검증 완료 (2026-06-18). 테스트 268 passed.
+**검증됨 (KIS 해외주식 주문 문서):** 데이마켓 TR `TTTS6036U/6037U` + `/daytime-order`, 정규/프리/애프터 ORD_DVSN `00`, 세션 시각 경계(애프터 07:00 마감 + CLOSED 갭). 무효였던 `01` 시장가 fallback 제거.
+**라이브 전 남은 확인:** ① 데이마켓(주간거래) **시세** 엔드포인트 — 아직 정규 `HHDFS00000300` 사용 중 (데이마켓 가격 stale 가능). ② 주간거래 **지원 종목** 범위 (일부만 매매 가능). ③ 모의투자는 일부 종목 + ORD_DVSN `00`만.
 
 ## 목표
 
@@ -149,15 +150,22 @@
 - **컨펌 전엔**: 어제 베이스 유지 + 라이브 슬롯만 갱신
 - **휴장일·주말**: 새 일봉이 안 들어오므로 자연스럽게 슬라이드 안 함 (시각 기반 아니라서 자동 처리됨)
 
-### 거래 세션 (US-only, EDT 기준 KST 시각)
-| 세션 | 시간 (KST) | 주문 경로 |
+### 거래 세션 (US-only, EDT 기준 KST 시각) — KIS 문서 검증 완료 (2026-06-18)
+| 세션 | 시간 (KST, 서머) | 주문 경로 |
 |------|------|------|
-| 데이마켓 | 09:00-17:00 | KIS 주간거래 TR (`TTTS6036U/6037U`) + 별도 엔드포인트 |
-| 프리마켓 | 17:00-22:30 | 정규 TR + `ORD_DVSN_CD` 분기 |
-| 정규장 | 22:30-05:00 (다음날) | 기존 코드 그대로 |
-| 애프터 | 05:00-09:00 (다음날) | 정규 TR + `ORD_DVSN_CD` 분기 |
+| 데이마켓 | 09:00-17:00 | KIS 주간거래 `TTTS6036U/6037U` + `/daytime-order`, ORD_DVSN `00` (지정가 only) |
+| 프리마켓 | 17:00-22:30 | 정규 `TTTT1002U/1006U` + `/order`, ORD_DVSN `00` |
+| 정규장 | 22:30-05:00 (다음날) | 정규 `order`, ORD_DVSN `00` |
+| 애프터 | **05:00-07:00** (다음날) | 정규 `order`, ORD_DVSN `00` |
+| (CLOSED) | **07:00-09:00** | KIS 정규 endpoint 운영시간 밖 + 주간거래 미개장 → 거래 불가 |
 
-EST(겨울)는 전체 1시간 시프트. DST는 기존 `is_us_dst()` 활용.
+**검증 결과 (KIS 해외주식 주문 API 문서):**
+- 프리/정규/애프터는 **전부 정규 `order` endpoint + ORD_DVSN `00`** (KIS가 시각으로 라우팅). 별도 시간외 코드 없음.
+- 해외 ORD_DVSN: `00`지정가 / `31`MOO / `32`LOO / `33`MOC / `34`LOC / `35`TWAP / `36`VWAP. **`01`(시장가) 없음**. **모의투자는 `00`만.**
+- 애프터 마감 = **07:00 (양 계절 고정)**, 그 후 주간거래 개장(09:00 서머/10:00 겨울)까지 CLOSED. 즉 24h 아님 (~22h, 갭 있음).
+- 운영시간 밖 정규 endpoint 호출 시 KIS 에러.
+
+EST(겨울)는 1시간 시프트 (단, **애프터 마감 07:00은 고정**). DST는 `is_us_dst()` 활용.
 
 ### 신호·진입
 - 매 틱 RSI 평가
@@ -195,16 +203,15 @@ EST(겨울)는 전체 1시간 시프트. DST는 기존 `is_us_dst()` 활용.
   - `get_us_session_windows_kst()` 신규(us_only 기본값). `is_market_open()`는 `get_current_session() != CLOSED`로 단일화. 레거시 `get_us_market_hours_kst()`(정규장 전용)는 KRX+US 경로용으로 유지.
   - ⚠️ 주말 경계는 KIS 24h 세션 캘린더 기준으로 추후 검증 필요 (코드에 주석).
 
-### Phase 3 — 주문 경로 (구조 구현 + 검증 플래그, 2026-06-18) ✅
-- [x] **5. 데이마켓 주문/시세 경로 신규** (`src/broker/kis/client.py`)
-  - `submit_order`가 `get_current_session()`로 라우팅: DAY_MARKET → `_submit_overseas_day_order()`, 그 외 해외 → `_submit_overseas_order(session)`.
-  - `_submit_overseas_day_order()`: TR `TTTS6036U/6037U`, `/daytime-order`, limit-only(마켓 차단), 페이퍼 모드 거부.
-  - ⚠️ **미검증 KIS 상수** (`_KIS_DAYTIME_*`, 모듈 상단): 라이브 전 KIS 문서/계좌로 확인 필수. 페이퍼는 PaperBroker가 처리하므로 라이브에서만 실행.
-  - ⚠️ **데이마켓 시세 엔드포인트는 미변경** — 기존 `HHDFS00000300` 사용. 데이마켓 중 가격이 stale하면 전용 엔드포인트로 교체 필요 (KIS doc 확인).
-- [x] **6. 프리/애프터 `ORD_DVSN_CD` 분기** (`_submit_overseas_order`)
-  - `session` 인자 추가. PRE/AFTER는 limit-only(`_KIS_EXTENDED_ORD_DVSN`), **가격 없으면 거부** (시간외 시장가 `01` 차단). 정규장은 기존 동작.
-  - ⚠️ `_KIS_EXTENDED_ORD_DVSN="00"` 미검증 — 시간외 전용 코드 있으면 교체.
-  - 테스트: `tests/test_broker_kis.py` (세션 라우팅, 시간외 마켓 차단, 데이마켓 페이퍼 거부).
+### Phase 3 — 주문 경로 (구현 + KIS 문서 검증 완료, 2026-06-18) ✅
+- [x] **5. 데이마켓 주문 경로 신규** (`src/broker/kis/client.py`)
+  - `submit_order`가 `get_current_session()`로 라우팅: DAY_MARKET → `_submit_overseas_day_order()`, 그 외 해외 → `_submit_overseas_order()`.
+  - `_submit_overseas_day_order()`: TR `TTTS6036U/6037U`, `/daytime-order`, ORD_DVSN `00`(지정가 only), 페이퍼/모의 거부. **✅ KIS 문서로 TR·엔드포인트·지정가-only 검증 완료.**
+  - ⚠️ **시세(데이터) 엔드포인트는 미변경** — 기존 `HHDFS00000300` 사용. 데이마켓 중 가격이 stale하면 전용 엔드포인트로 교체 필요 (남은 확인 항목).
+- [x] **6. 프리/애프터 주문 경로** (`_submit_overseas_order`)
+  - ✅ KIS 문서 확인: 프리/정규/애프터 **전부 정규 `order` endpoint + ORD_DVSN `00`** (KIS가 시각 라우팅). 별도 시간외 코드 불필요 → `_KIS_EXTENDED_ORD_DVSN` 제거, `session` 인자 제거로 단순화.
+  - **무효였던 `01` 시장가 fallback 제거** (해외엔 `01` 없음). 해외 주문은 가격 없으면 거부.
+  - 테스트: `tests/test_broker_kis.py` (세션 라우팅, 무가격 거부, 데이마켓 페이퍼 거부).
 
 ### Phase 4 — 손절 강화 (2026-06-18) ✅
 - [x] **7. 손절 미체결 → 다음 세션 시작 즉시 재제출**

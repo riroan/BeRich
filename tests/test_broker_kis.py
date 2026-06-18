@@ -426,31 +426,30 @@ class TestSessionOrderRouting:
         broker._submit_overseas_order.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_extended_session_routes_with_session_arg(self):
+    async def test_pre_after_regular_route_to_regular_endpoint(self):
         broker = _make_broker(hts_id="")
         broker._auth.ensure_authenticated = AsyncMock()
         broker._submit_overseas_order = AsyncMock(return_value="REG1")
         order = _open_order("x", Market.NASDAQ)
 
-        with patch(
-            "src.broker.kis.client.get_current_session",
-            return_value=Session.PRE,
-        ):
-            await broker.submit_order(order)
-
-        broker._submit_overseas_order.assert_awaited_once()
-        # session passed through to the regular path
-        assert broker._submit_overseas_order.await_args.args[-1] == Session.PRE
+        for sess in (Session.PRE, Session.REGULAR, Session.AFTER):
+            broker._submit_overseas_order.reset_mock()
+            with patch(
+                "src.broker.kis.client.get_current_session",
+                return_value=sess,
+            ):
+                await broker.submit_order(order)
+            broker._submit_overseas_order.assert_awaited_once_with(order)
 
     @pytest.mark.asyncio
-    async def test_extended_hours_blocks_priceless_order(self):
+    async def test_overseas_priceless_order_rejected(self):
         broker = _make_broker(hts_id="")
         order = Order(
             symbol="AAPL", market=Market.NASDAQ, side=OrderSide.BUY,
             order_type=OrderType.MARKET, quantity=5, price=None,
         )
         with pytest.raises(OrderError):
-            await broker._submit_overseas_order(order, Session.AFTER)
+            await broker._submit_overseas_order(order)
 
     @pytest.mark.asyncio
     async def test_daytime_order_rejected_in_paper_mode(self):
