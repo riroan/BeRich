@@ -407,6 +407,51 @@ def _make_order(
     )
 
 
+class TestTradeLogPnl:
+    """The Trades P&L column must populate for sells (partial_sell /
+    stop_loss) from the strategy's metadata pnl at submit time."""
+
+    @pytest.mark.asyncio
+    async def test_partial_sell_logs_pnl(self, order_manager):
+        dashboard_mock = MagicMock()
+        order = _make_order(side=OrderSide.SELL)
+        meta = {"reason": "staged_sell_1", "pnl": 12.5, "pnl_pct": 4.2, "rsi": 72}
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock):
+            await order_manager._submit_order(order, signal_metadata=meta)
+
+        kwargs = dashboard_mock.add_trade_log.call_args.kwargs
+        assert kwargs["action"] == "partial_sell"
+        assert kwargs["pnl"] == 12.5
+        assert kwargs["pnl_pct"] == 4.2
+
+    @pytest.mark.asyncio
+    async def test_stop_loss_logs_pnl(self, order_manager):
+        dashboard_mock = MagicMock()
+        order = _make_order(side=OrderSide.SELL)
+        meta = {"reason": "stop_loss", "pnl": -30.0, "pnl_pct": -10.0, "rsi": 25}
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock):
+            await order_manager._submit_order(order, signal_metadata=meta)
+
+        kwargs = dashboard_mock.add_trade_log.call_args.kwargs
+        assert kwargs["action"] == "stop_loss"
+        assert kwargs["pnl"] == -30.0
+
+    @pytest.mark.asyncio
+    async def test_buy_logs_no_pnl(self, order_manager):
+        dashboard_mock = MagicMock()
+        order = _make_order(side=OrderSide.BUY)
+        meta = {"reason": "avg_down_stage_1", "rsi": 28}  # buys carry no pnl
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock):
+            await order_manager._submit_order(order, signal_metadata=meta)
+
+        kwargs = dashboard_mock.add_trade_log.call_args.kwargs
+        assert kwargs["action"] == "buy"
+        assert kwargs["pnl"] is None
+
+
 class TestInFlightGuard:
     """Phase 5 #8: an outstanding same-side order suppresses new signals
     (so a fill-driven stage counter can't spawn duplicate orders)."""

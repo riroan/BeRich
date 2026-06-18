@@ -320,6 +320,12 @@ class OrderManager:
 
             trigger_rule = signal_metadata.get("reason", "manual") if signal_metadata else "manual"
             rsi = signal_metadata.get("rsi") if signal_metadata else None
+            # Sells carry the strategy's PnL estimate in metadata (same value
+            # used for the order's realized_pnl and the Discord notification).
+            # Without it the Trades P&L column shows "-" for partial_sell /
+            # stop_loss. Buys have no pnl key → None (correct, no realized PnL).
+            tl_pnl = signal_metadata.get("pnl") if signal_metadata else None
+            tl_pnl_pct = signal_metadata.get("pnl_pct") if signal_metadata else None
 
             dashboard.add_trade_log(
                 symbol=order.symbol,
@@ -330,6 +336,8 @@ class OrderManager:
                 trigger_rule=trigger_rule,
                 result="success",
                 rsi=rsi,
+                pnl=float(tl_pnl) if tl_pnl is not None else None,
+                pnl_pct=float(tl_pnl_pct) if tl_pnl_pct is not None else None,
             )
 
             # Add signal to dashboard
