@@ -27,7 +27,8 @@ class TickHandlerMixin:
         await self._handle_session_transition()
         await self.update_dashboard_status()
         await self.update_dashboard_positions()
-        await self._sync_enabled_symbols()
+        # Symbol reconciliation runs in _config_sync_loop (market-independent),
+        # not here — on_tick is gated behind is_market_open().
 
         logger.debug(f"Tick: {datetime.now():%H:%M:%S}")
 

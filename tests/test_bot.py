@@ -208,6 +208,76 @@ class TestTradingBot:
 
         strategy.confirm_daily_bar.assert_called_once_with("AAPL", latest_bar)
 
+    @pytest.mark.asyncio
+    async def test_sync_enabled_symbols_adds_symbol(self, bot):
+        """A symbol added to the DB config is reconciled into the running
+        strategy (the mechanism behind market-independent sync)."""
+        strategy = MagicMock()
+        strategy.name_with_market = "NASDAQ_RSI_MeanReversion"
+        strategy.symbols = ["AAPL"]
+        strategy.market = MagicMock()
+        strategy.initialize = MagicMock()
+
+        bot.strategy_engine = MagicMock()
+        bot.strategy_engine.get_strategies.return_value = [strategy]
+        bot.storage = AsyncMock()
+        bot.storage.get_all_strategy_configs = AsyncMock(return_value=[{
+            "name": "NASDAQ_RSI_MeanReversion", "enabled": True,
+            "symbols": [{"symbol": "AAPL"}, {"symbol": "MSFT"}],
+            "market": "NASDAQ",
+        }])
+        bot.broker = AsyncMock()
+        bot.broker.get_historical_bars = AsyncMock(return_value=["bar"])
+        bot.dashboard = MagicMock()
+
+        with patch("src.bot.tick_handler.asyncio.sleep", new=AsyncMock()):
+            await bot._sync_enabled_symbols()
+
+        assert set(strategy.symbols) == {"AAPL", "MSFT"}
+        strategy.initialize.assert_called_once()  # bars loaded for MSFT
+
+    @pytest.mark.asyncio
+    async def test_sync_enabled_symbols_removes_symbol(self, bot):
+        """A symbol removed from the DB config is dropped from the strategy."""
+        strategy = MagicMock()
+        strategy.name_with_market = "NASDAQ_RSI_MeanReversion"
+        strategy.symbols = ["AAPL", "MSFT"]
+        strategy.market = MagicMock()
+
+        bot.strategy_engine = MagicMock()
+        bot.strategy_engine.get_strategies.return_value = [strategy]
+        bot.storage = AsyncMock()
+        bot.storage.get_all_strategy_configs = AsyncMock(return_value=[{
+            "name": "NASDAQ_RSI_MeanReversion", "enabled": True,
+            "symbols": [{"symbol": "AAPL"}], "market": "NASDAQ",
+        }])
+        bot.broker = AsyncMock()
+        bot.dashboard = MagicMock()
+        bot.dashboard.rsi_values = {"MSFT": 50}
+        bot.dashboard.rsi_prices = {"MSFT": 100}
+
+        with patch("src.bot.tick_handler.asyncio.sleep", new=AsyncMock()):
+            await bot._sync_enabled_symbols()
+
+        assert set(strategy.symbols) == {"AAPL"}
+
+    @pytest.mark.asyncio
+    async def test_config_sync_loop_runs_regardless_of_market(self, bot):
+        """Regression: symbol reconciliation runs via an always-on loop that
+        never consults is_market_open() — so edits apply even when the market
+        is closed (previously they waited for the next session or a restart)."""
+        bot._running = True
+
+        async def _sync_then_stop():
+            bot._running = False  # break the loop after one iteration
+
+        bot._sync_enabled_symbols = AsyncMock(side_effect=_sync_then_stop)
+
+        with patch("src.bot.core.asyncio.sleep", new=AsyncMock()):
+            await bot._config_sync_loop()
+
+        bot._sync_enabled_symbols.assert_awaited_once()
+
 
 class TestDashboardSyncMixin:
     """Test cases for DashboardSyncMixin"""

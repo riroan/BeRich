@@ -65,6 +65,12 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self._confirm_poll_task: asyncio.Task | None = None
         self._confirm_poll_date = None
 
+        # Config-sync loop: reconcile strategy symbols from the DB
+        # regardless of market hours (the web UI runs in a separate
+        # thread/loop and reaches the bot only through the shared DB).
+        self._config_sync_task: asyncio.Task | None = None
+        self._config_sync_interval = 15  # seconds
+
     async def initialize(self) -> None:
         """Initialize all components"""
         logger.info("Initializing Trading Bot...")
@@ -482,6 +488,29 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         else:
             logger.info("Daily-bar confirmation poll complete (all slid)")
 
+    async def _config_sync_loop(self) -> None:
+        """Reconcile strategy symbols from the DB regardless of market hours.
+
+        The web UI runs in a separate thread with its own event loop and can
+        reach the bot only through the shared DB. on_tick's reconciliation
+        is gated behind is_market_open() (scheduler._run_loop), so symbol
+        add/remove edits made while the market is closed never applied until
+        the next session — only a restart (which reloads from the DB
+        unconditionally) showed them. This loop polls every
+        _config_sync_interval seconds so edits reflect within seconds,
+        market open or not.
+        """
+        while self._running:
+            try:
+                await asyncio.sleep(self._config_sync_interval)
+                if not self._running:
+                    break
+                await self._sync_enabled_symbols()
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.debug(f"Config sync loop error: {e}")
+
     async def start(self) -> None:
         """Start the bot"""
         logger.info("Starting Trading Bot...")
@@ -518,6 +547,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Dashboard status updater runs regardless of market hours (for warmup countdown)
         self._status_task = asyncio.create_task(self._status_loop())
+
+        # Symbol reconciliation runs regardless of market hours so web-UI
+        # symbol edits apply without a restart.
+        self._config_sync_task = asyncio.create_task(self._config_sync_loop())
 
         logger.info("Trading Bot started")
         logger.info(f"Paper trading: {self.broker.paper_trading}")
@@ -561,6 +594,13 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             self._confirm_poll_task.cancel()
             try:
                 await self._confirm_poll_task
+            except asyncio.CancelledError:
+                pass
+
+        if self._config_sync_task:
+            self._config_sync_task.cancel()
+            try:
+                await self._config_sync_task
             except asyncio.CancelledError:
                 pass
 
