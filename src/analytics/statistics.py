@@ -23,7 +23,7 @@ class SymbolStats:
     avg_loss: Decimal = Decimal("0")
     best_trade: Decimal = Decimal("0")
     worst_trade: Decimal = Decimal("0")
-    profit_factor: float = 0.0
+    profit_factor: float | None = None
     avg_hold_time_hours: float = 0.0
 
 
@@ -54,7 +54,7 @@ class OverallStats:
     avg_loss: Decimal = Decimal("0")
     best_trade: Decimal = Decimal("0")
     worst_trade: Decimal = Decimal("0")
-    profit_factor: float = 0.0
+    profit_factor: float | None = None
 
     # Streaks
     current_streak: int = 0  # Positive = wins, negative = losses

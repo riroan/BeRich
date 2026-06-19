@@ -145,7 +145,15 @@
             </div>
             <div class="card">
                 <div class="label">Profit Factor</div>
-                <div class="value">{{ statistics.profit_factor | round(2) }}</div>
+                <div class="value">
+                    {% if statistics.total_pnl > 0 and statistics.losing_trades == 0 %}
+                    ∞
+                    {% elif statistics.profit_factor is not none %}
+                    {{ "{:.2f}".format(statistics.profit_factor) }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
             </div>
         </div>
 
@@ -207,7 +215,13 @@
                         <div class="stat-row">
                             <span class="stat-label">Profit Factor</span>
                             <span class="stat-value" id="report-pf">
+                                {% if daily_report.total_pnl > 0 and daily_report.losing_trades == 0 %}
+                                ∞
+                                {% elif daily_report.profit_factor is not none %}
                                 {{ "{:.2f}".format(daily_report.profit_factor) }}
+                                {% else %}
+                                -
+                                {% endif %}
                             </span>
                         </div>
                     </div>
@@ -326,7 +340,15 @@
                         <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}" data-label="Total P&L">
                             ${{ "{:+,.2f}".format(s.total_pnl) }}
                         </td>
-                        <td data-label="PF">{{ "{:.2f}".format(s.profit_factor) }}</td>
+                        <td data-label="PF">
+                            {% if s.total_pnl > 0 and s.losing_trades == 0 %}
+                            ∞
+                            {% elif s.profit_factor is not none %}
+                            {{ "{:.2f}".format(s.profit_factor) }}
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -394,7 +416,13 @@
                 document.getElementById('report-pnl').className = 'stat-value ' + (data.total_pnl >= 0 ? 'positive' : 'negative');
                 document.getElementById('report-avgwin').textContent = '$' + data.avg_win.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('report-avgloss').textContent = '$' + data.avg_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('report-pf').textContent = data.profit_factor.toFixed(2);
+                let pfText = '-';
+                if (data.total_pnl > 0 && data.losing_trades === 0) {
+                    pfText = '∞';
+                } else if (data.profit_factor !== null && data.profit_factor !== undefined) {
+                    pfText = Number(data.profit_factor).toFixed(2);
+                }
+                document.getElementById('report-pf').textContent = pfText;
             });
         });
     </script>

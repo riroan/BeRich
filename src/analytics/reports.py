@@ -29,7 +29,7 @@ class PeriodReport:
     win_rate: float = 0.0
     avg_win: Decimal = Decimal("0")
     avg_loss: Decimal = Decimal("0")
-    profit_factor: float = 0.0
+    profit_factor: float | None = None
     best_trade: Decimal = Decimal("0")
     worst_trade: Decimal = Decimal("0")
 

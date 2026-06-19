@@ -586,3 +586,33 @@ class TestDataLoaderMixin:
         kwargs = bot.dashboard.add_trade_log.call_args.kwargs
         assert kwargs["action"] == "partial_sell"
         assert kwargs["pnl"] == 6.27
+
+    @pytest.mark.asyncio
+    async def test_load_fills_preserves_zero_pnl(self, bot_with_loader):
+        """Break-even fills are real trades and must not become NULL."""
+        bot = bot_with_loader
+
+        f = MagicMock()
+        f.order_id = "O2"
+        f.symbol = "BAC"
+        f.market = MagicMock()
+        f.market.value = "NYSE"
+        f.side = MagicMock()
+        f.side.value = "sell"
+        f.quantity = 1
+        f.price = Decimal("55.00")
+        f.commission = Decimal("0")
+        f.pnl = Decimal("0")
+        f.rsi = 65.0
+        f.reason = None
+        f.timestamp = datetime(2024, 1, 2, 3, 4, 5)
+
+        bot.storage = AsyncMock()
+        bot.storage.get_all_fills = AsyncMock(return_value=[f])
+
+        await bot.load_fills()
+
+        assert bot.dashboard.fills[0]["pnl"] == 0.0
+        kwargs = bot.dashboard.add_trade_log.call_args.kwargs
+        assert kwargs["pnl"] == 0.0
+        assert kwargs["pnl_pct"] == 0.0

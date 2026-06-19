@@ -123,7 +123,7 @@ class DataLoaderMixin:
                     "quantity": f.quantity,
                     "price": float(f.price),
                     "commission": float(f.commission),
-                    "pnl": float(f.pnl) if f.pnl else None,
+                    "pnl": float(f.pnl) if f.pnl is not None else None,
                     "timestamp": f.timestamp.isoformat() if f.timestamp else None,
                 }
                 for f in fills
@@ -135,9 +135,12 @@ class DataLoaderMixin:
             for f in fills:
                 side_val = f.side.value if f.side else "buy"
                 action = trade_action(side_val, f.reason)
-                pnl = float(f.pnl) if f.pnl else None
+                pnl = float(f.pnl) if f.pnl is not None else None
                 cost = float(f.price) * f.quantity
-                pnl_pct = (pnl / cost * 100) if pnl and cost > 0 else None
+                pnl_pct = (
+                    pnl / cost * 100
+                    if pnl is not None and cost > 0 else None
+                )
                 self.dashboard.add_trade_log(
                     symbol=f.symbol,
                     market=f.market.value.upper() if f.market else "US",
@@ -148,7 +151,7 @@ class DataLoaderMixin:
                     trigger_rule=f.reason or "historical",
                     result="success",
                     pnl=pnl,
-                    pnl_pct=round(pnl_pct, 2) if pnl_pct else None,
+                    pnl_pct=round(pnl_pct, 2) if pnl_pct is not None else None,
                     timestamp=f.timestamp,
                 )
 

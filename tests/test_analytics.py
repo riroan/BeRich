@@ -106,6 +106,35 @@ class TestReportGenerator:
         assert report.by_symbol["AAPL"]["trades"] == 2
         assert report.by_symbol["MSFT"]["trades"] == 1
 
+    def test_profit_factor_unbounded_when_no_losing_trades(self):
+        """Positive realized P&L with no losses has no finite PF."""
+        now = datetime.now().replace(hour=12, minute=0, second=0)
+        fills = [
+            {
+                "symbol": "AAPL",
+                "side": "sell",
+                "price": 150,
+                "quantity": 1,
+                "pnl": 10,
+                "timestamp": now.isoformat(),
+            },
+            {
+                "symbol": "MSFT",
+                "side": "sell",
+                "price": 300,
+                "quantity": 1,
+                "pnl": 5,
+                "timestamp": now.isoformat(),
+            },
+        ]
+        gen = ReportGenerator(fills, [])
+        report = gen.generate_daily_report()
+
+        assert report.total_pnl == Decimal("15")
+        assert report.winning_trades == 2
+        assert report.losing_trades == 0
+        assert report.profit_factor is None
+
 
 class TestDrawdownAnalyzer:
     """Test cases for DrawdownAnalyzer"""
@@ -231,6 +260,21 @@ class TestTradeStatistics:
         # Losses: 30 + 100 = 130
         # PF = 500 / 130 = 3.85
         assert stats.profit_factor == pytest.approx(3.85, rel=0.01)
+
+    def test_profit_factor_unbounded_when_no_losing_trades(self):
+        """Positive realized P&L with no losses has no finite PF."""
+        fills = [
+            {"symbol": "AAPL", "pnl": 10, "timestamp": datetime.now().isoformat()},
+            {"symbol": "MSFT", "pnl": 5, "timestamp": datetime.now().isoformat()},
+        ]
+        calc = TradeStatistics(fills)
+        stats = calc.calculate()
+
+        assert stats.total_pnl == Decimal("15")
+        assert stats.winning_trades == 2
+        assert stats.losing_trades == 0
+        assert stats.profit_factor is None
+        assert all(s.profit_factor is None for s in stats.by_symbol)
 
     def test_by_symbol_stats(self, sample_fills):
         """Test per-symbol statistics"""
