@@ -50,7 +50,7 @@
                     </thead>
                     <tbody>
                         {% for pos in positions %}
-                        <tr>
+                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}">
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>

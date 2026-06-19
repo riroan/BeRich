@@ -343,6 +343,9 @@ td.num, td.number {
     font-variant-numeric: tabular-nums;
 }
 tr:hover { background: rgba(59,130,246,0.04); }
+.position-row { cursor: pointer; }
+.position-row:hover { background: rgba(59,130,246,0.08); }
+.position-row:focus-within { background: rgba(59,130,246,0.06); }
 .empty { text-align: center; color: var(--dim); padding: 24px !important; }
 
 /* ===================== Symbol / Badge ===================== */

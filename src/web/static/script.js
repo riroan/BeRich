@@ -139,25 +139,29 @@ class DashboardWebSocket {
             return;
         }
 
-        tbody.innerHTML = positions.map(pos => `
-            <tr>
-                <td data-label="Symbol" class="full-width"><a href="/symbol/${pos.symbol}" class="sym-badge">${pos.symbol}</a></td>
-                <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
-                <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
-                    ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
-                </td>
-                <td data-label="RSI" class="${this.getRSIClass(pos.rsi)}">
-                    ${pos.rsi ? pos.rsi.toFixed(1) : '-'}
-                </td>
-                <td data-label="Stage">
-                    <div class="stage-bar">
-                        ${Array.from({length: pos.max_buy_stages || 3}, (_, i) =>
-                            `<span class="stage-dot ${i < (pos.buy_stage || 0) ? 'filled' : ''}"></span>`
-                        ).join('')}
-                    </div>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = positions.map(pos => {
+            const symbol = String(pos.symbol || '');
+            const href = `/symbol/${encodeURIComponent(symbol)}`;
+            return `
+                <tr class="position-row" data-href="${href}">
+                    <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${symbol}</a></td>
+                    <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
+                    <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
+                        ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
+                    </td>
+                    <td data-label="RSI" class="${this.getRSIClass(pos.rsi)}">
+                        ${pos.rsi ? pos.rsi.toFixed(1) : '-'}
+                    </td>
+                    <td data-label="Stage">
+                        <div class="stage-bar">
+                            ${Array.from({length: pos.max_buy_stages || 3}, (_, i) =>
+                                `<span class="stage-dot ${i < (pos.buy_stage || 0) ? 'filled' : ''}"></span>`
+                            ).join('')}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     updateRSIGrid(rsiValues, rsiPrices) {
@@ -347,10 +351,19 @@ let dashboardWS = null;
 document.addEventListener('DOMContentLoaded', () => {
     dashboardWS = new DashboardWebSocket();
     dashboardWS.connect();
+    initPositionRowLinks();
     initHamburgerMenu();
     initSwipeNav();
     initChartTheme();
 });
+
+function initPositionRowLinks() {
+    document.addEventListener('click', event => {
+        const row = event.target.closest('.position-row[data-href]');
+        if (!row || event.target.closest('a, button, input, select, textarea')) return;
+        window.location.href = row.dataset.href;
+    });
+}
 
 // ===================== Hamburger Menu =====================
 function initHamburgerMenu() {
