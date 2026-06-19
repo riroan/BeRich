@@ -9,15 +9,22 @@
         .bt-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
         .bt-field { display: flex; flex-direction: column; gap: 4px; }
         .bt-field label { font-size: 11px; text-transform: uppercase; color: var(--dim); letter-spacing: 0.5px; }
-        .bt-field input[type="text"], .bt-field input[type="date"], .bt-field select {
+        .bt-field input[type="text"], .bt-field input[type="date"], .bt-field input[type="number"], .bt-field select {
             background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
             padding: 8px 12px; color: var(--text); font-size: 13px;
         }
+        .bt-field input:disabled { opacity: 0.45; cursor: not-allowed; }
         .bt-field input.bt-num { font-variant-numeric: tabular-nums; text-align: right; }
         .bt-slider-row { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; }
         .bt-slider-row label { font-size: 12px; color: var(--dim); }
         .bt-slider-row .bt-slider-val { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
         .bt-slider-row input[type="range"] { width: 100%; accent-color: var(--blue); }
+        .bt-toggle-row { display: grid; grid-template-columns: 1fr minmax(120px, 180px); gap: 12px; align-items: end; }
+        .bt-check {
+            min-height: 35px; display: flex; align-items: center; gap: 8px;
+            color: var(--text); font-size: 13px;
+        }
+        .bt-check input { width: 16px; height: 16px; accent-color: var(--blue); }
         .bt-stage-row { display: grid; grid-template-columns: 60px 80px 1fr 80px 1fr; gap: 8px; align-items: center; font-size: 12px; }
         .bt-stage-row input[type="number"] {
             background: var(--bg); border: 1px solid var(--card); border-radius: 6px;
@@ -101,6 +108,16 @@
                         <label>Cooldown</label>
                         <input type="range" id="bt-cooldown" min="1" max="30" value="1">
                         <span class="bt-slider-val" id="bt-cooldown-v">1d</span>
+                    </div>
+                    <div class="bt-toggle-row">
+                        <label class="bt-check">
+                            <input type="checkbox" id="bt-reset-recovery">
+                            <span>Require RSI Recovery</span>
+                        </label>
+                        <div class="bt-field">
+                            <label for="bt-recovery-rsi">Recovery RSI</label>
+                            <input type="number" id="bt-recovery-rsi" class="bt-num" value="50" min="0" max="100" step="1" disabled>
+                        </div>
                     </div>
 
                     <div class="bt-section-h">Buy Levels (RSI ≤, % of remaining room)</div>
@@ -199,6 +216,14 @@
             wireSlider('bt-stop-loss', v => v + '%');
             wireSlider('bt-cooldown', v => v + 'd');
 
+            const recoveryToggle = document.getElementById('bt-reset-recovery');
+            const recoveryRsi = document.getElementById('bt-recovery-rsi');
+            const syncRecoveryInput = () => {
+                recoveryRsi.disabled = !recoveryToggle.checked;
+            };
+            recoveryToggle.addEventListener('change', syncRecoveryInput);
+            syncRecoveryInput();
+
             // Initial capital — strip non-digits and reformat with thousands separators while typing
             const capitalInp = document.getElementById('bt-capital');
             const parseCapital = () => {
@@ -288,6 +313,8 @@
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
+                    reset_requires_recovery: document.getElementById('bt-reset-recovery').checked,
+                    recovery_rsi: num('bt-recovery-rsi'),
                     initial_capital: parseCapital(),
                     buy_levels: [
                         [num('bt-buy-rsi-1'), num('bt-buy-p-1') / 100],

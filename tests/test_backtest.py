@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -116,6 +115,40 @@ class TestRunSimulation:
         # Multiple buy events with stage 1 means cooldown reset and re-bought
         stage_1_buys = [t for t in result["buy_trades"] if t["stage"] == 1]
         assert len(stage_1_buys) >= 2
+
+    def test_cooldown_reset_does_not_require_rsi_recovery_by_default(self):
+        closes = list(np.linspace(100, 60, 60))
+        df = _make_df(closes)
+        result = _run_simulation(
+            df,
+            "TEST",
+            _params(
+                stop_loss=-99,
+                cooldown_days=2,
+                avg_down_levels=[[30, 0.1], [25, 0.1], [20, 0.1]],
+            ),
+        )
+
+        stage_1_buys = [t for t in result["buy_trades"] if t["stage"] == 1]
+        assert len(stage_1_buys) > 1
+
+    def test_cooldown_reset_can_require_rsi_recovery(self):
+        closes = list(np.linspace(100, 60, 60))
+        df = _make_df(closes)
+        result = _run_simulation(
+            df,
+            "TEST",
+            _params(
+                stop_loss=-99,
+                cooldown_days=2,
+                reset_requires_recovery=True,
+                recovery_rsi=50,
+                avg_down_levels=[[30, 0.1], [25, 0.1], [20, 0.1]],
+            ),
+        )
+
+        stage_1_buys = [t for t in result["buy_trades"] if t["stage"] == 1]
+        assert len(stage_1_buys) == 1
 
     def test_zero_trades_when_rsi_neutral(self):
         # Flat-ish prices keep RSI in 35-65 range → no buy/sell triggers

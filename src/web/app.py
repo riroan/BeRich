@@ -177,6 +177,8 @@ class BacktestRequest(BaseModel):
     rsi_period: int = Field(14, ge=5, le=30)
     stop_loss: float = Field(-10.0, ge=-50.0, le=-1.0)
     cooldown_days: int = Field(1, ge=1, le=30)
+    reset_requires_recovery: bool = False
+    recovery_rsi: float = Field(50.0, ge=0.0, le=100.0)
     initial_capital: float = Field(10_000_000, gt=0, le=1e12)
     # [[rsi_threshold, portion], ...] — 3 stages each
     buy_levels: list[list[float]] = [[30, 0.5], [25, 0.3], [20, 0.2]]
@@ -980,8 +982,6 @@ def create_app() -> FastAPI:
             "risk_alerts": dashboard_state.risk_alerts,
             # Performance
             "performance": dashboard_state.performance.model_dump(),
-            # Trading control
-            "trading_paused": dashboard_state.trading_paused,
         }
         return templates.TemplateResponse(
             request=request,
@@ -1268,6 +1268,8 @@ def create_app() -> FastAPI:
                     "rsi_period": body.rsi_period,
                     "stop_loss": body.stop_loss,
                     "cooldown_days": body.cooldown_days,
+                    "reset_requires_recovery": body.reset_requires_recovery,
+                    "recovery_rsi": body.recovery_rsi,
                     "avg_down_levels": body.buy_levels,
                     "sell_levels": body.sell_levels,
                 },

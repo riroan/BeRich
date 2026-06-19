@@ -73,6 +73,7 @@ def _run_simulation(
     rsi_period = params.get("rsi_period", 14)
     stop_loss_pct = params.get("stop_loss", -10)
     cooldown_days = params.get("cooldown_days", 1)
+    reset_requires_recovery = params.get("reset_requires_recovery", False)
     recovery_rsi = params.get("recovery_rsi", 50)
     avg_down_levels = params.get("avg_down_levels", [[30, 0.5], [25, 0.3], [20, 0.2]])
     sell_levels = params.get("sell_levels", [[65, 0.3], [70, 0.3], [75, 0.4]])
@@ -98,14 +99,19 @@ def _run_simulation(
         rsi = row["RSI"]
         price = row["Close"]
 
-        # Track RSI recovery: must reach `recovery_rsi` after all buy stages used
-        if buy_stage >= len(avg_down_levels) and rsi >= recovery_rsi:
+        # Optional legacy gate: require RSI to recover once after a buy
+        # before cooldown can reset stages. Default matches the live bot:
+        # cooldown_days alone resets stages.
+        if reset_requires_recovery and last_buy_date is not None and rsi >= recovery_rsi:
             rsi_recovered = True
 
-        # Cooldown reset: time AND RSI recovery (matches live bot)
+        # Cooldown reset: live default is elapsed time only; the backtest UI
+        # can opt into the legacy RSI recovery gate for comparison.
         if last_buy_date is not None:
             days_since_buy = (date - last_buy_date).days
-            if days_since_buy >= cooldown_days and rsi_recovered:
+            if days_since_buy >= cooldown_days and (
+                not reset_requires_recovery or rsi_recovered
+            ):
                 buy_stage = 0
                 sell_stage = 0
                 rsi_recovered = False
