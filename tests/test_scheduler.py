@@ -107,6 +107,16 @@ class TestHolidayGate:
         assert is_us_market_holiday(date(2026, 12, 25)) is True   # Christmas
         assert is_us_market_holiday(date(2026, 6, 21)) is True    # Sunday
 
+    def test_calendar_range_extends_years_ahead(self):
+        pytest.importorskip("exchange_calendars")
+        # Regression (#1): default XNYS range ended only ~1yr out, so the
+        # cached calendar later raised DateOutOfBounds and the holiday gate
+        # silently treated every day as a trading day. Built far-end now.
+        import pandas as pd
+        from src.utils.scheduler import _get_xnys_calendar
+        last = _get_xnys_calendar().last_session
+        assert last >= pd.Timestamp(date.today()) + pd.DateOffset(years=4)
+
 
 class TestEarlyClose:
     """단축장: NYSE early close (13:00 ET) shortens the regular session by 3h;

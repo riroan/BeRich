@@ -13,19 +13,33 @@ logger = logging.getLogger(__name__)
 _XNYS_CAL = None
 
 
+def _get_xnys_calendar():
+    """XNYS calendar, built once with a far-future end.
+
+    get_calendar()'s default session range ends only ~1 year out, so the
+    cached calendar would later raise DateOutOfBounds and the holiday gate
+    would silently treat every day as a trading day. Build with end =
+    today + 5 years instead — comfortably covers any run between restarts
+    (and each restart re-rolls the window forward).
+    """
+    global _XNYS_CAL
+    if _XNYS_CAL is None:
+        import exchange_calendars as xcals
+        import pandas as pd
+        end = pd.Timestamp(datetime.now().date()) + pd.DateOffset(years=5)
+        _XNYS_CAL = xcals.get_calendar("XNYS", end=end)
+    return _XNYS_CAL
+
+
 def is_us_market_holiday(d: date) -> bool:
     """True if ``d`` is NOT a US (NYSE/XNYS) trading day — a market holiday
     or weekend. Degrades to False (treat as a trading day) if
     exchange_calendars is unavailable, so a missing dep never silently
     halts trading.
     """
-    global _XNYS_CAL
     try:
-        if _XNYS_CAL is None:
-            import exchange_calendars as xcals
-            _XNYS_CAL = xcals.get_calendar("XNYS")
         import pandas as pd
-        return not _XNYS_CAL.is_session(pd.Timestamp(d))
+        return not _get_xnys_calendar().is_session(pd.Timestamp(d))
     except Exception as e:  # pragma: no cover - defensive fallback
         logger.debug(f"holiday check unavailable ({e!r}); treating as trading day")
         return False
@@ -36,13 +50,9 @@ def is_us_early_close(d: date) -> bool:
     trading ends 13:00 ET instead of 16:00. Degrades to False if the
     calendar is unavailable.
     """
-    global _XNYS_CAL
     try:
-        if _XNYS_CAL is None:
-            import exchange_calendars as xcals
-            _XNYS_CAL = xcals.get_calendar("XNYS")
         import pandas as pd
-        return pd.Timestamp(d) in _XNYS_CAL.early_closes
+        return pd.Timestamp(d) in _get_xnys_calendar().early_closes
     except Exception:  # pragma: no cover - defensive fallback
         return False
 
