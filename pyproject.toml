@@ -28,6 +28,7 @@ dependencies = [
     # Utils
     "python-dateutil>=2.8",
     "pytz>=2024.1",
+    "exchange-calendars>=4.5",  # NYSE/XNYS holiday + early-close calendar
 
     # Web dashboard
     "fastapi>=0.109",

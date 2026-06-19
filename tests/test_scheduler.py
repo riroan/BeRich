@@ -1,16 +1,19 @@
 """Tests for US 24h session classification (Phase 2)."""
 
-from datetime import datetime
+from datetime import datetime, date
 
-from src.utils.scheduler import Session, get_current_session
+import pytest
+
+from src.utils.scheduler import Session, get_current_session, is_us_market_holiday
 
 
-# Anchor dates (verified weekdays):
-#   2026-06-17 Wed, 2026-06-20 Sat, 2026-06-21 Sun, 2026-06-22 Mon
-WED = (2026, 6, 17)
-SAT = (2026, 6, 20)
-SUN = (2026, 6, 21)
-MON = (2026, 6, 22)
+# Anchor dates — a clean (no-holiday) week so session logic is tested
+# independently of the holiday gate. 2026-06-22 Mon ... 2026-06-28 Sun.
+# (2026-06-19 Fri is Juneteenth, so the prior week is avoided here.)
+WED = (2026, 6, 24)   # Wednesday, trading day
+SAT = (2026, 6, 27)   # Saturday; preceding Fri 06-26 is a normal trading day
+SUN = (2026, 6, 28)   # Sunday
+MON = (2026, 6, 22)   # Monday, trading day
 
 
 def _at(date_tuple, h, m, dst=True):
@@ -72,3 +75,32 @@ class TestWeekendBoundaries:
         assert _at(MON, 8, 59) == Session.CLOSED
         assert _at(MON, 9, 0) == Session.DAY_MARKET
         assert _at(MON, 22, 30) == Session.REGULAR
+
+
+class TestHolidayGate:
+    """US market holidays / early closes via XNYS calendar close the bot."""
+
+    def test_juneteenth_closed(self):
+        pytest.importorskip("exchange_calendars")
+        # 2026-06-19 Fri = Juneteenth (NYSE closed). Every KST instant that
+        # maps to that US trading date must be CLOSED.
+        FRI = (2026, 6, 19)
+        assert _at(FRI, 11, 0) == Session.CLOSED   # day_market window
+        assert _at(FRI, 18, 0) == Session.CLOSED   # pre window
+        assert _at(FRI, 23, 0) == Session.CLOSED   # regular window
+        # next KST morning still maps to Fri 06-19 (carryover) → CLOSED
+        assert _at((2026, 6, 20), 3, 0) == Session.CLOSED   # regular tail
+        assert _at((2026, 6, 20), 6, 0) == Session.CLOSED   # after tail
+
+    def test_normal_trading_day_open(self):
+        pytest.importorskip("exchange_calendars")
+        # 2026-06-24 Wed (trading) — holiday gate must NOT close it.
+        assert _at((2026, 6, 24), 11, 0) == Session.DAY_MARKET
+        assert _at((2026, 6, 24), 23, 0) == Session.REGULAR
+
+    def test_is_us_market_holiday(self):
+        pytest.importorskip("exchange_calendars")
+        assert is_us_market_holiday(date(2026, 6, 19)) is True    # Juneteenth
+        assert is_us_market_holiday(date(2026, 6, 18)) is False   # Thu trading
+        assert is_us_market_holiday(date(2026, 12, 25)) is True   # Christmas
+        assert is_us_market_holiday(date(2026, 6, 21)) is True    # Sunday

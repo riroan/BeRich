@@ -1,13 +1,34 @@
 """Scheduler for periodic strategy execution"""
 
 import asyncio
-from datetime import datetime, time
+from datetime import datetime, time, timedelta, date
 from enum import Enum
 from typing import Callable
 from zoneinfo import ZoneInfo
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Lazily-built NYSE (XNYS) calendar — expensive to construct, so cache it.
+_XNYS_CAL = None
+
+
+def is_us_market_holiday(d: date) -> bool:
+    """True if ``d`` is NOT a US (NYSE/XNYS) trading day — a market holiday
+    or weekend. Degrades to False (treat as a trading day) if
+    exchange_calendars is unavailable, so a missing dep never silently
+    halts trading.
+    """
+    global _XNYS_CAL
+    try:
+        if _XNYS_CAL is None:
+            import exchange_calendars as xcals
+            _XNYS_CAL = xcals.get_calendar("XNYS")
+        import pandas as pd
+        return not _XNYS_CAL.is_session(pd.Timestamp(d))
+    except Exception as e:  # pragma: no cover - defensive fallback
+        logger.debug(f"holiday check unavailable ({e!r}); treating as trading day")
+        return False
 
 
 class Session(Enum):
@@ -77,6 +98,20 @@ def get_current_session(ts: datetime, dst: bool | None = None) -> Session:
         return Session.CLOSED
 
     m = ts.hour * 60 + ts.minute
+
+    # Holiday gate: map this KST instant to the US trading DATE it belongs to
+    # and close if that date isn't an NYSE session. The early-morning
+    # carryover (before after_end) belongs to the PREVIOUS US date; from
+    # day_market open onward it's today's US date. The 07:00-day_start gap is
+    # CLOSED regardless, so its date is irrelevant.
+    if m < after_end:
+        us_date = (ts - timedelta(days=1)).date()
+    elif m < day_start:
+        us_date = None
+    else:
+        us_date = ts.date()
+    if us_date is not None and is_us_market_holiday(us_date):
+        return Session.CLOSED
 
     # Early-morning carryover (REGULAR tail + AFTER) belongs to the
     # PREVIOUS US trading night.
