@@ -197,7 +197,6 @@
         function selectSlice(index) {
             if (index < 0) return;
             selectedIdx = index;
-            drawDonut(selectedIdx);
             updateLegend();
             updateSelectionLabel();
         }
@@ -205,7 +204,7 @@
         // Hit detection
         canvas.addEventListener('mousemove', (e) => {
             const hit = hitIndexFromEvent(e);
-            drawDonut(hit >= 0 ? hit : selectedIdx);
+            drawDonut(hit >= 0 ? hit : undefined);
             canvas.style.cursor = hit >= 0 ? 'pointer' : 'default';
         });
 
@@ -214,7 +213,7 @@
         });
 
         canvas.addEventListener('mouseleave', () => {
-            drawDonut(selectedIdx);
+            drawDonut();
             canvas.style.cursor = 'default';
         });
 
@@ -252,7 +251,7 @@
             });
         }
 
-        drawDonut(selectedIdx);
+        drawDonut();
         buildLegend();
         updateLegend();
         updateSelectionLabel();
