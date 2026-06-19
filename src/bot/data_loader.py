@@ -98,6 +98,18 @@ class DataLoaderMixin:
         except Exception as e:
             logger.warning(f"Failed to load equity history: {e}")
 
+    async def load_current_positions(self: "TradingBot") -> None:
+        """Load current positions from database into dashboard state."""
+        if not self.storage:
+            return
+
+        try:
+            positions = await self.storage.get_current_positions()
+            self.dashboard.replace_positions_from_records(positions)
+            logger.info(f"Loaded {len(positions)} current positions")
+        except Exception as e:
+            logger.warning(f"Failed to load current positions: {e}")
+
     async def load_fills(self: "TradingBot") -> None:
         """Load fills from database for performance calculation and trade logs"""
         try:

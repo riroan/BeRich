@@ -330,6 +330,82 @@ class DashboardState:
         )
         self.last_update = datetime.now()
 
+    @staticmethod
+    def _position_from_record(record: dict[str, Any] | PositionInfo) -> PositionInfo:
+        if isinstance(record, PositionInfo):
+            return record
+
+        avg_price = float(record["avg_price"])
+        current_price = float(record.get("current_price", avg_price))
+        pnl = float(
+            record.get(
+                "pnl",
+                (current_price - avg_price) * int(record["quantity"]),
+            )
+        )
+        pnl_pct = float(
+            record.get(
+                "pnl_pct",
+                ((current_price - avg_price) / avg_price * 100)
+                if avg_price else 0,
+            )
+        )
+        stop_loss_pct = float(record.get("stop_loss_pct", -10.0))
+
+        return PositionInfo(
+            symbol=str(record["symbol"]).upper(),
+            market=str(record["market"]).upper(),
+            quantity=int(record["quantity"]),
+            avg_price=avg_price,
+            current_price=current_price,
+            pnl=pnl,
+            pnl_pct=pnl_pct,
+            rsi=(
+                float(record["rsi"])
+                if record.get("rsi") is not None else None
+            ),
+            buy_stage=int(record.get("buy_stage", 0)),
+            sell_stage=int(record.get("sell_stage", 0)),
+            max_buy_stages=int(record.get("max_buy_stages", 3)),
+            max_sell_stages=int(record.get("max_sell_stages", 3)),
+            last_buy_date=record.get("last_buy_date"),
+            stop_loss_pct=stop_loss_pct,
+            stop_loss_distance=float(
+                record.get("stop_loss_distance", pnl_pct - stop_loss_pct)
+            ),
+        )
+
+    def replace_positions_from_records(
+        self,
+        records: list[dict[str, Any] | PositionInfo],
+        market: str | None = None,
+    ) -> None:
+        positions = {
+            position.symbol: position
+            for position in (self._position_from_record(record) for record in records)
+        }
+
+        if market is None:
+            self.positions = positions
+        else:
+            market_upper = market.upper()
+            self.positions = {
+                symbol: position
+                for symbol, position in self.positions.items()
+                if position.market.upper() != market_upper
+            }
+            self.positions.update(positions)
+
+        for position in positions.values():
+            if position.rsi is not None:
+                self.rsi_values[position.symbol] = position.rsi
+            self.rsi_prices[position.symbol] = {
+                "price": position.current_price,
+                "market": position.market,
+            }
+
+        self.last_update = datetime.now()
+
     def update_rsi(self, symbol: str, rsi: float, price: float = None, market: str = None):
         self.rsi_values[symbol] = rsi
         if price is not None:
@@ -934,14 +1010,16 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
+        positions = await _get_current_positions_for_web()
+
         # Update derived states
         dashboard_state.update_signal_candidates()
         dashboard_state.update_market_status()
         dashboard_state.update_risk_alerts()
 
         # Calculate portfolio summary
-        krw_positions = [p for p in dashboard_state.positions.values() if p.market == "KRX"]
-        us_positions = [p for p in dashboard_state.positions.values() if p.market != "KRX"]
+        krw_positions = [p for p in positions if p.market == "KRX"]
+        us_positions = [p for p in positions if p.market != "KRX"]
 
         total_krw_value = float(dashboard_state.balance_krw)
         total_usd_value = float(dashboard_state.balance_usd)
@@ -957,10 +1035,10 @@ def create_app() -> FastAPI:
             "request": request,
             "active_page": "dashboard",
             # Portfolio summary
-            "positions": list(dashboard_state.positions.values()),
+            "positions": positions,
             "krw_positions": krw_positions,
             "us_positions": us_positions,
-            "position_count": len(dashboard_state.positions),
+            "position_count": len(positions),
             # Balance
             "balance_krw": float(dashboard_state.balance_krw),
             "balance_usd": float(dashboard_state.balance_usd),
@@ -1080,7 +1158,8 @@ def create_app() -> FastAPI:
     @app.get("/api/positions")
     async def get_positions():
         """Get current positions"""
-        return [p.model_dump() for p in dashboard_state.positions.values()]
+        positions = await _get_current_positions_for_web()
+        return [p.model_dump() for p in positions]
 
     @app.get("/api/rsi")
     async def get_rsi():
@@ -1129,25 +1208,34 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
-        position = dashboard_state.positions.get(symbol)
-        rsi = dashboard_state.rsi_values.get(symbol)
-        trade_points = dashboard_state.trade_points.get(symbol, [])
+        symbol_upper = symbol.upper()
+        positions = await _get_current_positions_for_web()
+        position = {p.symbol: p for p in positions}.get(symbol_upper)
+        rsi = position.rsi if position and position.rsi is not None else (
+            dashboard_state.rsi_values.get(symbol_upper)
+        )
+        trade_points = dashboard_state.trade_points.get(symbol_upper, [])
 
         # Get current price from rsi_prices (available even without position)
-        price_info = dashboard_state.rsi_prices.get(symbol, {})
-        current_price = price_info.get("price") if price_info else None
-        market = price_info.get("market", "nasdaq") if price_info else None
+        price_info = dashboard_state.rsi_prices.get(symbol_upper, {})
+        current_price = position.current_price if position else (
+            price_info.get("price") if price_info else None
+        )
+        market = position.market if position else (
+            price_info.get("market", "nasdaq") if price_info else None
+        )
 
         # Get symbol-specific trade logs
         symbol_trades = [
-            log.model_dump() for log in dashboard_state.trade_logs
-            if log.symbol == symbol
+            log.model_dump()
+            for log in dashboard_state.trade_logs
+            if log.symbol == symbol_upper
         ][:20]
 
         context = {
             "request": request,
             "active_page": "symbols",
-            "symbol": symbol,
+            "symbol": symbol_upper,
             "position": position,
             "rsi": rsi,
             "current_price": current_price,
@@ -1237,11 +1325,15 @@ def create_app() -> FastAPI:
     @app.get("/api/symbol/{symbol}")
     async def get_symbol_info(symbol: str):
         """Get symbol info"""
-        position = dashboard_state.positions.get(symbol)
-        rsi = dashboard_state.rsi_values.get(symbol)
+        symbol_upper = symbol.upper()
+        positions = await _get_current_positions_for_web()
+        position = {p.symbol: p for p in positions}.get(symbol_upper)
+        rsi = position.rsi if position and position.rsi is not None else (
+            dashboard_state.rsi_values.get(symbol_upper)
+        )
 
         return {
-            "symbol": symbol,
+            "symbol": symbol_upper,
             "position": position.model_dump() if position else None,
             "rsi": rsi,
         }
@@ -1401,6 +1493,22 @@ def create_app() -> FastAPI:
         storage = Storage(dashboard_state.db_url)
         await storage.initialize()
         return storage
+
+    async def _get_current_positions_for_web() -> list[PositionInfo]:
+        """Read current positions from DB, falling back to in-memory state."""
+        storage = await _get_web_storage()
+        if not storage:
+            return list(dashboard_state.positions.values())
+
+        try:
+            records = await storage.get_current_positions()
+            dashboard_state.replace_positions_from_records(records)
+            return list(dashboard_state.positions.values())
+        except Exception as e:
+            logger.warning(f"Failed to load current positions for web: {e}")
+            return list(dashboard_state.positions.values())
+        finally:
+            await storage.close()
 
     @app.get("/symbols", response_class=HTMLResponse)
     async def symbols_page(request: Request):
@@ -1794,7 +1902,7 @@ def create_app() -> FastAPI:
                 await storage.close()
 
         # Build portfolio data from positions
-        positions = list(dashboard_state.positions.values())
+        positions = await _get_current_positions_for_web()
         total_value = float(dashboard_state.balance_usd)
 
         portfolio = []
@@ -1860,7 +1968,7 @@ def create_app() -> FastAPI:
             finally:
                 await storage.close()
 
-        positions = list(dashboard_state.positions.values())
+        positions = await _get_current_positions_for_web()
         total_value = float(dashboard_state.balance_usd)
 
         portfolio = []

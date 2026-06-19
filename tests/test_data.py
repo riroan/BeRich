@@ -28,18 +28,29 @@ class TestStorageInitialization:
             tables = await conn.run_sync(
                 lambda sync_conn: inspect(sync_conn).get_table_names()
             )
+            current_position_columns = await conn.run_sync(
+                lambda sync_conn: {
+                    col["name"]
+                    for col in inspect(sync_conn).get_columns("current_positions")
+                }
+            )
 
         expected = [
             "bars",
             "orders",
             "fills",
             "position_snapshots",
+            "current_positions",
             "price_rsi",
             "equity_snapshots",
             "strategy_params",
         ]
         for table in expected:
             assert table in tables, f"Table '{table}' not found"
+        assert "current_price" not in current_position_columns
+        assert "pnl" not in current_position_columns
+        assert "pnl_pct" not in current_position_columns
+        assert "rsi" not in current_position_columns
 
     async def test_initialize_idempotent(self, storage: Storage):
         """Calling initialize() twice should not raise"""
@@ -194,6 +205,88 @@ class TestStrategyParams:
         # Seeding again should not duplicate
         count = await storage.seed_strategy_params(config)
         assert count == 0
+
+
+class TestCurrentPositions:
+    """Test DB-backed current position state."""
+
+    @pytest.mark.asyncio
+    async def test_replace_and_get_current_positions(self, storage: Storage):
+        changed = await storage.replace_current_positions_for_market(
+            Market.NASDAQ,
+            [
+                {
+                    "symbol": "aapl",
+                    "quantity": 2,
+                    "avg_price": 100,
+                    "buy_stage": 1,
+                    "stop_loss_pct": -8,
+                },
+            ],
+        )
+        await storage.save_price_rsi(
+            symbol="AAPL",
+            market=Market.NASDAQ,
+            price=Decimal("110"),
+            rsi=42.5,
+        )
+
+        positions = await storage.get_current_positions()
+
+        assert changed is True
+        assert len(positions) == 1
+        assert positions[0]["symbol"] == "AAPL"
+        assert positions[0]["market"] == "NASDAQ"
+        assert positions[0]["current_price"] == 110.0
+        assert positions[0]["pnl"] == 20.0
+        assert positions[0]["pnl_pct"] == 10.0
+        assert positions[0]["stop_loss_distance"] == 18.0
+        assert positions[0]["rsi"] == 42.5
+        assert positions[0]["buy_stage"] == 1
+
+    @pytest.mark.asyncio
+    async def test_replace_current_positions_skips_unchanged_state(
+        self,
+        storage: Storage,
+    ):
+        position = {
+            "symbol": "AAPL",
+            "quantity": 1,
+            "avg_price": 100,
+            "buy_stage": 0,
+        }
+
+        first = await storage.replace_current_positions_for_market(
+            Market.NASDAQ,
+            [position],
+        )
+        second = await storage.replace_current_positions_for_market(
+            Market.NASDAQ,
+            [position],
+        )
+
+        assert first is True
+        assert second is False
+
+    @pytest.mark.asyncio
+    async def test_replace_current_positions_only_clears_that_market(
+        self,
+        storage: Storage,
+    ):
+        await storage.replace_current_positions_for_market(
+            Market.NASDAQ,
+            [{"symbol": "AAPL", "quantity": 1, "avg_price": 100}],
+        )
+        await storage.replace_current_positions_for_market(
+            Market.NYSE,
+            [{"symbol": "KO", "quantity": 3, "avg_price": 70}],
+        )
+
+        await storage.replace_current_positions_for_market(Market.NASDAQ, [])
+
+        positions = await storage.get_current_positions()
+        assert [p["symbol"] for p in positions] == ["KO"]
+        assert positions[0]["market"] == "NYSE"
 
 
 

@@ -7,6 +7,7 @@ from decimal import Decimal
 
 from src.bot.core import TradingBot
 from src.bot.warmup import WarmupManager
+from src.core.types import Market, Position
 
 
 class TestTradingBot:
@@ -350,6 +351,48 @@ class TestDashboardSyncMixin:
 
         bot.dashboard.set_bot_status.assert_called_once()
 
+    @pytest.mark.asyncio
+    async def test_update_market_positions_returns_dashboard_records(
+        self,
+        bot_with_dashboard,
+    ):
+        """Broker positions should be normalized for DB-backed dashboard state."""
+        bot = bot_with_dashboard
+        bot.dashboard.rsi_values = {"AAPL": 42.5}
+        bot.broker = AsyncMock()
+        bot.broker.get_positions = AsyncMock(return_value=[
+            Position(
+                symbol="AAPL",
+                market=Market.NASDAQ,
+                quantity=2,
+                avg_entry_price=Decimal("100"),
+                current_price=Decimal("110"),
+                unrealized_pnl=Decimal("20"),
+            ),
+        ])
+
+        records = await bot._update_market_positions(
+            Market.NASDAQ,
+            {
+                "AAPL": {
+                    "buy_stage": 1,
+                    "sell_stage": 0,
+                    "max_buy_stages": 3,
+                    "max_sell_stages": 3,
+                    "last_buy_time": datetime(2024, 1, 2, 3, 4),
+                    "stop_loss_pct": -8.0,
+                },
+            },
+        )
+
+        assert records is not None
+        assert records[0]["symbol"] == "AAPL"
+        assert records[0]["market"] == "NASDAQ"
+        assert records[0]["pnl"] == 20.0
+        assert records[0]["pnl_pct"] == 10.0
+        assert records[0]["stop_loss_distance"] == 18.0
+        assert records[0]["rsi"] == 42.5
+
 
 class TestTickHandlerMixin:
     """Test cases for TickHandlerMixin"""
@@ -456,6 +499,31 @@ class TestDataLoaderMixin:
         await bot.load_equity_history()
 
         assert bot.dashboard.equity_history == mock_history
+
+    @pytest.mark.asyncio
+    async def test_load_current_positions(self, bot_with_loader):
+        """Test loading current positions."""
+        bot = bot_with_loader
+        mock_positions = [
+            {
+                "symbol": "AAPL",
+                "market": "NASDAQ",
+                "quantity": 2,
+                "avg_price": 100,
+                "current_price": 110,
+                "pnl": 20,
+                "pnl_pct": 10,
+            },
+        ]
+
+        bot.storage = AsyncMock()
+        bot.storage.get_current_positions = AsyncMock(return_value=mock_positions)
+
+        await bot.load_current_positions()
+
+        bot.dashboard.replace_positions_from_records.assert_called_once_with(
+            mock_positions,
+        )
 
     @pytest.mark.asyncio
     async def test_load_fills(self, bot_with_loader):

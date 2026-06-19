@@ -52,3 +52,33 @@ class TestBuyCandidateDedup:
 
         assert len(symbols) == len(set(symbols))  # no duplicates
         assert "QQQ" not in symbols  # not oversold → not a buy candidate
+
+
+class TestDashboardPositionRecords:
+    def test_replace_positions_from_records_updates_position_and_price_state(self):
+        state = DashboardState()
+
+        state.replace_positions_from_records([
+            {
+                "symbol": "aapl",
+                "market": "nasdaq",
+                "quantity": 2,
+                "avg_price": 100,
+                "current_price": 110,
+                "pnl": 20,
+                "pnl_pct": 10,
+                "rsi": 42.5,
+                "buy_stage": 1,
+                "sell_stage": 0,
+                "max_buy_stages": 3,
+                "max_sell_stages": 3,
+                "last_buy_date": "01-02 03:04",
+                "stop_loss_pct": -8,
+                "stop_loss_distance": 18,
+            },
+        ])
+
+        assert state.positions["AAPL"].current_price == 110
+        assert state.positions["AAPL"].market == "NASDAQ"
+        assert state.rsi_values["AAPL"] == 42.5
+        assert state.rsi_prices["AAPL"] == {"price": 110, "market": "NASDAQ"}

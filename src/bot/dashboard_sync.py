@@ -30,9 +30,42 @@ class DashboardSyncMixin:
             if not us_only:
                 markets.insert(0, Market.KRX)
 
+            stored_positions = False
+            storage_failed = False
             for market in markets:
-                await self._update_market_positions(market, strategy_states)
+                positions = await self._update_market_positions(
+                    market,
+                    strategy_states,
+                )
+                if positions is not None:
+                    self.dashboard.replace_positions_from_records(
+                        positions,
+                        market=market.value.upper(),
+                    )
+                    if self.storage:
+                        try:
+                            replace_positions = (
+                                self.storage.replace_current_positions_for_market
+                            )
+                            changed = await replace_positions(market, positions)
+                            stored_positions = stored_positions or changed
+                            for position in positions:
+                                await self.storage.save_price_rsi(
+                                    symbol=position["symbol"],
+                                    market=market,
+                                    price=Decimal(str(position["current_price"])),
+                                    rsi=position.get("rsi"),
+                                )
+                        except Exception as e:
+                            storage_failed = True
+                            logger.warning(
+                                "Failed to save current positions for "
+                                f"{market.value}: {e}"
+                            )
                 await asyncio.sleep(1)
+
+            if stored_positions and not storage_failed:
+                await self.load_current_positions()
 
             await self._update_balances(us_only)
 
@@ -65,10 +98,11 @@ class DashboardSyncMixin:
 
     async def _update_market_positions(
         self: "TradingBot", market: Market, strategy_states: dict
-    ) -> None:
+    ) -> list[dict] | None:
         """Update positions for a specific market"""
         try:
             positions = await self.broker.get_positions(market)
+            dashboard_positions = []
             for pos in positions:
                 rsi = self.dashboard.rsi_values.get(pos.symbol)
                 state = strategy_states.get(pos.symbol, {})
@@ -85,26 +119,33 @@ class DashboardSyncMixin:
                     )
 
                 stop_loss_pct = state.get("stop_loss_pct", -10.0)
-
-                self.dashboard.update_position(
-                    symbol=pos.symbol,
-                    market=market.value.upper(),
-                    quantity=pos.quantity,
-                    avg_price=float(pos.avg_entry_price),
-                    current_price=float(pos.current_price),
-                    rsi=rsi,
-                    buy_stage=state.get("buy_stage", 0),
-                    sell_stage=state.get("sell_stage", 0),
-                    max_buy_stages=state.get("max_buy_stages", 3),
-                    max_sell_stages=state.get("max_sell_stages", 3),
-                    last_buy_date=last_buy_date,
-                    stop_loss_pct=stop_loss_pct,
+                pnl = float(
+                    (pos.current_price - pos.avg_entry_price) * pos.quantity
                 )
+                dashboard_positions.append({
+                    "symbol": pos.symbol,
+                    "market": market.value.upper(),
+                    "quantity": pos.quantity,
+                    "avg_price": float(pos.avg_entry_price),
+                    "current_price": float(pos.current_price),
+                    "pnl": pnl,
+                    "pnl_pct": pnl_pct,
+                    "rsi": rsi,
+                    "buy_stage": state.get("buy_stage", 0),
+                    "sell_stage": state.get("sell_stage", 0),
+                    "max_buy_stages": state.get("max_buy_stages", 3),
+                    "max_sell_stages": state.get("max_sell_stages", 3),
+                    "last_buy_date": last_buy_date,
+                    "stop_loss_pct": stop_loss_pct,
+                    "stop_loss_distance": pnl_pct - stop_loss_pct,
+                })
 
                 await self._check_stop_loss_alert(pos, pnl_pct, stop_loss_pct)
+            return dashboard_positions
 
         except Exception as e:
             logger.debug(f"Failed to update positions for {market.value}: {e}")
+            return None
 
     async def _check_stop_loss_alert(
         self: "TradingBot", pos, pnl_pct: float, stop_loss_pct: float

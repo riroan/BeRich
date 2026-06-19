@@ -535,12 +535,17 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         await self.strategy_engine.initialize()
 
         # Load historical data
+        await self.load_current_positions()
         await self.load_chart_history()
         await self.load_equity_history()
         await self.load_fills()
 
         # Calculate initial RSI values
         await self.update_initial_rsi()
+
+        # Refresh broker positions into DB-backed dashboard state before the
+        # scheduler's first market-hour tick.
+        await self.update_dashboard_positions()
 
         # Start scheduler
         await self.scheduler.start()

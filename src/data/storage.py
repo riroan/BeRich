@@ -2,13 +2,13 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import select
+from sqlalchemy import delete, select
 import logging
 
 from src.core.types import Bar, Order, Fill, Market, OrderStatus
 from .models import (
     Base, BarModel, OrderModel, FillModel,
-    PriceRSIModel, EquitySnapshot,
+    CurrentPositionModel, PriceRSIModel, EquitySnapshot,
     StrategyParams,
     StrategyConfigModel, BotStateModel,
 )
@@ -60,6 +60,22 @@ class Storage:
                         "ADD COLUMN reason VARCHAR(40)"
                     ))
                     logger.info("Migrated: added reason column to fills")
+
+            if "current_positions" in insp.get_table_names():
+                cols = {c["name"] for c in insp.get_columns("current_positions")}
+                obsolete_cols = {
+                    "current_price",
+                    "pnl",
+                    "pnl_pct",
+                    "rsi",
+                    "stop_loss_distance",
+                }
+                if cols & obsolete_cols:
+                    CurrentPositionModel.__table__.drop(sync_conn, checkfirst=True)
+                    CurrentPositionModel.__table__.create(sync_conn, checkfirst=True)
+                    logger.info(
+                        "Migrated: recreated current_positions with holding-only schema"
+                    )
 
         await conn.run_sync(_check_and_migrate)
 
@@ -390,6 +406,178 @@ class Storage:
             query = select(distinct(PriceRSIModel.symbol))
             result = await session.execute(query)
             return [row[0] for row in result.all()]
+
+    # ==================== Current Positions ====================
+
+    async def replace_current_positions_for_market(
+        self,
+        market: Market | str,
+        positions: list[dict],
+    ) -> bool:
+        """Replace current-position rows for a market when holding state changed."""
+        market_enum = (
+            market if isinstance(market, Market)
+            else Market.from_string(str(market))
+        )
+
+        async with self.async_session() as session:
+            incoming = [
+                {
+                    "symbol": str(position["symbol"]).upper(),
+                    "quantity": int(position["quantity"]),
+                    "avg_price": Decimal(str(position["avg_price"])),
+                    "buy_stage": int(position.get("buy_stage", 0)),
+                    "sell_stage": int(position.get("sell_stage", 0)),
+                    "max_buy_stages": int(position.get("max_buy_stages", 3)),
+                    "max_sell_stages": int(position.get("max_sell_stages", 3)),
+                    "last_buy_date": position.get("last_buy_date"),
+                    "stop_loss_pct": Decimal(str(
+                        position.get("stop_loss_pct", -10.0),
+                    )),
+                }
+                for position in positions
+            ]
+            incoming.sort(key=lambda item: item["symbol"])
+
+            existing_result = await session.execute(
+                select(CurrentPositionModel)
+                .where(CurrentPositionModel.market == market_enum)
+                .order_by(CurrentPositionModel.symbol)
+            )
+            existing = existing_result.scalars().all()
+
+            def _state_tuple(item) -> tuple:
+                if isinstance(item, dict):
+                    return (
+                        item["symbol"],
+                        item["quantity"],
+                        item["avg_price"],
+                        item["buy_stage"],
+                        item["sell_stage"],
+                        item["max_buy_stages"],
+                        item["max_sell_stages"],
+                        item["last_buy_date"],
+                        item["stop_loss_pct"],
+                    )
+                return (
+                    item.symbol,
+                    item.quantity,
+                    Decimal(str(item.avg_price)),
+                    item.buy_stage,
+                    item.sell_stage,
+                    item.max_buy_stages,
+                    item.max_sell_stages,
+                    item.last_buy_date,
+                    Decimal(str(item.stop_loss_pct)),
+                )
+
+            if [_state_tuple(row) for row in existing] == [
+                _state_tuple(row) for row in incoming
+            ]:
+                return False
+
+            await session.execute(
+                delete(CurrentPositionModel).where(
+                    CurrentPositionModel.market == market_enum,
+                )
+            )
+
+            now = datetime.now()
+            for position in incoming:
+                session.add(CurrentPositionModel(
+                    symbol=position["symbol"],
+                    market=market_enum,
+                    quantity=position["quantity"],
+                    avg_price=position["avg_price"],
+                    buy_stage=position["buy_stage"],
+                    sell_stage=position["sell_stage"],
+                    max_buy_stages=position["max_buy_stages"],
+                    max_sell_stages=position["max_sell_stages"],
+                    last_buy_date=position["last_buy_date"],
+                    stop_loss_pct=position["stop_loss_pct"],
+                    updated_at=now,
+                ))
+
+            await session.commit()
+            return True
+
+    async def get_current_positions(
+        self,
+        market: Market | str | None = None,
+    ) -> list[dict]:
+        """Get current-position rows for dashboard rendering."""
+        async with self.async_session() as session:
+            query = select(CurrentPositionModel)
+            if market is not None:
+                market_enum = (
+                    market if isinstance(market, Market)
+                    else Market.from_string(str(market))
+                )
+                query = query.where(CurrentPositionModel.market == market_enum)
+            query = query.order_by(
+                CurrentPositionModel.market,
+                CurrentPositionModel.symbol,
+            )
+
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            positions = []
+            for row in rows:
+                latest_result = await session.execute(
+                    select(PriceRSIModel)
+                    .where(
+                        PriceRSIModel.symbol == row.symbol,
+                        PriceRSIModel.market == row.market,
+                    )
+                    .order_by(PriceRSIModel.timestamp.desc())
+                    .limit(1)
+                )
+                latest = latest_result.scalar_one_or_none()
+
+                avg_price = Decimal(str(row.avg_price))
+                current_price = Decimal(str(latest.price)) if latest else avg_price
+                pnl = (current_price - avg_price) * row.quantity
+                pnl_pct = (
+                    (current_price - avg_price) / avg_price * Decimal("100")
+                    if avg_price else Decimal("0")
+                )
+                stop_loss_pct = Decimal(str(row.stop_loss_pct))
+                stop_loss_distance = pnl_pct - stop_loss_pct
+
+                positions.append({
+                    "symbol": row.symbol,
+                    "market": (
+                        row.market.value.upper()
+                        if isinstance(row.market, Market)
+                        else str(row.market).upper()
+                    ),
+                    "quantity": row.quantity,
+                    "avg_price": float(avg_price),
+                    "current_price": float(current_price),
+                    "pnl": float(pnl),
+                    "pnl_pct": float(pnl_pct),
+                    "rsi": (
+                        float(latest.rsi)
+                        if latest and latest.rsi is not None else None
+                    ),
+                    "buy_stage": row.buy_stage,
+                    "sell_stage": row.sell_stage,
+                    "max_buy_stages": row.max_buy_stages,
+                    "max_sell_stages": row.max_sell_stages,
+                    "last_buy_date": row.last_buy_date,
+                    "stop_loss_pct": float(stop_loss_pct),
+                    "stop_loss_distance": float(stop_loss_distance),
+                    "updated_at": (
+                        row.updated_at.isoformat()
+                        if row.updated_at else None
+                    ),
+                    "price_updated_at": (
+                        latest.timestamp.isoformat()
+                        if latest and latest.timestamp else None
+                    ),
+                })
+            return positions
 
     # ==================== Equity Snapshots ====================
 

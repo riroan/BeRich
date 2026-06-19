@@ -83,6 +83,34 @@ class PositionSnapshot(Base):
     unrealized_pnl = Column(Numeric(20, 8), nullable=False)
 
 
+class CurrentPositionModel(Base):
+    """Current broker position state used by the dashboard"""
+
+    __tablename__ = "current_positions"
+
+    id = Column(Integer, primary_key=True)
+    symbol = Column(String(20), nullable=False)
+    market = Column(SQLEnum(Market), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    avg_price = Column(Numeric(20, 8), nullable=False)
+    buy_stage = Column(Integer, nullable=False, default=0)
+    sell_stage = Column(Integer, nullable=False, default=0)
+    max_buy_stages = Column(Integer, nullable=False, default=3)
+    max_sell_stages = Column(Integer, nullable=False, default=3)
+    last_buy_date = Column(String(20))
+    stop_loss_pct = Column(Numeric(10, 4), nullable=False, default=-10.0)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+
+    __table_args__ = (
+        Index(
+            "idx_current_positions_market_symbol",
+            "market",
+            "symbol",
+            unique=True,
+        ),
+    )
+
+
 class PriceRSIModel(Base):
     """Price and RSI history table"""
 
