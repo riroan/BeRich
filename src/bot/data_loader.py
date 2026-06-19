@@ -137,6 +137,7 @@ class DataLoaderMixin:
                     result="success",
                     pnl=pnl,
                     pnl_pct=round(pnl_pct, 2) if pnl_pct else None,
+                    timestamp=f.timestamp,
                 )
 
             self.dashboard.calculate_performance()

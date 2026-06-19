@@ -4,7 +4,6 @@ import pytest
 from unittest.mock import MagicMock, AsyncMock, patch
 from datetime import datetime
 from decimal import Decimal
-from pathlib import Path
 
 from src.bot.core import TradingBot
 from src.bot.warmup import WarmupManager
@@ -474,7 +473,10 @@ class TestDataLoaderMixin:
         mock_fill.price = Decimal("150")
         mock_fill.commission = Decimal("1")
         mock_fill.pnl = None
-        mock_fill.timestamp = None
+        fill_time = datetime(2024, 1, 2, 3, 4, 5)
+        mock_fill.timestamp = fill_time
+        mock_fill.reason = None
+        mock_fill.rsi = 28.4
 
         bot.storage = AsyncMock()
         bot.storage.get_all_fills = AsyncMock(return_value=[mock_fill])
@@ -482,6 +484,9 @@ class TestDataLoaderMixin:
         await bot.load_fills()
 
         assert len(bot.dashboard.fills) == 1
+        assert bot.dashboard.fills[0]["timestamp"] == "2024-01-02T03:04:05"
+        kwargs = bot.dashboard.add_trade_log.call_args.kwargs
+        assert kwargs["timestamp"] == fill_time
         bot.dashboard.calculate_performance.assert_called_once()
 
     @pytest.mark.asyncio

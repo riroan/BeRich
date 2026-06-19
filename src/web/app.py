@@ -408,10 +408,14 @@ class DashboardState:
         rsi: float | None = None,
         pnl: float | None = None,
         pnl_pct: float | None = None,
+        timestamp: datetime | str | None = None,
     ):
         """Add detailed trade log"""
+        timestamp_value = timestamp or datetime.now()
+        log_time = self._format_trade_timestamp(timestamp_value, "%Y-%m-%d %H:%M:%S")
+        marker_time = self._format_trade_timestamp(timestamp_value, "%Y-%m-%d %H:%M")
         log = TradeLog(
-            timestamp=f"{datetime.now():%Y-%m-%d %H:%M:%S}",
+            timestamp=log_time,
             symbol=symbol,
             market=market,
             action=action,
@@ -431,7 +435,7 @@ class DashboardState:
         if symbol not in self.trade_points:
             self.trade_points[symbol] = []
         self.trade_points[symbol].append({
-            "time": f"{datetime.now():%Y-%m-%d %H:%M}",
+            "time": marker_time,
             "action": action,
             "price": price,
             "rsi": rsi,
@@ -439,6 +443,22 @@ class DashboardState:
         # Keep only last 50 points per symbol
         if len(self.trade_points[symbol]) > 50:
             self.trade_points[symbol] = self.trade_points[symbol][-50:]
+
+    @staticmethod
+    def _format_trade_timestamp(timestamp: datetime | str, fmt: str) -> str:
+        if isinstance(timestamp, datetime):
+            return timestamp.strftime(fmt)
+
+        value = timestamp.strip()
+        if not value:
+            return datetime.now().strftime(fmt)
+
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).strftime(fmt)
+        except ValueError:
+            if fmt == "%Y-%m-%d %H:%M" and len(value) >= 16:
+                return value[:16]
+            return value
 
     def update_signal_candidates(self):
         """Update list of signal candidates based on RSI values"""
