@@ -46,7 +46,15 @@
             </div>
             <div class="card">
                 <div class="label">Profit Factor</div>
-                <div class="value small">{{ "{:.2f}".format(performance.profit_factor) }}</div>
+                <div class="value small">
+                    {% if performance.winning_trades > 0 and performance.losing_trades == 0 %}
+                    ∞
+                    {% elif performance.profit_factor is not none %}
+                    {{ "{:.2f}".format(performance.profit_factor) }}
+                    {% else %}
+                    -
+                    {% endif %}
+                </div>
             </div>
         </div>
 

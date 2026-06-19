@@ -135,7 +135,7 @@ class PerformanceMetrics(BaseModel):
     losing_trades: int = 0
     avg_profit: float = 0.0
     avg_loss: float = 0.0
-    profit_factor: float = 0.0
+    profit_factor: float | None = None
     sharpe_ratio: float = 0.0
     total_pnl: float = 0.0
     best_trade: float = 0.0
@@ -708,6 +708,8 @@ class DashboardState:
         """Calculate performance metrics from equity history and fills"""
         import math
 
+        self.performance = PerformanceMetrics()
+
         # Calculate from equity history
         if len(self.equity_history) >= 2:
             # Get initial and current values (use USD for now, or combine)
@@ -770,7 +772,10 @@ class DashboardState:
 
         # Calculate from fills/trades
         if self.fills:
-            sell_trades = [f for f in self.fills if f.get("side") == "sell"]
+            sell_trades = [
+                f for f in self.fills
+                if str(f.get("side") or "").lower() == "sell"
+            ]
             pnls = [f.get("pnl", 0) or 0 for f in sell_trades if f.get("pnl") is not None]
 
             if pnls:
@@ -1014,6 +1019,7 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
+        await _load_fills_for_web()
         positions = await _get_current_positions_for_web()
 
         # Update derived states
@@ -1097,6 +1103,7 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
+        await _load_fills_for_web()
         context = {
             "request": request,
             "active_page": "trades",
@@ -1118,6 +1125,7 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
+        await _load_fills_for_web()
         # Recalculate performance metrics
         dashboard_state.calculate_performance()
 
@@ -1183,6 +1191,7 @@ def create_app() -> FastAPI:
     @app.get("/api/trade-logs")
     async def get_trade_logs(limit: int = 50):
         """Get trade logs"""
+        await _load_fills_for_web()
         return [log.model_dump() for log in dashboard_state.trade_logs[:limit]]
 
     @app.get("/api/signal-candidates")
@@ -1213,6 +1222,7 @@ def create_app() -> FastAPI:
             return RedirectResponse(url="/login", status_code=302)
 
         symbol_upper = symbol.upper()
+        await _load_fills_for_web()
         positions = await _get_current_positions_for_web()
         position = {p.symbol: p for p in positions}.get(symbol_upper)
         rsi = position.rsi if position and position.rsi is not None else (
@@ -1269,6 +1279,7 @@ def create_app() -> FastAPI:
         ``time`` fields). Records strictly older than the cursor are returned,
         enabling lazy-loading when the user scrolls back on the chart.
         """
+        await _load_fills_for_web()
         trade_points = dashboard_state.trade_points.get(symbol, [])
 
         before_dt: datetime | None = None
@@ -1595,6 +1606,72 @@ def create_app() -> FastAPI:
             return list(dashboard_state.positions.values())
         finally:
             await storage.close()
+
+    async def _load_fills_for_web() -> None:
+        """Read persisted fills into dashboard state for standalone web views."""
+        storage = await _get_web_storage()
+        if not storage:
+            return
+
+        try:
+            fills = await storage.get_all_fills()
+        except Exception as e:
+            logger.warning(f"Failed to load fills for web: {e}")
+            return
+        finally:
+            await storage.close()
+
+        from src.core.types import trade_action
+
+        def _enum_value(value) -> str:
+            if hasattr(value, "value"):
+                return str(value.value)
+            return str(value)
+
+        dashboard_state.fills = [
+            {
+                "order_id": fill.order_id,
+                "symbol": fill.symbol,
+                "market": _enum_value(fill.market).upper(),
+                "side": _enum_value(fill.side),
+                "quantity": fill.quantity,
+                "price": float(fill.price),
+                "commission": float(fill.commission),
+                "pnl": float(fill.pnl) if fill.pnl is not None else None,
+                "rsi": float(fill.rsi) if fill.rsi is not None else None,
+                "reason": fill.reason,
+                "timestamp": (
+                    fill.timestamp.isoformat() if fill.timestamp else None
+                ),
+            }
+            for fill in fills
+        ]
+
+        dashboard_state.trade_logs = []
+        dashboard_state.trade_points = {}
+        for fill in fills:
+            side = _enum_value(fill.side)
+            pnl = float(fill.pnl) if fill.pnl is not None else None
+            cost = float(fill.price) * fill.quantity
+            pnl_pct = (
+                pnl / cost * 100
+                if pnl is not None and cost > 0 else None
+            )
+            dashboard_state.add_trade_log(
+                symbol=fill.symbol,
+                market=_enum_value(fill.market).upper(),
+                action=trade_action(side, fill.reason),
+                price=float(fill.price),
+                quantity=fill.quantity,
+                rsi=float(fill.rsi) if fill.rsi is not None else None,
+                trigger_rule=fill.reason or "historical",
+                result="success",
+                pnl=pnl,
+                pnl_pct=pnl_pct,
+                timestamp=fill.timestamp,
+            )
+
+        dashboard_state.calculate_performance()
 
     @app.get("/symbols", response_class=HTMLResponse)
     async def symbols_page(request: Request):
@@ -2438,6 +2515,7 @@ def create_app() -> FastAPI:
 
         from src.analytics import ReportGenerator, DrawdownAnalyzer, TradeStatistics
 
+        await _load_fills_for_web()
         # Generate reports
         report_gen = ReportGenerator(
             fills=dashboard_state.fills,
@@ -2480,6 +2558,7 @@ def create_app() -> FastAPI:
         """Get trade reports"""
         from src.analytics import ReportGenerator
 
+        await _load_fills_for_web()
         report_gen = ReportGenerator(
             fills=dashboard_state.fills,
             equity_history=dashboard_state.equity_history,
@@ -2547,6 +2626,7 @@ def create_app() -> FastAPI:
         """Get trade statistics"""
         from src.analytics import TradeStatistics
 
+        await _load_fills_for_web()
         calc = TradeStatistics(dashboard_state.fills)
         stats = calc.calculate()
 
