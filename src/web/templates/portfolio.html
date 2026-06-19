@@ -58,7 +58,7 @@
                     </thead>
                     <tbody>
                         {% for pos in portfolio %}
-                        <tr>
+                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}" tabindex="0" role="link" aria-label="Open {{ pos.symbol }} chart">
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Market">{{ pos.market }}</td>
                             <td data-label="Qty">{{ pos.quantity }}</td>

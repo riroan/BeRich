@@ -141,10 +141,11 @@ class DashboardWebSocket {
 
         tbody.innerHTML = positions.map(pos => {
             const symbol = String(pos.symbol || '');
+            const escapedSymbol = this.escapeHTML(symbol);
             const href = `/symbol/${encodeURIComponent(symbol)}`;
             return `
-                <tr class="position-row" data-href="${href}">
-                    <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${symbol}</a></td>
+                <tr class="position-row" data-href="${href}" tabindex="0" role="link" aria-label="Open ${escapedSymbol} chart">
+                    <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${escapedSymbol}</a></td>
                     <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
                     <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
                         ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
@@ -343,6 +344,16 @@ class DashboardWebSocket {
         if (rsi <= 35 || rsi >= 65) return 'rsi-warning';
         return 'rsi-neutral';
     }
+
+    escapeHTML(value) {
+        return String(value).replace(/[&<>"']/g, char => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#39;',
+        })[char]);
+    }
 }
 
 // Initialize WebSocket connection
@@ -361,6 +372,14 @@ function initPositionRowLinks() {
     document.addEventListener('click', event => {
         const row = event.target.closest('.position-row[data-href]');
         if (!row || event.target.closest('a, button, input, select, textarea')) return;
+        window.location.href = row.dataset.href;
+    });
+
+    document.addEventListener('keydown', event => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('.position-row[data-href]');
+        if (!row || event.target.closest('a, button, input, select, textarea')) return;
+        event.preventDefault();
         window.location.href = row.dataset.href;
     });
 }

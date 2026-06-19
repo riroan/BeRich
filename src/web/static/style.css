@@ -347,6 +347,10 @@ tr:hover { background: rgba(59,130,246,0.04); }
 .position-row { cursor: pointer; }
 .position-row:hover { background: rgba(59,130,246,0.08); }
 .position-row:focus-within { background: rgba(59,130,246,0.06); }
+.position-row:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
 .empty { text-align: center; color: var(--dim); padding: 24px !important; }
 
 /* ===================== Symbol / Badge ===================== */
@@ -451,6 +455,9 @@ tr:hover { background: rgba(59,130,246,0.04); }
 .signal-item.two-col {
     grid-template-columns: 1fr auto;
 }
+.recent-trades-card .signal-item {
+    grid-template-columns: 70px 66px 46px minmax(0, 1fr);
+}
 .trade-qty {
     font-size: 15px;
     font-weight: 600;
@@ -477,6 +484,23 @@ tr:hover { background: rgba(59,130,246,0.04); }
     font-size: 11px;
     font-weight: 600;
     text-align: center;
+}
+.recent-trades-card .signal-tag {
+    display: inline-flex;
+    justify-content: center;
+    width: 66px;
+    box-sizing: border-box;
+    padding-left: 0;
+    padding-right: 0;
+}
+.recent-trades-card .trade-qty {
+    justify-self: center;
+    width: 46px;
+    text-align: center;
+}
+.recent-trades-card .trade-price {
+    justify-self: end;
+    min-width: 0;
 }
 .signal-tag.buy { background: rgba(16,185,129,0.12); color: var(--emerald); }
 .signal-tag.sell { background: rgba(239,68,68,0.12); color: var(--red); }
@@ -989,6 +1013,101 @@ select option { background: var(--surface); color: var(--text); }
         justify-content: center;
     }
 
+    /* Trades: dense log cards for mobile scanning */
+    .trades-table.mobile-cards tbody tr.trade-row {
+        grid-template-columns: minmax(0, 1fr) auto auto;
+        align-items: center;
+        gap: 4px 8px;
+        padding: 9px 10px;
+    }
+    .trades-table.mobile-cards td {
+        min-width: 0;
+        padding: 1px 0;
+        font-size: 12px;
+        line-height: 1.25;
+    }
+    .trades-table.mobile-cards td::before {
+        font-size: 9px;
+        margin-bottom: 1px;
+        letter-spacing: 0;
+    }
+    .trades-table.mobile-cards td[data-label="Symbol"] {
+        grid-column: 1;
+        grid-row: 1;
+        overflow: hidden;
+    }
+    .trades-table.mobile-cards td[data-label="Symbol"]::before,
+    .trades-table.mobile-cards td[data-label="Action"]::before,
+    .trades-table.mobile-cards td[data-label="Market"]::before,
+    .trades-table.mobile-cards td[data-label="Time"]::before {
+        display: none;
+    }
+    .trades-table.mobile-cards td[data-label="Symbol"] .sym-badge {
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        font-size: 14px;
+    }
+    .trades-table.mobile-cards .signal-tag {
+        padding: 2px 7px;
+        font-size: 10px;
+    }
+    .trades-table.mobile-cards .market-badge {
+        padding: 2px 6px;
+        font-size: 10px;
+    }
+    .trades-table.mobile-cards td[data-label="Action"] {
+        grid-column: 2;
+        grid-row: 1;
+        justify-self: end;
+    }
+    .trades-table.mobile-cards td[data-label="Market"] {
+        grid-column: 3;
+        grid-row: 1;
+        justify-self: end;
+    }
+    .trades-table.mobile-cards td[data-label="Time"] {
+        grid-column: 1 / -1;
+        grid-row: 2;
+        color: var(--dim);
+        font-size: 11px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--border);
+    }
+    .trades-table.mobile-cards td[data-label="Price"] {
+        grid-column: 1;
+        grid-row: 3;
+    }
+    .trades-table.mobile-cards td[data-label="Qty"] {
+        grid-column: 2;
+        grid-row: 3;
+    }
+    .trades-table.mobile-cards td[data-label="RSI"] {
+        grid-column: 3;
+        grid-row: 3;
+    }
+    .trades-table.mobile-cards td[data-label="Result"] {
+        grid-column: 1;
+        grid-row: 4;
+    }
+    .trades-table.mobile-cards td[data-label="P&L"] {
+        grid-column: 2;
+        grid-row: 4;
+    }
+    .trades-table.mobile-cards td[data-label="P&L %"] {
+        grid-column: 3;
+        grid-row: 4;
+    }
+    .trades-table.mobile-cards td[data-label="Qty"],
+    .trades-table.mobile-cards td[data-label="RSI"],
+    .trades-table.mobile-cards td[data-label="P&L"],
+    .trades-table.mobile-cards td[data-label="P&L %"] {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+
     /* Signals: Buy + Sell side by side, Recent Trades below */
     .signals-grid {
         grid-template-columns: 1fr 1fr !important;
@@ -1054,6 +1173,15 @@ select option { background: var(--surface); color: var(--text); }
         gap: 6px;
         font-size: 11px;
         padding: 6px 0;
+    }
+    .recent-trades-card .signal-item {
+        grid-template-columns: 60px 62px 38px minmax(0, 1fr);
+    }
+    .recent-trades-card .signal-tag {
+        width: 62px;
+    }
+    .recent-trades-card .trade-qty {
+        width: 38px;
     }
     .signal-item.two-col {
         display: flex;
@@ -1205,6 +1333,14 @@ select option { background: var(--surface); color: var(--text); }
 
     /* Charts: compact */
     .chart-container-small { min-height: 160px; }
+
+    .trades-table.mobile-cards tbody tr.trade-row {
+        gap: 3px 6px;
+        padding: 8px;
+    }
+    .trades-table.mobile-cards td[data-label="Time"] {
+        font-size: 10px;
+    }
 
     /* Symbol detail header */
     .section-title { font-size: 16px !important; }

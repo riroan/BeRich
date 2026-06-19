@@ -50,7 +50,7 @@
                     </thead>
                     <tbody>
                         {% for pos in positions %}
-                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}">
+                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}" tabindex="0" role="link" aria-label="Open {{ pos.symbol }} chart">
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
@@ -110,7 +110,7 @@
                 {% endfor %}
                 <div class="empty-state">Watching for RSI &ge; 65</div>
             </div>
-            <div class="signal-card">
+            <div class="signal-card recent-trades-card">
                 <h3>Recent Trades</h3>
                 {% for log in trade_logs[:5] %}
                 <div class="signal-item">

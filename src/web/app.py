@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Any
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request, Form, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, Request, Form, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -843,6 +843,24 @@ SESSION_COOKIE_NAME = "berich_session"
 SESSION_EXPIRE_DAYS = 30
 
 
+def _is_secure_request(request: Request) -> bool:
+    """Return True when the original client request is HTTPS."""
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    return request.url.scheme == "https" or forwarded_proto.split(",", 1)[0].strip() == "https"
+
+
+def _set_session_cookie(response: Response, request: Request, token: str) -> None:
+    """Set the dashboard session cookie with HTTPS-only Secure semantics."""
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=token,
+        httponly=True,
+        max_age=SESSION_EXPIRE_DAYS * 86400,
+        secure=_is_secure_request(request),
+        samesite="lax",
+    )
+
+
 def generate_session_token() -> str:
     """Generate a secure session token"""
     return secrets.token_hex(32)
@@ -946,14 +964,7 @@ def create_app() -> FastAPI:
         if path not in ("/login", "/logout"):
             token = request.cookies.get(SESSION_COOKIE_NAME)
             if token and token in valid_sessions:
-                response.set_cookie(
-                    key=SESSION_COOKIE_NAME,
-                    value=token,
-                    httponly=True,
-                    max_age=SESSION_EXPIRE_DAYS * 86400,
-                    secure=True,
-                    samesite="lax",
-                )
+                _set_session_cookie(response, request, token)
         return response
 
     @app.get("/login", response_class=HTMLResponse)
@@ -979,14 +990,7 @@ def create_app() -> FastAPI:
             valid_sessions[token] = datetime.now()
 
             response = RedirectResponse(url="/", status_code=302)
-            response.set_cookie(
-                key=SESSION_COOKIE_NAME,
-                value=token,
-                httponly=True,
-                max_age=SESSION_EXPIRE_DAYS * 86400,
-                secure=True,
-                samesite="lax",
-            )
+            _set_session_cookie(response, request, token)
             return response
         else:
             return RedirectResponse(url="/login?error=Invalid credentials", status_code=302)
@@ -1477,6 +1481,88 @@ def create_app() -> FastAPI:
             uptime="0d 1h 23m",
         )
         return {"seeded": len(test_positions), "signals": len(signal_rsi)}
+
+    @app.post("/api/debug/seed-trades")
+    async def seed_test_trades():
+        """Inject sample trade logs into dashboard (dev only)."""
+        if os.getenv("DEBUG") != "true":
+            raise HTTPException(status_code=404, detail="Not found")
+
+        dashboard_state.trade_logs = []
+        dashboard_state.trade_points = {}
+        now = datetime.now().replace(microsecond=0)
+        sample_trades = [
+            {
+                "symbol": "IAU",
+                "market": "AMEX",
+                "action": "buy",
+                "price": 82.90,
+                "quantity": 2,
+                "trigger_rule": "RSI <= 35",
+                "rsi": 32.8,
+                "timestamp": now - timedelta(minutes=58),
+            },
+            {
+                "symbol": "AMZN",
+                "market": "NASDAQ",
+                "action": "buy",
+                "price": 245.29,
+                "quantity": 1,
+                "trigger_rule": "RSI <= 30",
+                "rsi": 29.7,
+                "timestamp": now - timedelta(minutes=45),
+            },
+            {
+                "symbol": "AXP",
+                "market": "NYSE",
+                "action": "partial_sell",
+                "price": 337.91,
+                "quantity": 1,
+                "trigger_rule": "RSI >= 70",
+                "rsi": 70.2,
+                "pnl": 35.86,
+                "pnl_pct": 11.9,
+                "timestamp": now - timedelta(minutes=31),
+            },
+            {
+                "symbol": "CVX",
+                "market": "NYSE",
+                "action": "buy",
+                "price": 175.64,
+                "quantity": 3,
+                "trigger_rule": "Average down stage 1",
+                "rsi": 34.1,
+                "timestamp": now - timedelta(minutes=22),
+            },
+            {
+                "symbol": "XLE",
+                "market": "AMEX",
+                "action": "stop_loss",
+                "price": 51.25,
+                "quantity": 4,
+                "trigger_rule": "Stop loss -10%",
+                "rsi": 41.5,
+                "pnl": -13.80,
+                "pnl_pct": -6.3,
+                "timestamp": now - timedelta(minutes=11),
+            },
+            {
+                "symbol": "GOOG",
+                "market": "NASDAQ",
+                "action": "sell",
+                "price": 365.80,
+                "quantity": 1,
+                "trigger_rule": "RSI >= 65",
+                "rsi": 66.4,
+                "pnl": 10.27,
+                "pnl_pct": 2.9,
+                "timestamp": now - timedelta(minutes=3),
+            },
+        ]
+        for trade in sample_trades:
+            dashboard_state.add_trade_log(result="success", **trade)
+
+        return {"seeded": len(sample_trades)}
 
     # ==================== Symbol Management Routes ====================
 
