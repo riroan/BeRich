@@ -4,7 +4,9 @@ from datetime import datetime, date
 
 import pytest
 
-from src.utils.scheduler import Session, get_current_session, is_us_market_holiday
+from src.utils.scheduler import (
+    Session, get_current_session, is_us_market_holiday, is_us_early_close,
+)
 
 
 # Anchor dates — a clean (no-holiday) week so session logic is tested
@@ -104,3 +106,32 @@ class TestHolidayGate:
         assert is_us_market_holiday(date(2026, 6, 18)) is False   # Thu trading
         assert is_us_market_holiday(date(2026, 12, 25)) is True   # Christmas
         assert is_us_market_holiday(date(2026, 6, 21)) is True    # Sunday
+
+
+class TestEarlyClose:
+    """단축장: NYSE early close (13:00 ET) shortens the regular session by 3h;
+    the after-window is unchanged. 2026-11-27 (Fri, EST) is an early close."""
+
+    def test_is_us_early_close(self):
+        pytest.importorskip("exchange_calendars")
+        assert is_us_early_close(date(2026, 11, 27)) is True   # day after Thxgiving
+        assert is_us_early_close(date(2026, 12, 24)) is True   # Christmas Eve
+        assert is_us_early_close(date(2026, 11, 26)) is False  # Thxgiving (full holiday)
+        assert is_us_early_close(date(2026, 6, 24)) is False   # normal day
+
+    def test_early_close_shortens_regular(self):
+        pytest.importorskip("exchange_calendars")
+        # KST Sat 11-28 early morning = carryover of US Fri 11-27 (early close).
+        # EST (winter), so dst=False. reg normally ends 06:00 KST; early → 03:00.
+        SAT = (2026, 11, 28)
+        assert _at(SAT, 1, 0, dst=False) == Session.REGULAR   # before early close
+        assert _at(SAT, 3, 0, dst=False) == Session.CLOSED    # early close hit
+        assert _at(SAT, 5, 0, dst=False) == Session.CLOSED    # was regular, now closed
+        assert _at(SAT, 6, 30, dst=False) == Session.AFTER    # after-window kept
+
+    def test_normal_day_keeps_full_regular_and_after(self):
+        pytest.importorskip("exchange_calendars")
+        # Regression: a normal day's carryover keeps regular→06:00 then AFTER.
+        # KST Sat 06-27 = carryover of Fri 06-26 (normal). dst=True (summer).
+        assert _at((2026, 6, 27), 4, 0, dst=True) == Session.REGULAR  # still regular
+        assert _at((2026, 6, 27), 6, 0, dst=True) == Session.AFTER

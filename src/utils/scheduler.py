@@ -31,6 +31,22 @@ def is_us_market_holiday(d: date) -> bool:
         return False
 
 
+def is_us_early_close(d: date) -> bool:
+    """True if ``d`` is a US (XNYS) early-close (단축장) session — regular
+    trading ends 13:00 ET instead of 16:00. Degrades to False if the
+    calendar is unavailable.
+    """
+    global _XNYS_CAL
+    try:
+        if _XNYS_CAL is None:
+            import exchange_calendars as xcals
+            _XNYS_CAL = xcals.get_calendar("XNYS")
+        import pandas as pd
+        return pd.Timestamp(d) in _XNYS_CAL.early_closes
+    except Exception:  # pragma: no cover - defensive fallback
+        return False
+
+
 class Session(Enum):
     """US trading session (24h coverage), classified in KST."""
     DAY_MARKET = "day_market"  # KIS 주간거래 (US overnight)
@@ -114,12 +130,21 @@ def get_current_session(ts: datetime, dst: bool | None = None) -> Session:
         return Session.CLOSED
 
     # Early-morning carryover (REGULAR tail + AFTER) belongs to the
-    # PREVIOUS US trading night.
+    # PREVIOUS US trading night (us_date computed above).
     if m < after_end:
         # Monday early morning = Sunday US night → still closed.
         if weekday == 0:
             return Session.CLOSED
-        return Session.REGULAR if m < reg_am_end else Session.AFTER
+        # Early close (단축장): NYSE closes 13:00 ET vs the normal 16:00, i.e.
+        # exactly 3h early, so the regular session ends reg_am_end-180. The
+        # freed 3h is CLOSED (regular done, KIS after-window not open yet);
+        # the after-window itself is unchanged.
+        reg_end = reg_am_end - 180 if is_us_early_close(us_date) else reg_am_end
+        if m < reg_end:
+            return Session.REGULAR
+        if m < reg_am_end:
+            return Session.CLOSED
+        return Session.AFTER
 
     # Gap between after-market close and 주간거래 open: regular endpoint is
     # outside operating hours and 주간거래 hasn't started yet.
