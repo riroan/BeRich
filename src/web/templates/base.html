@@ -11,6 +11,16 @@
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
     <title>{% block title %}BeRich Dashboard{% endblock %}</title>
+    <script>
+    (() => {
+        try {
+            const theme = localStorage.getItem("berich-theme");
+            if (theme === "dark" || theme === "light") {
+                document.documentElement.dataset.theme = theme;
+            }
+        } catch (_) {}
+    })();
+    </script>
     <link rel="stylesheet" href="/static/style.css">
     {% block head_extra %}{% endblock %}
 </head>
@@ -32,7 +42,7 @@
         else { btn.textContent = "TRADING"; btn.classList.remove("paused"); }
     }
     </script>
-    <script src="/static/script.js?v=2"></script>
+    <script src="/static/script.js?v=3"></script>
     <script>
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

@@ -24,6 +24,7 @@
     --shadow: 0 4px 24px rgba(0,0,0,0.3);
 }
 
+html { color-scheme: dark; }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 a { text-decoration: none; color: inherit; }
 
@@ -87,6 +88,50 @@ body {
 }
 .pause-btn.paused { background: rgba(239,68,68,0.15); color: var(--red); }
 .pause-btn:hover { opacity: 0.8; }
+
+.theme-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 32px;
+    padding: 6px 12px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: rgba(148,163,184,0.12);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition: border-color .2s, background .2s, color .2s;
+}
+.theme-btn:hover {
+    border-color: rgba(59,130,246,0.55);
+    background: rgba(59,130,246,0.14);
+}
+.theme-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+.theme-icon {
+    position: relative;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    flex: 0 0 auto;
+    transition: background .2s, box-shadow .2s, border-color .2s;
+}
+.theme-btn.is-dark .theme-icon {
+    background: #f8fafc;
+    border: 1px solid rgba(248,250,252,0.3);
+    box-shadow: inset -5px -3px 0 #0f172a;
+}
+.theme-btn.is-light .theme-icon {
+    background: #f59e0b;
+    border: 1px solid rgba(217,119,6,0.2);
+    box-shadow: 0 0 0 3px rgba(245,158,11,0.18);
+}
 
 .update-time { color: var(--dim); font-size: 13px; }
 
@@ -1108,6 +1153,8 @@ select option { background: var(--surface); color: var(--text); }
     /* Pills & buttons */
     .pill { padding: 4px 8px; font-size: 10px; }
     .pause-btn { padding: 4px 8px; font-size: 10px; }
+    .theme-btn { padding: 4px 8px; font-size: 10px; min-height: 28px; gap: 5px; }
+    .theme-icon { width: 12px; height: 12px; }
     .ws-status { padding: 4px 8px; font-size: 10px; }
 
     /* Strategy tabs: horizontal scroll */
@@ -1258,3 +1305,114 @@ select option { background: var(--surface); color: var(--text); }
     .mobile-cards tbody tr:hover { background: #e2e8f0; }
     .login-error { background: rgba(220,38,38,0.05); }
 }
+
+/* ===================== Manual Theme Overrides ===================== */
+html[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #0f172a;
+    --surface: #1e293b;
+    --card: #334155;
+    --border: rgba(255,255,255,0.06);
+    --text: #e2e8f0;
+    --text-muted: #64748b;
+    --dim: #94a3b8;
+    --white: #f8fafc;
+    --emerald: #10b981;
+    --red: #ef4444;
+    --amber: #f59e0b;
+    --positive: #10b981;
+    --negative: #ef4444;
+    --warning: #f59e0b;
+    --oversold: #10b981;
+    --overbought: #ef4444;
+    --shadow: 0 4px 24px rgba(0,0,0,0.3);
+}
+
+html[data-theme="light"] {
+    color-scheme: light;
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --card: #f1f5f9;
+    --border: rgba(0,0,0,0.08);
+    --text: #1e293b;
+    --text-muted: #64748b;
+    --dim: #64748b;
+    --white: #0f172a;
+    --emerald: #059669;
+    --red: #dc2626;
+    --amber: #d97706;
+    --positive: #059669;
+    --negative: #dc2626;
+    --warning: #d97706;
+    --oversold: #059669;
+    --overbought: #dc2626;
+    --shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+html[data-theme="dark"] .pill.running,
+html[data-theme="dark"] .status.running { background: rgba(16,185,129,0.15); }
+html[data-theme="dark"] .pill.stopped,
+html[data-theme="dark"] .status.stopped { background: rgba(239,68,68,0.15); }
+html[data-theme="dark"] .pill.real,
+html[data-theme="dark"] .mode.real { background: rgba(239,68,68,0.15); }
+html[data-theme="dark"] .pill.paper,
+html[data-theme="dark"] .mode.paper,
+html[data-theme="dark"] .pill.warmup { background: rgba(245,158,11,0.15); }
+html[data-theme="dark"] .ws-status.connected { background: rgba(16,185,129,0.15); }
+html[data-theme="dark"] .ws-status.disconnected { background: rgba(239,68,68,0.15); }
+html[data-theme="dark"] .pause-btn { background: rgba(16,185,129,0.15); }
+html[data-theme="dark"] .pause-btn.paused { background: rgba(239,68,68,0.15); }
+html[data-theme="dark"] .signal-tag.buy { background: rgba(16,185,129,0.12); }
+html[data-theme="dark"] .signal-tag.sell { background: rgba(239,68,68,0.12); }
+html[data-theme="dark"] .alert { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.2); }
+html[data-theme="dark"] .alert.warning { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
+html[data-theme="dark"] tr:hover { background: rgba(59,130,246,0.04); }
+html[data-theme="dark"] .rsi-item { background: var(--bg); }
+html[data-theme="dark"] .rsi-item:hover { background: var(--card); }
+html[data-theme="dark"] .btn:hover,
+html[data-theme="dark"] .btn-add:hover,
+html[data-theme="dark"] .btn-save:hover {
+    background: #2563eb;
+    box-shadow: 0 0 16px rgba(59,130,246,0.3);
+}
+html[data-theme="dark"] .sys-cell { background: var(--bg); }
+html[data-theme="dark"] .nav { background: transparent; }
+html[data-theme="dark"] .nav.open { background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.4); }
+html[data-theme="dark"] .sticky-pnl { background: var(--surface); border-bottom-color: var(--border); }
+html[data-theme="dark"] .mobile-cards tbody tr { background: var(--bg); }
+html[data-theme="dark"] .mobile-cards tbody tr:hover { background: var(--card); }
+html[data-theme="dark"] .login-error { background: rgba(239,68,68,0.1); }
+
+html[data-theme="light"] .pill.running,
+html[data-theme="light"] .status.running { background: rgba(5,150,105,0.1); }
+html[data-theme="light"] .pill.stopped,
+html[data-theme="light"] .status.stopped { background: rgba(220,38,38,0.1); }
+html[data-theme="light"] .pill.real,
+html[data-theme="light"] .mode.real { background: rgba(220,38,38,0.1); }
+html[data-theme="light"] .pill.paper,
+html[data-theme="light"] .mode.paper,
+html[data-theme="light"] .pill.warmup { background: rgba(217,119,6,0.1); }
+html[data-theme="light"] .ws-status.connected { background: rgba(5,150,105,0.1); }
+html[data-theme="light"] .ws-status.disconnected { background: rgba(220,38,38,0.1); }
+html[data-theme="light"] .pause-btn { background: rgba(5,150,105,0.1); }
+html[data-theme="light"] .pause-btn.paused { background: rgba(220,38,38,0.1); }
+html[data-theme="light"] .signal-tag.buy { background: rgba(5,150,105,0.08); }
+html[data-theme="light"] .signal-tag.sell { background: rgba(220,38,38,0.08); }
+html[data-theme="light"] .alert { background: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.15); }
+html[data-theme="light"] .alert.warning { background: rgba(217,119,6,0.05); border-color: rgba(217,119,6,0.15); }
+html[data-theme="light"] tr:hover { background: rgba(59,130,246,0.06); }
+html[data-theme="light"] .rsi-item:hover { background: var(--surface); }
+html[data-theme="light"] .rsi-item { background: var(--card); }
+html[data-theme="light"] .btn:hover,
+html[data-theme="light"] .btn-add:hover,
+html[data-theme="light"] .btn-save:hover {
+    background: #2563eb;
+    box-shadow: 0 0 16px rgba(59,130,246,0.15);
+}
+html[data-theme="light"] .sys-cell { background: var(--card); }
+html[data-theme="light"] .nav { background: var(--bg); }
+html[data-theme="light"] .nav.open { background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+html[data-theme="light"] .sticky-pnl { background: var(--surface); border-bottom-color: rgba(0,0,0,0.06); }
+html[data-theme="light"] .mobile-cards tbody tr { background: var(--card); }
+html[data-theme="light"] .mobile-cards tbody tr:hover { background: #e2e8f0; }
+html[data-theme="light"] .login-error { background: rgba(220,38,38,0.05); }

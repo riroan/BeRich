@@ -347,15 +347,102 @@ class DashboardWebSocket {
 
 // Initialize WebSocket connection
 let dashboardWS = null;
+const THEME_STORAGE_KEY = 'berich-theme';
 
 document.addEventListener('DOMContentLoaded', () => {
     dashboardWS = new DashboardWebSocket();
     dashboardWS.connect();
+    initThemeToggle();
     initPositionRowLinks();
     initHamburgerMenu();
     initSwipeNav();
     initChartTheme();
 });
+
+function getStoredTheme() {
+    try {
+        const theme = localStorage.getItem(THEME_STORAGE_KEY);
+        return theme === 'dark' || theme === 'light' ? theme : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function getSystemTheme() {
+    const prefersLight = window.matchMedia
+        ? window.matchMedia('(prefers-color-scheme: light)').matches
+        : false;
+    return prefersLight ? 'light' : 'dark';
+}
+
+function getCurrentTheme() {
+    return document.documentElement.dataset.theme || getSystemTheme();
+}
+
+function updateThemeChrome(theme) {
+    const button = document.getElementById('theme-toggle');
+    const isDark = theme === 'dark';
+
+    if (button) {
+        const label = button.querySelector('.theme-label');
+        button.classList.toggle('is-dark', isDark);
+        button.classList.toggle('is-light', !isDark);
+        button.setAttribute('aria-pressed', String(isDark));
+        button.setAttribute(
+            'aria-label',
+            isDark ? 'Switch to light mode' : 'Switch to dark mode'
+        );
+        button.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
+        if (label) label.textContent = isDark ? 'Dark Mode' : 'Light Mode';
+    }
+
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+        metaTheme.setAttribute('content', isDark ? '#0f172a' : '#f8fafc');
+    }
+}
+
+function setTheme(theme, persist = false) {
+    document.documentElement.dataset.theme = theme;
+    if (persist) {
+        try {
+            localStorage.setItem(THEME_STORAGE_KEY, theme);
+        } catch (_) {}
+    }
+    updateThemeChrome(theme);
+    window.dispatchEvent(new CustomEvent('berich:theme-change', {
+        detail: { theme }
+    }));
+}
+
+function initThemeToggle() {
+    const storedTheme = getStoredTheme();
+    if (storedTheme) {
+        document.documentElement.dataset.theme = storedTheme;
+    }
+
+    updateThemeChrome(getCurrentTheme());
+
+    const button = document.getElementById('theme-toggle');
+    if (button) {
+        button.addEventListener('click', () => {
+            const nextTheme = getCurrentTheme() === 'dark' ? 'light' : 'dark';
+            setTheme(nextTheme, true);
+        });
+    }
+
+    const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+    if (mq) {
+        mq.addEventListener('change', () => {
+            if (!getStoredTheme()) {
+                updateThemeChrome(getCurrentTheme());
+                window.dispatchEvent(new CustomEvent('berich:theme-change', {
+                    detail: { theme: getCurrentTheme() }
+                }));
+            }
+        });
+    }
+}
 
 function initPositionRowLinks() {
     document.addEventListener('click', event => {
@@ -413,7 +500,6 @@ function initSwipeNav() {
 // ===================== Chart Theme Detection =====================
 function initChartTheme() {
     const mq = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
-    if (!mq) return;
 
     function applyChartTheme(isLight) {
         document.querySelectorAll('[data-chart]').forEach(el => {
@@ -432,5 +518,17 @@ function initChartTheme() {
         });
     }
 
-    mq.addEventListener('change', (e) => applyChartTheme(e.matches));
+    applyChartTheme(getCurrentTheme() === 'light');
+
+    if (mq) {
+        mq.addEventListener('change', () => {
+            if (!getStoredTheme()) {
+                applyChartTheme(getCurrentTheme() === 'light');
+            }
+        });
+    }
+
+    window.addEventListener('berich:theme-change', event => {
+        applyChartTheme(event.detail.theme === 'light');
+    });
 }
