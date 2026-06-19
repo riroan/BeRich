@@ -3,7 +3,6 @@
 {% block title %}Performance - BeRich Dashboard{% endblock %}
 
 {% block head_extra %}
-    <meta http-equiv="refresh" content="60">
     <script src="/static/lightweight-charts.js"></script>
 {% endblock %}
 
@@ -107,7 +106,8 @@
         <!-- Equity Curve Chart -->
         <div class="card">
             <div class="section-title">Equity Curve</div>
-            <div id="equity-chart" class="chart-container-small"></div>
+            <div id="equity-chart" class="chart-container-small" role="img" aria-label="Portfolio equity curve chart" tabindex="0"></div>
+            <p class="sr-only">Interactive equity curve chart. Monthly returns are listed below.</p>
         </div>
 
         <!-- Monthly Returns -->

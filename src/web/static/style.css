@@ -145,6 +145,10 @@ body {
     align-items: center;
 }
 .nav-secondary {
+    flex: 1;
+    margin-left: 0;
+}
+.nav-secondary .logout-btn {
     margin-left: auto;
 }
 .nav a, .nav-link {
@@ -319,7 +323,10 @@ body {
 .sym-weight, .sym-controls {
     display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
-.sym-controls input[type="text"], .sym-weight input[type="text"] {
+.sym-controls input[type="text"],
+.sym-controls input[type="number"],
+.sym-weight input[type="text"],
+.sym-weight input[type="number"] {
     width: 60px; text-align: right; padding: 6px 8px; font-size: 13px;
 }
 .sym-controls .pct, .sym-weight .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
@@ -329,23 +336,32 @@ body {
 .alloc-legend { display: flex; flex-direction: column; gap: 0; align-items: center; }
 .alloc-item {
     display: flex; align-items: center; gap: 10px;
+    appearance: none;
+    -webkit-appearance: none;
     width: 100%;
     min-height: 32px;
+    margin: 0;
     padding: 4px 8px;
     border: 0;
     border-radius: 8px;
-    background: transparent;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none;
     color: inherit;
     font-family: inherit;
+    text-align: left;
     cursor: pointer;
     transition: background .2s, box-shadow .2s;
 }
 .alloc-item:hover,
 .alloc-item.active {
-    background: rgba(59,130,246,0.08);
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
 }
 .alloc-item.active {
-    box-shadow: inset 0 0 0 1px rgba(59,130,246,0.18);
+    box-shadow: none;
 }
 .alloc-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
 .alloc-name { font-size: 14px; color: var(--white); font-weight: 600; width: 60px; }
@@ -359,7 +375,7 @@ body {
 .summary-val { font-size: 15px; font-weight: 600; color: var(--white); font-variant-numeric: tabular-nums; }
 
 .alloc-pct {
-    font-size: 14px; font-weight: 700; color: var(--dim);
+    font-size: 14px; font-weight: 700; color: var(--text);
     font-variant-numeric: tabular-nums;
     min-width: 55px; text-align: right;
 }
@@ -852,6 +868,12 @@ select option { background: var(--surface); color: var(--text); }
     margin-bottom: 32px;
 }
 .login-form { display: flex; flex-direction: column; gap: 16px; }
+.login-form label {
+    margin-bottom: -10px;
+    color: var(--dim);
+    font-size: 12px;
+    font-weight: 600;
+}
 .login-form input {
     width: 100%;
     padding: 12px 16px;
@@ -1084,6 +1106,7 @@ select option { background: var(--surface); color: var(--text); }
         width: 100%;
     }
     .nav-secondary {
+        flex: initial;
         margin-left: 0;
         margin-top: 8px;
         padding-top: 8px;
@@ -1101,6 +1124,7 @@ select option { background: var(--surface); color: var(--text); }
         border-radius: 8px;
         flex-shrink: 0;
     }
+    .nav-secondary .logout-btn { margin-left: 0; }
     .logout-btn { margin-top: 4px; color: var(--red); }
 
     /* Card conversion: table → cards */
@@ -1392,7 +1416,8 @@ select option { background: var(--surface); color: var(--text); }
         justify-content: flex-end;
         gap: 8px;
     }
-    .sym-controls input[type="text"] { width: 58px; min-height: 40px; padding: 8px 8px; font-size: 12px; }
+    .sym-controls input[type="text"],
+    .sym-controls input[type="number"] { width: 58px; min-height: 40px; padding: 8px 8px; font-size: 12px; }
     .sym-controls .btn-danger { min-width: 40px; min-height: 40px; padding: 8px 12px; }
 
     /* Charts: reduce height */
@@ -1562,4 +1587,15 @@ select option { background: var(--surface); color: var(--text); }
     .mobile-cards tbody tr { background: var(--card); }
     .mobile-cards tbody tr:hover { background: #e2e8f0; }
     .login-error { background: rgba(220,38,38,0.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+    }
 }

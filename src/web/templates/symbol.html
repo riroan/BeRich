@@ -95,14 +95,16 @@
         <section class="chart-section">
             <div class="panel">
                 <h2>Price Chart</h2>
-                <div id="price-chart" class="chart-container-small"></div>
+                <div id="price-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} price chart with trade markers" tabindex="0"></div>
+                <p class="sr-only">Interactive price chart for {{ symbol }}. Trade history is also available in the table below.</p>
             </div>
         </section>
 
         <section class="chart-section">
             <div class="panel">
                 <h2>RSI Chart</h2>
-                <div id="rsi-chart" class="chart-container-small"></div>
+                <div id="rsi-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} RSI chart" tabindex="0"></div>
+                <p class="sr-only">Interactive RSI chart for {{ symbol }} with oversold and overbought reference lines.</p>
             </div>
         </section>
 

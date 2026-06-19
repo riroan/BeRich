@@ -2,11 +2,11 @@
         <div class="nav-section nav-primary">
             <a href="/"{% if active_page == 'dashboard' %} class="active"{% endif %}>Dashboard</a>
             <a href="/portfolio"{% if active_page == 'portfolio' %} class="active"{% endif %}>Portfolio</a>
+            <a href="/symbols"{% if active_page == 'symbols' %} class="active"{% endif %}>Symbols</a>
             <a href="/trades"{% if active_page == 'trades' %} class="active"{% endif %}>Trades</a>
             <a href="/performance"{% if active_page == 'performance' %} class="active"{% endif %}>Performance</a>
         </div>
         <div class="nav-section nav-secondary">
-            <a href="/symbols"{% if active_page == 'symbols' %} class="active"{% endif %}>Symbols</a>
             <a href="/analytics"{% if active_page == 'analytics' %} class="active"{% endif %}>Analytics</a>
             <a href="/backtest"{% if active_page == 'backtest' %} class="active"{% endif %}>Backtest</a>
             <a href="/settings"{% if active_page == 'settings' %} class="active"{% endif %}>Settings</a>

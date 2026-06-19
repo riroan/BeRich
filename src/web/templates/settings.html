@@ -13,7 +13,7 @@
         .level-table th { font-size: 11px; color: var(--dim); text-transform: uppercase; padding: 8px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-table td { padding: 10px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-badge { background: var(--card); color: var(--white); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
-        input.level-input[type="text"] { width: 60px; padding: 6px 8px; font-size: 13px; }
+        input.level-input { width: 60px; padding: 6px 8px; font-size: 13px; }
         .strategy-tabs { display: flex; align-items: center; margin-bottom: 0; }
         .strategy-content { display: none; }
         .strategy-content.active { display: flex; flex-direction: column; gap: 20px; }
@@ -53,7 +53,7 @@
         }
         .strategy-content.editing .read-val { display: none; }
         .strategy-content:not(.editing) input.level-input,
-        .strategy-content:not(.editing) .settings-form-grid input[type="text"] { display: none; }
+        .strategy-content:not(.editing) .settings-form-grid input { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
 
@@ -90,8 +90,8 @@
             /* level tables: override global min-width:420px, fit within card */
             .level-table { table-layout: fixed; width: 100%; min-width: 0 !important; }
             .level-table th, .level-table td { padding: 8px 4px; font-size: 12px; }
-            input.level-input[type="text"] { width: 48px; max-width: 100%; box-sizing: border-box; }
-            input.level-input[type="text"] { width: 48px; padding: 5px 4px; font-size: 12px; }
+            input.level-input { width: 48px; max-width: 100%; box-sizing: border-box; }
+            input.level-input { width: 48px; padding: 5px 4px; font-size: 12px; }
         }
     </style>
 {% endblock %}
@@ -165,11 +165,12 @@
         {% for cfg in strategy_configs %}
         {% set params = cfg.params %}
         <div class="strategy-content {{ 'active' if loop.first else '' }}" id="strategy-{{ cfg.name }}">
+            {% set cfg_idx = loop.index %}
             <div class="strategy-meta">
                 <span>Class: <strong>{{ cfg.class_path.split('.')|last }}</strong></span>
                 <span>Market: <strong>{{ cfg.market|upper }}</strong></span>
                 <span>Symbols: <strong>{{ cfg.symbols|length }}</strong></span>
-                <label class="toggle-switch" title="Enabled/Disabled">
+                <label class="toggle-switch" title="Enabled/Disabled" aria-label="{{ cfg.name }} enabled">
                     <input type="checkbox" {{ 'checked' if cfg.enabled else '' }}
                         onchange="toggleStrategy('{{ cfg.name }}', this.checked)">
                     <span class="toggle-slider"></span>
@@ -182,21 +183,21 @@
                     <div class="section-title">Parameters</div>
                     <div class="settings-form-grid">
                         <div class="form-group">
-                            <label>RSI Period</label>
+                            <label for="cfg-{{ cfg_idx }}-rsi-period">RSI Period</label>
                             <span class="read-val">{{ params.get('rsi_period', 14) }}</span>
-                            <input type="text" name="rsi_period" value="{{ params.get('rsi_period', 14) }}">
+                            <input type="number" id="cfg-{{ cfg_idx }}-rsi-period" name="rsi_period" value="{{ params.get('rsi_period', 14) }}" min="1" max="100" step="1" inputmode="numeric">
                             <span class="hint">Lookback window in days</span>
                         </div>
                         <div class="form-group">
-                            <label>Stop Loss</label>
+                            <label for="cfg-{{ cfg_idx }}-stop-loss">Stop Loss</label>
                             <span class="read-val">{{ params.get('stop_loss', -10) }}%</span>
-                            <input type="text" name="stop_loss" value="{{ params.get('stop_loss', -10) }}">
+                            <input type="number" id="cfg-{{ cfg_idx }}-stop-loss" name="stop_loss" value="{{ params.get('stop_loss', -10) }}" min="-100" max="0" step="0.1" inputmode="decimal">
                             <span class="hint">Exit threshold (%)</span>
                         </div>
                         <div class="form-group">
-                            <label>Cooldown Days</label>
+                            <label for="cfg-{{ cfg_idx }}-cooldown-days">Cooldown Days</label>
                             <span class="read-val">{{ params.get('cooldown_days', 1) }}</span>
-                            <input type="text" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}">
+                            <input type="number" id="cfg-{{ cfg_idx }}-cooldown-days" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}" min="0" max="365" step="1" inputmode="numeric">
                             <span class="hint">Wait period after trade</span>
                         </div>
                     </div>
@@ -215,11 +216,11 @@
                                     <td><span class="level-badge">{{ loop.index }}</span></td>
                                     <td>
                                         <span class="read-val">{{ level[0] }}</span>
-                                        <input type="text" class="level-input" data-type="buy-rsi" value="{{ level[0] }}">
+                                        <input type="number" class="level-input" data-type="buy-rsi" value="{{ level[0] }}" min="0" max="100" step="1" inputmode="numeric" aria-label="{{ cfg.name }} buy level {{ loop.index }} RSI">
                                     </td>
                                     <td>
                                         <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
-                                        <input type="text" class="level-input" data-type="buy-portion" value="{{ (level[1] * 100)|round(0)|int }}" style="width:40px;">
+                                        <input type="number" class="level-input" data-type="buy-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" style="width:52px;" aria-label="{{ cfg.name }} buy level {{ loop.index }} portion percent">
                                         <span class="dim"> %</span>
                                     </td>
                                 </tr>
@@ -238,11 +239,11 @@
                                     <td><span class="level-badge">{{ loop.index }}</span></td>
                                     <td>
                                         <span class="read-val">{{ level[0] }}</span>
-                                        <input type="text" class="level-input" data-type="sell-rsi" value="{{ level[0] }}">
+                                        <input type="number" class="level-input" data-type="sell-rsi" value="{{ level[0] }}" min="0" max="100" step="1" inputmode="numeric" aria-label="{{ cfg.name }} sell level {{ loop.index }} RSI">
                                     </td>
                                     <td>
                                         <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
-                                        <input type="text" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" style="width:40px;">
+                                        <input type="number" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" style="width:52px;" aria-label="{{ cfg.name }} sell level {{ loop.index }} portion percent">
                                         <span class="dim"> %</span>
                                     </td>
                                 </tr>

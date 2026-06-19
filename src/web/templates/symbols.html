@@ -48,11 +48,11 @@
                 <span class="sym-badge">{{ s.symbol }}</span>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <label class="toggle sym-toggle">
-                    <input type="checkbox" {{ 'checked' if s.enabled else '' }} onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}')">
+                    <input type="checkbox" {{ 'checked' if s.enabled else '' }} aria-label="Enable {{ s.symbol }}" onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}')">
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
-                    <input type="text" value="{{ s.max_weight }}" aria-label="{{ s.symbol }} max weight" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
+                    <input type="number" value="{{ s.max_weight }}" min="0" max="100" step="0.1" inputmode="decimal" aria-label="{{ s.symbol }} max weight" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
                     <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')" aria-label="Delete {{ s.symbol }}">&#x2715;</button>
                 </div>

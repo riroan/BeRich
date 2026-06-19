@@ -2,10 +2,6 @@
 
 {% block title %}Trade Log - BeRich Dashboard{% endblock %}
 
-{% block head_extra %}
-    <meta http-equiv="refresh" content="60">
-{% endblock %}
-
 {% block content %}
         <!-- Summary Cards (top) -->
         <div class="cards-row">
@@ -29,13 +25,13 @@
 
         <!-- Trade Table -->
         <div class="card">
-            <div class="section-title">All Trades <span class="count">{{ trade_logs|length }}</span></div>
+            <div class="section-title">All Trades <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
 
             <div class="filter-bar">
-                <button class="filter-pill active" data-filter="all">All</button>
-                <button class="filter-pill" data-filter="buy">Buy</button>
-                <button class="filter-pill" data-filter="sell">Sell</button>
-                <button class="filter-pill" data-filter="stop_loss">Stop Loss</button>
+                <button class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
+                <button class="filter-pill" data-filter="buy" aria-pressed="false">Buy</button>
+                <button class="filter-pill" data-filter="sell" aria-pressed="false">Sell</button>
+                <button class="filter-pill" data-filter="stop_loss" aria-pressed="false">Stop Loss</button>
             </div>
 
             <div class="table-wrap">
@@ -81,6 +77,9 @@
                         <td colspan="10" class="empty">No trades recorded</td>
                     </tr>
                     {% endfor %}
+                    <tr id="trades-empty-filter" hidden>
+                        <td colspan="10" class="empty">No trades match this filter</td>
+                    </tr>
                 </tbody>
             </table>
             </div>
@@ -94,62 +93,77 @@
     <script>
         const ROWS_PER_PAGE = 20;
         let currentPage = 1;
+        let currentFilter = 'all';
         const rows = Array.from(document.querySelectorAll('.trade-row'));
-        const totalPages = Math.ceil(rows.length / ROWS_PER_PAGE);
+        const emptyFilterRow = document.getElementById('trades-empty-filter');
+        const visibleCount = document.getElementById('visible-trade-count');
 
-        function showPage(page) {
-            currentPage = page;
-            const start = (page - 1) * ROWS_PER_PAGE;
-            const end = start + ROWS_PER_PAGE;
-
-            rows.forEach((row, i) => {
-                if (row.style.display === 'none' && row.dataset.filtered === 'true') return;
-                row.style.display = (i >= start && i < end) ? '' : 'none';
-            });
-
-            renderPagination();
+        function rowMatchesFilter(row, filter) {
+            const action = row.dataset.action;
+            if (filter === 'all') return true;
+            if (filter === 'sell') return action === 'sell' || action === 'partial_sell';
+            return action === filter;
         }
 
-        function renderPagination() {
+        function getVisibleRows() {
+            return rows.filter(row => rowMatchesFilter(row, currentFilter));
+        }
+
+        function showPage(page) {
+            const visibleRows = getVisibleRows();
+            const pages = Math.max(1, Math.ceil(visibleRows.length / ROWS_PER_PAGE));
+            currentPage = Math.min(Math.max(page, 1), pages);
+            const start = (currentPage - 1) * ROWS_PER_PAGE;
+            const end = start + ROWS_PER_PAGE;
+            const pageRows = new Set(visibleRows.slice(start, end));
+
+            rows.forEach(row => {
+                row.hidden = !pageRows.has(row);
+            });
+            if (emptyFilterRow) emptyFilterRow.hidden = visibleRows.length > 0 || rows.length === 0;
+            if (visibleCount) visibleCount.textContent = visibleRows.length;
+
+            renderPagination(visibleRows.length);
+        }
+
+        function renderPagination(visibleTotal) {
             const container = document.getElementById('pagination');
-            const visibleRows = rows.filter(r => r.dataset.filtered !== 'true');
-            const pages = Math.ceil(visibleRows.length / ROWS_PER_PAGE);
+            const pages = Math.ceil(visibleTotal / ROWS_PER_PAGE);
             if (pages <= 1) { container.innerHTML = ''; return; }
 
             let html = '';
-            html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" onclick="showPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''}>&lt;</button>`;
+            html += `<button class="page-btn ${currentPage === 1 ? 'disabled' : ''}" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''} aria-label="Previous page">&lt;</button>`;
             for (let i = 1; i <= pages; i++) {
                 if (i === 1 || i === pages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-                    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" onclick="showPage(${i})">${i}</button>`;
+                    html += `<button class="page-btn ${i === currentPage ? 'active' : ''}" data-page="${i}" ${i === currentPage ? 'aria-current="page"' : ''}>${i}</button>`;
                 } else if (i === currentPage - 3 || i === currentPage + 3) {
                     html += '<span class="page-dots">...</span>';
                 }
             }
-            html += `<button class="page-btn ${currentPage === pages ? 'disabled' : ''}" onclick="showPage(${currentPage + 1})" ${currentPage === pages ? 'disabled' : ''}>&gt;</button>`;
+            html += `<button class="page-btn ${currentPage === pages ? 'disabled' : ''}" data-page="${currentPage + 1}" ${currentPage === pages ? 'disabled' : ''} aria-label="Next page">&gt;</button>`;
             container.innerHTML = html;
         }
 
         // Filter functionality
         document.querySelectorAll('.filter-pill').forEach(btn => {
             btn.addEventListener('click', function() {
-                const filter = this.dataset.filter;
-                document.querySelectorAll('.filter-pill').forEach(b => b.classList.remove('active'));
-                this.classList.add('active');
-
-                rows.forEach(row => {
-                    const action = row.dataset.action;
-                    let show = filter === 'all';
-                    if (!show) {
-                        if (filter === 'sell' && (action === 'sell' || action === 'partial_sell')) show = true;
-                        else if (action === filter) show = true;
-                    }
-                    row.dataset.filtered = show ? 'false' : 'true';
-                    row.style.display = show ? '' : 'none';
+                currentFilter = this.dataset.filter;
+                document.querySelectorAll('.filter-pill').forEach(b => {
+                    b.classList.remove('active');
+                    b.setAttribute('aria-pressed', 'false');
                 });
+                this.classList.add('active');
+                this.setAttribute('aria-pressed', 'true');
 
                 currentPage = 1;
                 showPage(1);
             });
+        });
+
+        document.getElementById('pagination').addEventListener('click', event => {
+            const btn = event.target.closest('.page-btn[data-page]');
+            if (!btn || btn.disabled) return;
+            showPage(Number(btn.dataset.page));
         });
 
         // Init

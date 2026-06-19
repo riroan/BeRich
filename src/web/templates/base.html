@@ -12,15 +12,15 @@
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
     <title>{% block title %}BeRich Dashboard{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=10">
     {% block head_extra %}{% endblock %}
 </head>
 <body>
     {% include "_header.html" %}
     {% include "_nav.html" %}
-    <div class="container">
+    <main id="main-content" class="container" tabindex="-1">
         {% block content %}{% endblock %}
-    </div>
+    </main>
     {% block scripts %}{% endblock %}
     <script>
     async function togglePause() {
@@ -40,7 +40,7 @@
         }
     }
     </script>
-    <script src="/static/script.js?v=5"></script>
+    <script src="/static/script.js?v=6"></script>
     <script>
     if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => {

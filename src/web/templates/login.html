@@ -11,7 +11,7 @@
     <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon-180.png">
     <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
     <title>BeRich — Login</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=10">
 </head>
 <body>
     <div class="login-container">
@@ -19,11 +19,13 @@
             <h1>Be<span>Rich</span></h1>
             <p class="subtitle">Trading Dashboard</p>
             {% if error %}
-            <div class="login-error">{{ error }}</div>
+            <div class="login-error" role="alert">{{ error }}</div>
             {% endif %}
             <form class="login-form" method="POST" action="/login">
-                <input type="text" name="username" placeholder="Username" required>
-                <input type="password" name="password" placeholder="Password" required>
+                <label for="login-username">Username</label>
+                <input type="text" id="login-username" name="username" placeholder="Username" autocomplete="username" required>
+                <label for="login-password">Password</label>
+                <input type="password" id="login-password" name="password" placeholder="Password" autocomplete="current-password" required>
                 <button type="submit" class="btn">Login</button>
             </form>
         </div>
