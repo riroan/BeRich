@@ -408,6 +408,7 @@ class KISBroker:
                 for item in output1
                 if (pos := self._mapper.map_overseas_position(item, market))
                 .quantity > 0
+                and pos.market == market
             ]
 
             return positions

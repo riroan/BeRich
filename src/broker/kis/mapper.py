@@ -53,15 +53,20 @@ class KISMapper:
     }
 
     @staticmethod
-    def to_market(exchange_code: str) -> Market:
+    def to_market(exchange_code: str, default: Market = Market.KRX) -> Market:
         """Convert exchange code to Market enum"""
+        code = str(exchange_code or "").strip().upper()
         mapping = {
             "J": Market.KRX,
             "NYS": Market.NYSE,
+            "NYSE": Market.NYSE,
             "NAS": Market.NASDAQ,
+            "NASD": Market.NASDAQ,
+            "NASDAQ": Market.NASDAQ,
             "AMS": Market.AMEX,
+            "AMEX": Market.AMEX,
         }
-        return mapping.get(exchange_code, Market.KRX)
+        return mapping.get(code, default)
 
     @staticmethod
     def map_domestic_quote(data: dict) -> Quote:
@@ -152,10 +157,14 @@ class KISMapper:
             _first_num(data, "ovrs_now_pric1", "now_pric2")
         )
         eval_pnl = Decimal(data.get("frcr_evlu_pfls_amt", "0") or "0")
+        row_market = KISMapper.to_market(
+            data.get("ovrs_excg_cd") or data.get("excg_cd"),
+            default=market,
+        )
 
         return Position(
             symbol=data.get("ovrs_pdno", "") or data.get("pdno", ""),
-            market=market,
+            market=row_market,
             quantity=quantity,
             avg_entry_price=avg_price,
             current_price=current_price,

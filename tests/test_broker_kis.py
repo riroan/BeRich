@@ -189,6 +189,19 @@ class TestMapOverseasPositionFallback:
         assert pos.current_price == Decimal("28.1000")
         assert pos.unrealized_pnl == Decimal("1.65")
 
+    def test_real_exchange_code_overrides_requested_market(self):
+        row = {
+            "ovrs_pdno": "IAU",
+            "ovrs_cblc_qty": "2",
+            "pchs_avg_pric": "82.9049",
+            "now_pric2": "84.10",
+            "ovrs_excg_cd": "AMEX",
+        }
+
+        pos = KISMapper.map_overseas_position(row, Market.NASDAQ)
+
+        assert pos.market == Market.AMEX
+
     def test_primary_price_keys_still_win_when_present(self):
         row = {
             "ovrs_pdno": "AAPL",
@@ -267,6 +280,44 @@ class TestGetOverseasPositionsFilter:
         assert out[0].quantity == 3
         assert out[0].avg_entry_price == Decimal("27.55")
         assert out[0].current_price == Decimal("28.10")
+
+    @pytest.mark.asyncio
+    async def test_filters_positions_to_actual_exchange(self):
+        """KIS can return all overseas holdings for an exchange request.
+
+        Rows must use their own exchange code and the caller's market should
+        only receive matching rows, otherwise current_positions duplicates
+        every holding under NASDAQ/NYSE/AMEX.
+        """
+        broker = _make_broker(hts_id="")
+        broker._auth.get_headers = MagicMock(return_value={})
+        payload = {
+            "rt_cd": "0",
+            "output1": [
+                {
+                    "ovrs_pdno": "GOOG", "ovrs_cblc_qty": "1",
+                    "pchs_avg_pric": "355.53", "now_pric2": "360.00",
+                    "ovrs_excg_cd": "NASD",
+                },
+                {
+                    "ovrs_pdno": "CVX", "ovrs_cblc_qty": "3",
+                    "pchs_avg_pric": "175.64", "now_pric2": "177.00",
+                    "ovrs_excg_cd": "NYSE",
+                },
+                {
+                    "ovrs_pdno": "IAU", "ovrs_cblc_qty": "2",
+                    "pchs_avg_pric": "82.9049", "now_pric2": "84.10",
+                    "ovrs_excg_cd": "AMEX",
+                },
+            ],
+        }
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(return_value=_FakeResp(payload))
+
+        out = await broker._get_overseas_positions(Market.NASDAQ)
+
+        assert [p.symbol for p in out] == ["GOOG"]
+        assert out[0].market == Market.NASDAQ
 
 
 class TestGetOverseasBalanceUsesSummary:
