@@ -6,24 +6,53 @@
 
 웹 서버와 트레이딩 봇을 K8s에서 독립 배포. 어느 쪽이 재시작되어도 상대방에 영향 없음.
 
+## 리팩토링 원칙
+
+- 봇은 writer, 웹은 reader/control-command writer로 역할 분리.
+- 봇/실행/브로커 코드에서 `src.web.app` import 완전 제거.
+- 웹은 봇 객체, 전략 인스턴스, callback을 직접 만지지 않고 DB만 사용.
+- 현재 잔고 표시는 `account_state` 단일 row를 source of truth로 사용.
+- 잔고/성과 히스토리는 기존 `equity_snapshots`를 계속 사용.
+- pause/resume/reload/settings apply는 DB command queue로 전달.
+
+## 6단계 리팩토링 로드맵
+
+1. `account_state`, `bot_status`, `bot_events`, `bot_commands` 추가.
+2. 봇이 잔고/status/equity/signal/order 이벤트를 DB에 쓰도록 변경.
+3. 웹 Dashboard/Performance/Portfolio가 메모리 대신 DB에서 읽도록 변경.
+4. pause/reload/settings apply를 callback 대신 `bot_commands`로 변경.
+5. 봇/실행/브로커에서 `src.web.app` import 완전 제거.
+6. `src/web/app.py`를 route/service 단위로 분리.
+
+### 추가 운영 안정화
+
+- 로그인 세션을 in-memory dict가 아닌 signed cookie/Redis/DB 기반으로 변경.
+- WebSocket 실시간 갱신은 in-memory broadcast 대신 polling 또는 pub/sub 사용.
+- bot process health check와 오프라인 배너 추가.
+- command 처리 결과/timeout/error를 웹 UI에 표시.
+- command idempotency와 설정 변경 충돌 방지.
+- schema migration을 versioned migration으로 정리.
+- 실행 entrypoint 분리: `run_bot.py`, `run_web.py`.
+
 ---
 
 ## Step 1: DB 스키마 추가
 
-- [ ] `src/data/models.py` — 신규 테이블 5개 추가
-  - `BotState` (id=1 단일행, bot 실행상태)
-  - `PositionsSnapshot` (symbol PK, 30s 전체 교체)
-  - `AccountSnapshot` (id=1 단일행, 잔고/PnL)
+- [ ] `src/data/models.py` — 신규/보강 테이블 추가
+  - `BotStatus` (id=1 단일행, bot 실행상태)
+  - `AccountState` (id=1 단일행, 현재 잔고/PnL)
+  - `BotEvent` (최근 signal/order/status/error 이벤트)
+  - `BotCommand` (명령 큐: reload_strategies, pause, resume, settings_apply)
   - `RsiSnapshot` (symbol PK, 변화량 기반 upsert)
-  - `BotCommand` (명령 큐: reload_strategies, pause, resume)
+  - 필요 시 `PositionsSnapshot` 추가. 단, 현재 포지션은 기존 `current_positions` 우선 재사용.
 - [ ] `src/data/storage.py` — upsert/query 메서드 추가
-  - `upsert_bot_state()`
-  - `upsert_positions_snapshot()` (트랜잭션: DELETE + bulk INSERT)
-  - `upsert_account_snapshot()`
+  - `upsert_bot_status()`
+  - `upsert_account_state()`
+  - `create_bot_event()`, `get_recent_bot_events()`
   - `upsert_rsi_snapshot(symbol, rsi, price, market)`
-  - `get_pending_commands()`, `mark_command_done(id)`
-  - `create_command(command)` (중복 pending 방지 로직 포함)
-  - `get_bot_state()`, `get_positions_snapshot()`, `get_account_snapshot()`, `get_rsi_snapshot_all()`
+  - `get_pending_commands()`, `mark_command_done(id)`, `mark_command_failed(id, error)`
+  - `create_command(command, payload)` (중복 pending 방지 로직 포함)
+  - `get_bot_status()`, `get_account_state()`, `get_rsi_snapshot_all()`
 - [ ] Alembic 마이그레이션 실행 (서비스 영향 없음)
 - [ ] SQLAlchemy engine pool 설정: `pool_size=5, max_overflow=10, pool_recycle=3600, pool_pre_ping=True`
 
@@ -34,8 +63,9 @@
 - [ ] `src/bot/db_writer.py` 신규 작성 (dashboard_sync.py 교체)
   - `DBWriterMixin` 구현
   - `write_positions_to_db()` — 포지션 DB upsert
-  - `write_account_to_db()` — 잔고 DB upsert
-  - `write_bot_status_to_db()` — bot_state DB upsert
+  - `write_account_to_db()` — `account_state` DB upsert
+  - `write_bot_status_to_db()` — `bot_status` DB upsert
+  - `write_bot_event_to_db()` — signal/order/status/error 이벤트 저장
   - `write_rsi_to_db_if_changed()` — RSI 변화량 ≥0.5 또는 10s 경과 시만 upsert
 - [ ] `src/bot/dashboard_sync.py` 삭제
 - [ ] `src/bot/core.py`
@@ -60,9 +90,9 @@
 
 - [ ] `src/web/app.py`
   - `refresh_dashboard_from_db()` 함수 추가 (3s 백그라운드 태스크)
-    - bot_state → DashboardState (봇 오프라인 감지: updated_at > 120s → 배너 표시)
-    - positions_snapshot → dashboard.positions
-    - account_snapshot → dashboard.balance_*/cash_*/pnl_*
+    - bot_status → DashboardState (봇 오프라인 감지: updated_at > 120s → 배너 표시)
+    - current_positions → dashboard.positions
+    - account_state → dashboard.balance_*/cash_*/pnl_*
     - rsi_snapshot → dashboard.rsi_values
   - Strategy CRUD API: `reload_callback()` → `storage.create_command("reload_strategies")`
   - pause API: `storage.create_command("pause")`
@@ -73,7 +103,42 @@
 
 ---
 
-## Step 4: Dockerfile 분리
+## Step 4: 웹 제어 명령 DB 큐 전환
+
+- [ ] `/api/trading/pause` → `bot_commands`에 `pause` 생성
+- [ ] `/api/trading/resume` → `bot_commands`에 `resume` 생성
+- [ ] Strategy CRUD 변경 후 `reload_strategies` command 생성
+- [ ] settings 변경 후 필요 시 `settings_apply` command 생성
+- [ ] command 상태(`pending`, `running`, `done`, `failed`) 조회 API 추가
+- [ ] 봇의 `_poll_commands()`에서 command 처리 및 결과 저장
+
+---
+
+## Step 5: `src.web.app` import 완전 제거
+
+- [ ] `src/bot/core.py`에서 `get_dashboard_state` 제거
+- [ ] `src/bot/dashboard_sync.py` 또는 대체 mixin에서 `broadcast_update` 제거
+- [ ] `src/execution/order_manager.py`에서 `get_dashboard_state` 제거
+- [ ] `src/broker/paper.py`에서 `get_dashboard_state` 제거
+- [ ] `rg -n "src\\.web\\.app|get_dashboard_state|broadcast_update" src/bot src/execution src/broker` 결과 0건 확인
+
+---
+
+## Step 6: `src/web/app.py` 라우트/서비스 분리
+
+- [ ] `src/web/routes/dashboard.py`
+- [ ] `src/web/routes/trades.py`
+- [ ] `src/web/routes/portfolio.py`
+- [ ] `src/web/routes/performance.py`
+- [ ] `src/web/routes/symbols.py`
+- [ ] `src/web/routes/settings.py`
+- [ ] `src/web/services/performance.py`
+- [ ] `src/web/services/portfolio.py`
+- [ ] `src/web/services/trade_logs.py`
+
+---
+
+## Step 7: Dockerfile 분리
 
 - [ ] `Dockerfile.bot` 작성 (`python -m src.bot` entrypoint)
 - [ ] `Dockerfile.web` 작성 (`uvicorn src.web.app:app` entrypoint)
@@ -81,7 +146,7 @@
 
 ---
 
-## Step 5: K8s 배포 파일
+## Step 8: K8s 배포 파일
 
 - [ ] `k8s/bot-deployment.yaml`
 - [ ] `k8s/web-deployment.yaml`
@@ -96,8 +161,10 @@
 1. Step 1 완료 후 Alembic 실행         ← 기존 서비스 영향 없음
 2. Step 2 봇 배포                       ← DB 쓰기 시작, 웹은 아직 DashboardState 읽음
 3. Step 3 웹 배포                       ← DB에서 읽기 시작
-4. DashboardState 잔여 코드 정리        ← cleanup
-5. Step 4, 5 배포 분리                  ← K8s 완전 독립
+4. Step 4 command queue 적용            ← 웹→봇 직접 callback 제거
+5. Step 5 import 제거 확인              ← 프로세스 분리 가능
+6. Step 6 app.py 분리                   ← 유지보수성 개선
+7. Step 7, 8 배포 분리                  ← K8s 완전 독립
 ```
 
 ---

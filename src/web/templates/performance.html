@@ -179,10 +179,15 @@
                         return Math.floor(date.getTime() / 1000) + 32400;
                     }
 
+                    function equityUsdValue(point) {
+                        return point.adjusted_total_usd ?? point.total_usd ?? 0;
+                    }
+
                     data.forEach(point => {
                         const time = parseKST(point.timestamp);
-                        if (point.total_usd > 0) {
-                            usdData.push({ time, value: point.total_usd });
+                        const value = equityUsdValue(point);
+                        if (value > 0) {
+                            usdData.push({ time, value });
                         }
                     });
 
@@ -211,11 +216,14 @@
 
                     // Group by month
                     const months = {};
+                    function equityUsdValue(point) {
+                        return point.adjusted_total_usd ?? point.total_usd ?? 0;
+                    }
                     data.forEach(p => {
                         const d = new Date(p.timestamp);
                         const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
                         if (!months[key]) months[key] = [];
-                        months[key].push(p.total_usd);
+                        months[key].push(equityUsdValue(p));
                     });
 
                     const keys = Object.keys(months).sort();

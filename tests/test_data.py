@@ -34,6 +34,12 @@ class TestStorageInitialization:
                     for col in inspect(sync_conn).get_columns("current_positions")
                 }
             )
+            equity_columns = await conn.run_sync(
+                lambda sync_conn: {
+                    col["name"]
+                    for col in inspect(sync_conn).get_columns("equity_snapshots")
+                }
+            )
 
         expected = [
             "bars",
@@ -51,6 +57,8 @@ class TestStorageInitialization:
         assert "pnl" not in current_position_columns
         assert "pnl_pct" not in current_position_columns
         assert "rsi" not in current_position_columns
+        assert "adjusted_total_usd" in equity_columns
+        assert "settlement_adjustment_usd" in equity_columns
 
     async def test_initialize_idempotent(self, storage: Storage):
         """Calling initialize() twice should not raise"""
@@ -322,3 +330,45 @@ class TestFillReasonPersistence:
         ))
         fills = await storage.get_all_fills()
         assert fills[0].reason is None
+
+
+class TestEquitySnapshots:
+    """Equity snapshot persistence."""
+
+    @pytest.mark.asyncio
+    async def test_save_equity_snapshot_defaults_adjusted_total(self, storage: Storage):
+        await storage.save_equity_snapshot(
+            total_krw=Decimal("0"),
+            total_usd=Decimal("1000"),
+            cash_krw=Decimal("0"),
+            cash_usd=Decimal("400"),
+            position_value_krw=Decimal("0"),
+            position_value_usd=Decimal("600"),
+        )
+
+        history = await storage.get_equity_history(days=1)
+
+        assert history[0]["total_usd"] == 1000.0
+        assert history[0]["adjusted_total_usd"] == 1000.0
+        assert history[0]["settlement_adjustment_usd"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_save_equity_snapshot_with_settlement_adjustment(
+        self,
+        storage: Storage,
+    ):
+        await storage.save_equity_snapshot(
+            total_krw=Decimal("0"),
+            total_usd=Decimal("1000"),
+            cash_krw=Decimal("0"),
+            cash_usd=Decimal("400"),
+            position_value_krw=Decimal("0"),
+            position_value_usd=Decimal("600"),
+            adjusted_total_usd=Decimal("1050"),
+            settlement_adjustment_usd=Decimal("50"),
+        )
+
+        history = await storage.get_equity_history(days=1)
+
+        assert history[0]["adjusted_total_usd"] == 1050.0
+        assert history[0]["settlement_adjustment_usd"] == 50.0

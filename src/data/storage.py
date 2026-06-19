@@ -77,6 +77,33 @@ class Storage:
                         "Migrated: recreated current_positions with holding-only schema"
                     )
 
+            if "equity_snapshots" in insp.get_table_names():
+                cols = {c["name"] for c in insp.get_columns("equity_snapshots")}
+                if "adjusted_total_usd" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE equity_snapshots "
+                        "ADD COLUMN adjusted_total_usd DECIMAL(20,2)"
+                    ))
+                    sync_conn.execute(text(
+                        "UPDATE equity_snapshots "
+                        "SET adjusted_total_usd = total_usd "
+                        "WHERE adjusted_total_usd IS NULL"
+                    ))
+                    logger.info(
+                        "Migrated: added adjusted_total_usd column "
+                        "to equity_snapshots"
+                    )
+                if "settlement_adjustment_usd" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE equity_snapshots "
+                        "ADD COLUMN settlement_adjustment_usd "
+                        "DECIMAL(20,2) NOT NULL DEFAULT 0"
+                    ))
+                    logger.info(
+                        "Migrated: added settlement_adjustment_usd column "
+                        "to equity_snapshots"
+                    )
+
         await conn.run_sync(_check_and_migrate)
 
     async def close(self) -> None:
@@ -589,9 +616,14 @@ class Storage:
         cash_usd: Decimal,
         position_value_krw: Decimal,
         position_value_usd: Decimal,
+        adjusted_total_usd: Decimal | None = None,
+        settlement_adjustment_usd: Decimal = Decimal("0"),
     ) -> None:
         """Save equity snapshot"""
         async with self.async_session() as session:
+            adjusted_total = (
+                adjusted_total_usd if adjusted_total_usd is not None else total_usd
+            )
             snapshot = EquitySnapshot(
                 timestamp=datetime.now(),
                 total_krw=total_krw,
@@ -600,6 +632,8 @@ class Storage:
                 cash_usd=cash_usd,
                 position_value_krw=position_value_krw,
                 position_value_usd=position_value_usd,
+                adjusted_total_usd=adjusted_total,
+                settlement_adjustment_usd=settlement_adjustment_usd,
             )
             session.add(snapshot)
             await session.commit()
@@ -626,6 +660,13 @@ class Storage:
                     "cash_usd": float(row.cash_usd),
                     "position_value_krw": float(row.position_value_krw),
                     "position_value_usd": float(row.position_value_usd),
+                    "adjusted_total_usd": float(
+                        row.adjusted_total_usd
+                        if row.adjusted_total_usd is not None else row.total_usd
+                    ),
+                    "settlement_adjustment_usd": float(
+                        row.settlement_adjustment_usd or 0
+                    ),
                 }
                 for row in rows
             ]

@@ -16,6 +16,7 @@ trading:
   paper_cash_usd: 10000  # Initial paper trading cash (USD)
   paper_cash_krw: 0      # Initial paper trading cash (KRW)
   slippage_buffer_pct: 0.01  # Marketable-limit buffer: BUY +1%, SELL -1%
+  us_settlement_business_days: 1  # US stock settlement window for equity adjustment
 
 # Database
 database:

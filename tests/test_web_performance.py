@@ -59,6 +59,27 @@ def test_performance_page_displays_infinity_for_no_losing_sells():
     assert "∞" in response.text
 
 
+def test_performance_prefers_adjusted_equity_history():
+    state = DashboardState()
+    state.equity_history = [
+        {
+            "timestamp": "2026-06-01T00:00:00",
+            "total_usd": 1000,
+            "adjusted_total_usd": 1000,
+        },
+        {
+            "timestamp": "2026-06-02T00:00:00",
+            "total_usd": 900,
+            "adjusted_total_usd": 1200,
+        },
+    ]
+
+    state.calculate_performance()
+
+    assert state.performance.total_return_pct == pytest.approx(20.0)
+    assert state.performance.mdd == pytest.approx(0.0)
+
+
 def test_performance_page_loads_fills_from_db(tmp_path):
     db_url = f"sqlite+aiosqlite:///{tmp_path / 'fills.db'}"
 

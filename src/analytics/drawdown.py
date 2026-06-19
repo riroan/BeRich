@@ -62,14 +62,20 @@ class DrawdownAnalyzer:
     def __init__(self, equity_history: list):
         self.equity_history = equity_history
 
+    @staticmethod
+    def _equity_value(point: dict, currency: str = "usd"):
+        if currency == "usd":
+            adjusted = point.get("adjusted_total_usd")
+            if adjusted is not None:
+                return adjusted
+        return point.get(f"total_{currency}", 0)
+
     def analyze(self, currency: str = "usd") -> DrawdownAnalysis:
         """Perform complete drawdown analysis"""
         analysis = DrawdownAnalysis()
 
         if not self.equity_history:
             return analysis
-
-        key = f"total_{currency}"
 
         # Track peak and drawdowns
         peak = Decimal("0")
@@ -93,7 +99,7 @@ class DrawdownAnalyzer:
             else:
                 ts = timestamp
 
-            equity = Decimal(str(point.get(key, 0) or 0))
+            equity = Decimal(str(self._equity_value(point, currency) or 0))
             if equity <= 0:
                 continue
 
@@ -202,7 +208,10 @@ class DrawdownAnalyzer:
         prev_equity = None
 
         for point in self.equity_history:
-            equity = point.get("total_usd", 0) or point.get("total_krw", 0)
+            equity = (
+                self._equity_value(point, "usd")
+                or point.get("total_krw", 0)
+            )
             if prev_equity and prev_equity > 0:
                 daily_return = (equity - prev_equity) / prev_equity
                 returns.append(daily_return)

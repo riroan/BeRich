@@ -116,6 +116,44 @@ BeRich/
 └── .env                      # 환경 변수 (gitignore)
 ```
 
+## 현재 아키텍처
+
+현재 봇과 웹 대시보드는 같은 코드베이스에서 동작하며, 일부 실시간 화면 상태는 `src.web.app`의 in-memory `DashboardState`를 공유한다.
+
+DB가 source of truth인 데이터:
+- `strategy_configs` / `strategy_params`: 전략·종목·파라미터 설정
+- `orders` / `fills`: 주문·체결 이력
+- `current_positions`: 현재 보유 포지션
+- `price_rsi`: 가격·RSI 이력
+- `equity_snapshots`: 잔고/equity curve 히스토리
+
+아직 메모리 의존이 남아 있는 데이터:
+- 현재 잔고/현금/PnL
+- 봇 상태, pause 상태, 최근 업데이트 시각
+- 최근 signal/order 이벤트
+- 현재 RSI snapshot
+- WebSocket broadcast 상태
+
+## 리팩토링 방향
+
+목표는 봇과 웹을 DB-first 구조로 분리해 별도 프로세스/K8s deployment로 독립 실행하는 것이다. 자세한 작업 목록은 `TODO.md`의 "Bot/Web 완전 분리" 섹션을 따른다.
+
+핵심 원칙:
+- 봇은 DB writer, 웹은 DB reader/control-command writer로 역할 분리
+- 봇/실행/브로커 코드에서 `src.web.app` import 제거
+- 웹은 봇 객체, 전략 인스턴스, callback을 직접 참조하지 않음
+- 현재 잔고는 `account_state` 단일 row로 관리
+- 잔고·성과 히스토리는 기존 `equity_snapshots` 유지
+- pause/resume/reload/settings apply는 `bot_commands` 큐로 전달
+
+로드맵:
+1. `account_state`, `bot_status`, `bot_events`, `bot_commands` 추가
+2. 봇이 잔고/status/equity/signal/order 이벤트를 DB에 기록
+3. 웹 Dashboard/Performance/Portfolio가 메모리 대신 DB에서 읽도록 변경
+4. pause/reload/settings apply를 callback 대신 command queue로 변경
+5. 봇/실행/브로커에서 `src.web.app` import 완전 제거
+6. `src/web/app.py`를 route/service 단위로 분리
+
 ## 설정
 
 ### 종목 관리
@@ -142,12 +180,12 @@ BeRich/
 ## 테스트
 
 ```bash
-python -m pytest tests/ -v
+uv run --python 3.13 --locked --extra dev pytest
 ```
 
 ## 기술 스택
 
-- **Python 3.12** / FastAPI / SQLAlchemy (async)
+- **Python 3.13** / FastAPI / SQLAlchemy (async)
 - **MySQL 8.0** / Docker Compose
 - **KIS Open API** (한국투자증권)
 - **LightweightCharts 4.2** (차트)

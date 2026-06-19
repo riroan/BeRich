@@ -218,7 +218,11 @@ class ReportGenerator:
                 if hasattr(ts, 'replace'):
                     ts = ts.replace(tzinfo=None)
 
-                total = point.get("total_usd", 0) or point.get("total_krw", 0)
+                total = (
+                    point.get("adjusted_total_usd")
+                    if point.get("adjusted_total_usd") is not None
+                    else point.get("total_usd", 0)
+                ) or point.get("total_krw", 0)
 
                 if ts >= start and start_equity is None:
                     start_equity = total

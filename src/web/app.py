@@ -704,6 +704,13 @@ class DashboardState:
             error_message=error,
         )
 
+    @staticmethod
+    def _equity_usd_value(point: dict[str, Any]) -> float:
+        value = point.get("adjusted_total_usd")
+        if value is None:
+            value = point.get("total_usd", 0)
+        return value or 0
+
     def calculate_performance(self):
         """Calculate performance metrics from equity history and fills"""
         import math
@@ -717,8 +724,8 @@ class DashboardState:
             current = self.equity_history[-1]
 
             # Total return (using USD as primary)
-            initial_value = initial.get("total_usd", 0) or 0
-            current_value = current.get("total_usd", 0) or 0
+            initial_value = self._equity_usd_value(initial)
+            current_value = self._equity_usd_value(current)
 
             if initial_value > 0:
                 self.performance.total_return_pct = (
@@ -729,7 +736,7 @@ class DashboardState:
             peak = 0
             max_drawdown = 0
             for point in self.equity_history:
-                value = point.get("total_usd", 0) or 0
+                value = self._equity_usd_value(point)
                 if value > peak:
                     peak = value
                 if peak > 0:
@@ -755,8 +762,12 @@ class DashboardState:
             if len(self.equity_history) > 2:
                 returns = []
                 for i in range(1, len(self.equity_history)):
-                    prev_val = self.equity_history[i - 1].get("total_usd", 0) or 1
-                    curr_val = self.equity_history[i].get("total_usd", 0) or 1
+                    prev_val = self._equity_usd_value(
+                        self.equity_history[i - 1]
+                    ) or 1
+                    curr_val = self._equity_usd_value(
+                        self.equity_history[i]
+                    ) or 1
                     if prev_val > 0:
                         daily_return = (curr_val - prev_val) / prev_val
                         returns.append(daily_return)

@@ -141,6 +141,8 @@ class EquitySnapshot(Base):
     cash_usd = Column(Numeric(20, 2), nullable=False)
     position_value_krw = Column(Numeric(20, 2), nullable=False)
     position_value_usd = Column(Numeric(20, 2), nullable=False)
+    adjusted_total_usd = Column(Numeric(20, 2))
+    settlement_adjustment_usd = Column(Numeric(20, 2), nullable=False, default=0)
 
     __table_args__ = (
         Index("idx_equity_timestamp", "timestamp"),
