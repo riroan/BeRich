@@ -74,13 +74,13 @@
                 <div class="section-title">RSI Monitor <span class="count">{{ rsi_with_prices|length }}</span></div>
                 <div class="rsi-grid">
                     {% for symbol, data in rsi_with_prices.items() %}
-                    <div class="rsi-item" onclick="location.href='/symbol/{{ symbol }}'">
+                    <a class="rsi-item" href="/symbol/{{ symbol }}" aria-label="Open {{ symbol }} chart">
                         <div class="rsi-left">
                             <div class="rsi-symbol">{{ symbol }}</div>
                             <div class="rsi-price">{% if data.price %}{% if data.market == 'KRX' %}{{ "{:,.0f}".format(data.price) }}{% else %}${{ "{:,.2f}".format(data.price) }}{% endif %}{% else %}-{% endif %}</div>
                         </div>
                         <span class="rsi-value {% if data.rsi <= 24 or data.rsi >= 76 %}rsi-danger{% elif data.rsi <= 35 or data.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}">{{ "{:.1f}".format(data.rsi) }}</span>
-                    </div>
+                    </a>
                     {% else %}
                     <p class="empty">No RSI data</p>
                     {% endfor %}
@@ -93,20 +93,20 @@
             <div class="signal-card">
                 <h3>Buy Candidates</h3>
                 {% for c in buy_candidates %}
-                <div class="signal-item two-col" onclick="location.href='/symbol/{{ c.symbol }}'" style="cursor:pointer;">
+                <a class="signal-item two-col" href="/symbol/{{ c.symbol }}" aria-label="Open {{ c.symbol }} chart">
                     <span class="sym-badge">{{ c.symbol }}</span>
                     <span class="signal-tag buy">RSI {{ "{:.1f}".format(c.rsi) }}</span>
-                </div>
+                </a>
                 {% endfor %}
                 <div class="empty-state">Watching for RSI &le; 35</div>
             </div>
             <div class="signal-card">
                 <h3>Sell Candidates</h3>
                 {% for c in sell_candidates %}
-                <div class="signal-item two-col" onclick="location.href='/symbol/{{ c.symbol }}'" style="cursor:pointer;">
+                <a class="signal-item two-col" href="/symbol/{{ c.symbol }}" aria-label="Open {{ c.symbol }} chart">
                     <span class="sym-badge">{{ c.symbol }}</span>
                     <span class="signal-tag sell">RSI {{ "{:.1f}".format(c.rsi) }}</span>
-                </div>
+                </a>
                 {% endfor %}
                 <div class="empty-state">Watching for RSI &ge; 65</div>
             </div>

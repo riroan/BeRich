@@ -131,8 +131,8 @@
                             <td class="number" data-label="Price">{{ "{:,.2f}".format(log.price) }}</td>
                             <td class="number" data-label="Qty">{{ log.quantity }}</td>
                             <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
-                            <td class="number {{ 'positive' if log.pnl and log.pnl >= 0 else 'negative' }}" data-label="P&L">
-                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
+                            <td class="number {{ 'positive' if log.pnl_pct is not none and log.pnl_pct >= 0 else ('negative' if log.pnl_pct is not none else '') }}" data-label="P&L">
+                                {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '-' }}
                             </td>
                         </tr>
                         {% endfor %}

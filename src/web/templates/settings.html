@@ -37,7 +37,7 @@
         .modal-box { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
         .modal-header { display: flex; justify-content: space-between; align-items: center; }
         .modal-header .section-title { margin: 0; }
-        .modal-close { background: none; border: none; color: var(--dim); font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
+        .modal-close { background: none; border: none; color: var(--dim); font-size: 20px; cursor: pointer; min-width: 40px; min-height: 40px; padding: 0 4px; line-height: 1; }
         .modal-close:hover { color: var(--white); }
         .modal-form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
         .modal-form-grid .form-group { gap: 6px; }
@@ -108,7 +108,7 @@
                 </button>
                 {% endfor %}
             </div>
-            <button class="btn" onclick="toggleCreateForm()" id="btn-create">+ New Strategy</button>
+            <button class="btn" onclick="toggleCreateForm(true)" id="btn-create" aria-haspopup="dialog">+ New Strategy</button>
         </div>
         <!-- Mobile: dropdown (full width below) -->
         <select class="strategy-select" onchange="switchStrategyByName(this.value)" style="margin-bottom: 16px;">
@@ -120,11 +120,11 @@
         </select>
 
         <!-- Create Strategy Modal -->
-        <div class="modal-overlay" id="create-modal" onclick="if(event.target===this)toggleCreateForm()">
-            <div class="modal-box">
+        <div class="modal-overlay" id="create-modal" aria-hidden="true" onclick="if(event.target===this)toggleCreateForm(false)">
+            <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="create-strategy-title">
                 <div class="modal-header">
-                    <div class="section-title">New Strategy</div>
-                    <button class="modal-close" onclick="toggleCreateForm()">✕</button>
+                    <div class="section-title" id="create-strategy-title">New Strategy</div>
+                    <button class="modal-close" onclick="toggleCreateForm(false)" aria-label="Close new strategy dialog">✕</button>
                 </div>
                 <div class="modal-form-grid">
                     <div class="form-group">
@@ -155,7 +155,7 @@
                 </div>
                 <div class="form-actions" style="margin-top: 0;">
                     <span class="save-status" id="create-status"></span>
-                    <button class="btn" onclick="toggleCreateForm()">Cancel</button>
+                    <button class="btn" onclick="toggleCreateForm(false)">Cancel</button>
                     <button class="btn btn-save" onclick="createStrategy()">Create</button>
                 </div>
             </div>
@@ -287,9 +287,33 @@
             document.getElementById('strategy-' + name).classList.add('active');
         }
 
-        function toggleCreateForm() {
-            document.getElementById('create-modal').classList.toggle('active');
+        let createModalLastFocus = null;
+
+        function toggleCreateForm(forceOpen) {
+            const modal = document.getElementById('create-modal');
+            const shouldOpen = typeof forceOpen === 'boolean' ? forceOpen : !modal.classList.contains('active');
+
+            if (shouldOpen) {
+                createModalLastFocus = document.activeElement;
+                modal.classList.add('active');
+                modal.setAttribute('aria-hidden', 'false');
+                setTimeout(() => document.getElementById('new-name')?.focus(), 0);
+                return;
+            }
+
+            modal.classList.remove('active');
+            modal.setAttribute('aria-hidden', 'true');
+            if (createModalLastFocus && typeof createModalLastFocus.focus === 'function') {
+                createModalLastFocus.focus();
+            }
         }
+
+        document.addEventListener('keydown', event => {
+            const modal = document.getElementById('create-modal');
+            if (event.key === 'Escape' && modal.classList.contains('active')) {
+                toggleCreateForm(false);
+            }
+        });
 
         async function createStrategy() {
             const statusEl = document.getElementById('create-status');
@@ -341,22 +365,31 @@
             }
         }
 
+        function setStrategyStatus(name, message, type = '') {
+            const statusEl = document.getElementById('status-' + name);
+            if (!statusEl) return;
+            statusEl.textContent = message;
+            statusEl.className = `save-status ${type}`;
+        }
+
         async function deleteStrategy(name) {
             if (!confirm('Delete strategy "' + name + '"? Trade history will be preserved.')) return;
+            setStrategyStatus(name, 'Deleting...');
 
             try {
                 const resp = await fetch('/api/strategies/' + encodeURIComponent(name), {method: 'DELETE'});
                 if (resp.ok) location.reload();
                 else {
                     const data = await resp.json();
-                    alert(data.detail || 'Delete failed');
+                    setStrategyStatus(name, data.detail || 'Delete failed', 'error');
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                setStrategyStatus(name, 'Error: ' + e.message, 'error');
             }
         }
 
         async function toggleStrategy(name, enabled) {
+            setStrategyStatus(name, 'Updating...');
             try {
                 const resp = await fetch('/api/strategies/' + encodeURIComponent(name), {
                     method: 'PUT',
@@ -365,10 +398,12 @@
                 });
                 if (!resp.ok) {
                     const data = await resp.json();
-                    alert(data.detail || 'Toggle failed');
+                    setStrategyStatus(name, data.detail || 'Toggle failed', 'error');
+                } else {
+                    setStrategyStatus(name, enabled ? 'Enabled.' : 'Disabled.', 'success');
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                setStrategyStatus(name, 'Error: ' + e.message, 'error');
             }
         }
 

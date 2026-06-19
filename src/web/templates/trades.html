@@ -69,11 +69,11 @@
                         <td data-label="Qty">{{ log.quantity }}</td>
                         <td data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
                         <td data-label="Result" class="{{ 'positive' if log.result == 'success' else 'negative' }}">{{ log.result }}</td>
-                        <td data-label="P&L" class="{{ 'positive' if log.pnl and log.pnl >= 0 else ('negative' if log.pnl else '') }}">
-                            {% if log.pnl %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}
+                        <td data-label="P&L" class="{{ 'positive' if log.pnl is not none and log.pnl >= 0 else ('negative' if log.pnl is not none else '') }}">
+                            {% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}
                         </td>
-                        <td data-label="P&L %" class="{{ 'positive' if log.pnl_pct and log.pnl_pct >= 0 else ('negative' if log.pnl_pct else '') }}">
-                            {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct else '-' }}
+                        <td data-label="P&L %" class="{{ 'positive' if log.pnl_pct is not none and log.pnl_pct >= 0 else ('negative' if log.pnl_pct is not none else '') }}">
+                            {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '-' }}
                         </td>
                     </tr>
                     {% else %}

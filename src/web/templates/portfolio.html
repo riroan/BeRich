@@ -29,16 +29,17 @@
         </div>
 
         <!-- Chart Section -->
-        <div class="card">
+        <div class="card portfolio-allocation-card">
             <div class="section-title">Allocation</div>
             <div class="alloc-wrap">
-                <canvas id="pieChart" width="240" height="240"></canvas>
+                <canvas id="pieChart" width="240" height="240" tabindex="0" role="img" aria-label="Portfolio allocation chart"></canvas>
                 <div class="alloc-legend" id="allocLegend"></div>
             </div>
+            <div id="allocSelection" class="sr-only" aria-live="polite"></div>
         </div>
 
         <!-- Holdings Table -->
-        <section class="symbols-section">
+        <section class="symbols-section portfolio-holdings">
             <div class="panel">
                 <h2>Holdings</h2>
                 <div class="table-wrap">
@@ -107,13 +108,25 @@
 
         const data = [
             {% for pos in portfolio %}
-            {label: '{{ pos.symbol }}', value: {{ pos.weight }}, color: colors[{{ loop.index0 }} % colors.length]},
+            {label: {{ pos.symbol | tojson }}, value: {{ pos.weight }}, color: colors[{{ loop.index0 }} % colors.length]},
             {% endfor %}
             {label: 'Cash', value: {{ cash_weight }}, color: '#475569'},
         ];
 
         // Store slice angles for hit detection
         const slices = [];
+        let selectedIdx = data.reduce((best, item, idx) => {
+            if (item.value <= 0) return best;
+            return best < 0 || item.value > data[best].value ? idx : best;
+        }, -1);
+
+        function updateSelectionLabel() {
+            const selectionEl = document.getElementById('allocSelection');
+            if (!selectionEl || selectedIdx < 0) return;
+            const item = data[selectedIdx];
+            selectionEl.textContent = `${item.label} ${item.value.toFixed(1)}%`;
+            canvas.setAttribute('aria-label', `Portfolio allocation chart. Selected ${item.label}, ${item.value.toFixed(1)}%.`);
+        }
 
         function drawDonut(highlightIdx) {
             const cx = canvas.width / 2;
@@ -143,7 +156,7 @@
             });
 
             // Center label on hover
-            if (highlightIdx !== undefined) {
+            if (highlightIdx !== undefined && highlightIdx >= 0) {
                 const h = data[highlightIdx];
                 ctx.fillStyle = '#f8fafc';
                 ctx.font = 'bold 18px Inter, sans-serif';
@@ -156,8 +169,7 @@
             }
         }
 
-        // Hit detection
-        canvas.addEventListener('mousemove', (e) => {
+        function hitIndexFromEvent(e) {
             const rect = canvas.getBoundingClientRect();
             const x = e.clientX - rect.left;
             const y = e.clientY - rect.top;
@@ -169,9 +181,7 @@
             const inner = outer * 0.6;
 
             if (dist < inner || dist > outer + 10) {
-                drawDonut();
-                canvas.style.cursor = 'default';
-                return;
+                return -1;
             }
 
             let angle = Math.atan2(dy, dx);
@@ -185,32 +195,70 @@
                 if (angle >= s.start && angle < s.end) { hit = s.index; break; }
             }
 
-            if (hit >= 0) {
-                drawDonut(hit);
-                canvas.style.cursor = 'pointer';
-            } else {
-                drawDonut();
-                canvas.style.cursor = 'default';
-            }
+            return hit;
+        }
+
+        function selectSlice(index) {
+            if (index < 0) return;
+            selectedIdx = index;
+            drawDonut(selectedIdx);
+            updateLegend();
+            updateSelectionLabel();
+        }
+
+        // Hit detection
+        canvas.addEventListener('mousemove', (e) => {
+            const hit = hitIndexFromEvent(e);
+            drawDonut(hit >= 0 ? hit : selectedIdx);
+            canvas.style.cursor = hit >= 0 ? 'pointer' : 'default';
+        });
+
+        canvas.addEventListener('click', (e) => {
+            selectSlice(hitIndexFromEvent(e));
         });
 
         canvas.addEventListener('mouseleave', () => {
-            drawDonut();
+            drawDonut(selectedIdx);
+            canvas.style.cursor = 'default';
+        });
+
+        canvas.addEventListener('keydown', (e) => {
+            if (selectedIdx < 0 || (e.key !== 'ArrowRight' && e.key !== 'ArrowLeft')) return;
+            e.preventDefault();
+            const visible = data.map((item, index) => ({ item, index })).filter(({ item }) => item.value > 0);
+            const current = visible.findIndex(({ index }) => index === selectedIdx);
+            const delta = e.key === 'ArrowRight' ? 1 : -1;
+            const next = visible[(current + delta + visible.length) % visible.length];
+            selectSlice(next.index);
         });
 
         function buildLegend() {
             legendEl.innerHTML = data
+                .map((d, index) => ({ ...d, index }))
                 .filter(d => d.value > 0)
                 .map(d => `
-                    <div class="alloc-item">
+                    <button type="button" class="alloc-item" data-index="${d.index}" aria-pressed="${d.index === selectedIdx ? 'true' : 'false'}">
                         <span class="alloc-dot" style="background:${d.color}"></span>
                         <span class="alloc-name">${d.label}</span>
                         <span class="alloc-pct">${d.value.toFixed(1)}%</span>
-                    </div>
+                    </button>
                 `).join('');
+            legendEl.querySelectorAll('.alloc-item').forEach(item => {
+                item.addEventListener('click', () => selectSlice(Number(item.dataset.index)));
+            });
         }
 
-        drawDonut();
+        function updateLegend() {
+            legendEl.querySelectorAll('.alloc-item').forEach(item => {
+                const active = Number(item.dataset.index) === selectedIdx;
+                item.classList.toggle('active', active);
+                item.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+        }
+
+        drawDonut(selectedIdx);
         buildLegend();
+        updateLegend();
+        updateSelectionLabel();
     </script>
 {% endblock %}

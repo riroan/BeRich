@@ -128,6 +128,12 @@ class DashboardWebSocket {
             usdPnl.textContent = this.formatUSD(data.pnl_usd, true);
             usdPnl.className = `value small ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
+
+        const stickyUsdPnl = document.getElementById('sticky-pnl-usd');
+        if (stickyUsdPnl && data.pnl_usd !== undefined) {
+            stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true);
+            stickyUsdPnl.className = `sticky-value ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
+        }
     }
 
     updatePositionsTable(positions) {
@@ -180,15 +186,17 @@ class DashboardWebSocket {
             const priceInfo = rsiPrices[symbol] || {};
             const price = priceInfo.price;
             const market = priceInfo.market;
+            const escapedSymbol = this.escapeHTML(symbol);
+            const href = `/symbol/${encodeURIComponent(symbol)}`;
 
             return `
-                <div class="rsi-item" onclick="location.href='/symbol/${symbol}'">
+                <a class="rsi-item" href="${href}" aria-label="Open ${escapedSymbol} chart">
                     <div class="rsi-left">
-                        <div class="rsi-symbol">${symbol}</div>
+                        <div class="rsi-symbol">${escapedSymbol}</div>
                         <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
                     </div>
                     <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi.toFixed(1)}</span>
-                </div>
+                </a>
             `;
         }).join('');
     }
@@ -196,25 +204,25 @@ class DashboardWebSocket {
     updateStatusBar(data) {
         // Bot status
         if (data.bot_status) {
-            const statusSpan = document.querySelector('.status-bar .status');
+            const statusSpan = document.getElementById('bot-run-status') || document.querySelector('.status-bar .status');
             if (statusSpan) {
-                statusSpan.textContent = data.bot_status.running ? 'RUNNING' : 'STOPPED';
-                statusSpan.className = `status ${data.bot_status.running ? 'running' : 'stopped'}`;
+                statusSpan.textContent = data.bot_status.running ? 'Running' : 'Stopped';
+                statusSpan.className = `pill status ${data.bot_status.running ? 'running' : 'stopped'}`;
             }
 
-            const modeSpan = document.querySelector('.status-bar .mode');
+            const modeSpan = document.getElementById('bot-mode-status') || document.querySelector('.status-bar .mode');
             if (modeSpan) {
-                modeSpan.textContent = data.bot_status.paper_trading ? 'PAPER' : 'REAL';
-                modeSpan.className = `mode ${data.bot_status.paper_trading ? 'paper' : 'real'}`;
+                modeSpan.textContent = data.bot_status.paper_trading ? 'Paper' : 'Real';
+                modeSpan.className = `pill mode ${data.bot_status.paper_trading ? 'paper' : 'real'}`;
             }
 
-            const warmupSpan = document.querySelector('.status-bar .warmup');
+            const warmupSpan = document.getElementById('bot-warmup-status') || document.querySelector('.status-bar .warmup');
             if (warmupSpan) {
                 if (data.bot_status.warmup_remaining) {
                     warmupSpan.textContent = `WARMUP: ${data.bot_status.warmup_remaining}`;
-                    warmupSpan.style.display = '';
+                    warmupSpan.hidden = false;
                 } else {
-                    warmupSpan.style.display = 'none';
+                    warmupSpan.hidden = true;
                 }
             }
         }
@@ -236,10 +244,27 @@ class DashboardWebSocket {
     }
 
     updateLastUpdateTime(lastUpdate) {
-        const updateTime = document.querySelector('.update-time');
+        const updateTime = document.getElementById('last-update-time') || document.querySelector('.update-time');
         if (updateTime) {
             const date = new Date(lastUpdate);
-            updateTime.textContent = `Last: ${date.toLocaleTimeString()}`;
+            if (Number.isNaN(date.getTime())) {
+                const fallback = lastUpdate || 'N/A';
+                updateTime.textContent = `Last: ${fallback}`;
+                const stickyLast = document.getElementById('sticky-last-update');
+                if (stickyLast) stickyLast.textContent = fallback;
+                return;
+            }
+            const formattedTime = date.toLocaleTimeString('ko-KR', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: false,
+            });
+            updateTime.textContent = `Last: ${formattedTime}`;
+            const stickyLast = document.getElementById('sticky-last-update');
+            if (stickyLast) {
+                stickyLast.textContent = formattedTime;
+            }
         }
     }
 
@@ -249,8 +274,12 @@ class DashboardWebSocket {
             indicator = document.createElement('span');
             indicator.id = 'ws-status';
             indicator.className = 'ws-status';
+            indicator.setAttribute('aria-live', 'polite');
             const statusBar = document.querySelector('.status-bar');
-            if (statusBar) {
+            const headerRight = document.querySelector('.header-right');
+            if (headerRight) {
+                headerRight.insertBefore(indicator, headerRight.firstChild);
+            } else if (statusBar) {
                 statusBar.insertBefore(indicator, statusBar.firstChild);
             }
         }
@@ -261,6 +290,12 @@ class DashboardWebSocket {
         } else {
             indicator.textContent = 'OFFLINE';
             indicator.className = 'ws-status disconnected';
+        }
+
+        const stickyWs = document.getElementById('sticky-ws-value');
+        if (stickyWs) {
+            stickyWs.textContent = connected ? 'LIVE' : 'OFFLINE';
+            stickyWs.className = `sticky-value ${connected ? 'positive' : 'negative'}`;
         }
     }
 

@@ -7,19 +7,29 @@
         <div class="card">
             <div class="section-title">Add Symbol</div>
             <div class="sym-add-form">
-                <input type="text" id="symbol-input" placeholder="Ticker (e.g. AAPL)">
-                <select id="market-select">
-                    {% for market in markets %}
-                    <option value="{{ market }}">{{ market | upper }}</option>
-                    {% endfor %}
-                </select>
-                <select id="strategy-select">
-                    {% for name in strategy_names %}
-                    <option value="{{ name }}">{{ name }}</option>
-                    {% endfor %}
-                </select>
-                <button onclick="addSymbol()" class="btn">Add Symbol</button>
+                <div class="form-field">
+                    <label for="symbol-input">Ticker</label>
+                    <input type="text" id="symbol-input" placeholder="AAPL" autocomplete="off" autocapitalize="characters">
+                </div>
+                <div class="form-field">
+                    <label for="market-select">Market</label>
+                    <select id="market-select">
+                        {% for market in markets %}
+                        <option value="{{ market }}">{{ market | upper }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
+                    <label for="strategy-select">Strategy</label>
+                    <select id="strategy-select">
+                        {% for name in strategy_names %}
+                        <option value="{{ name }}">{{ name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button id="add-symbol-btn" onclick="addSymbol()" class="btn">Add Symbol</button>
             </div>
+            <div id="symbol-form-status" class="form-status" role="status" aria-live="polite"></div>
         </div>
 
         <!-- Symbols grouped by strategy -->
@@ -42,9 +52,9 @@
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
-                    <input type="text" value="{{ s.max_weight }}" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
+                    <input type="text" value="{{ s.max_weight }}" aria-label="{{ s.symbol }} max weight" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
-                    <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')">&#x2715;</button>
+                    <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')" aria-label="Delete {{ s.symbol }}">&#x2715;</button>
                 </div>
             </div>
             {% endfor %}
@@ -60,11 +70,28 @@
 
 {% block scripts %}
     <script>
+        function setSymbolStatus(message, type = '') {
+            const status = document.getElementById('symbol-form-status');
+            if (!status) return;
+            status.textContent = message;
+            status.className = `form-status ${type}`;
+        }
+
         async function addSymbol() {
-            const symbol = document.getElementById('symbol-input').value.trim();
+            const input = document.getElementById('symbol-input');
+            const button = document.getElementById('add-symbol-btn');
+            const symbol = input.value.trim().toUpperCase();
             const market = document.getElementById('market-select').value;
             const strategyName = document.getElementById('strategy-select').value;
-            if (!symbol) { alert('Symbol is required'); return; }
+            if (!symbol) {
+                setSymbolStatus('Ticker is required.', 'error');
+                input.focus();
+                return;
+            }
+
+            button.disabled = true;
+            button.textContent = 'Adding...';
+            setSymbolStatus('Adding symbol...');
 
             try {
                 const resp = await fetch('/api/symbols', {
@@ -73,15 +100,25 @@
                     body: JSON.stringify({symbol, market, strategy_name: strategyName}),
                 });
                 const data = await resp.json();
-                if (!resp.ok) { alert(data.detail || 'Failed'); return; }
-                if (data.duplicate) { alert(`${symbol} already exists`); }
+                if (!resp.ok) {
+                    setSymbolStatus(data.detail || 'Failed to add symbol.', 'error');
+                    return;
+                }
+                if (data.duplicate) {
+                    setSymbolStatus(`${symbol} already exists.`, 'error');
+                }
                 else { location.reload(); }
-            } catch (e) { alert('Error: ' + e.message); }
+            } catch (e) {
+                setSymbolStatus('Error: ' + e.message, 'error');
+            } finally {
+                button.disabled = false;
+                button.textContent = 'Add Symbol';
+            }
         }
 
         async function toggleSymbol(id, symbol) {
             try { await fetch(`/api/symbols/${id}/toggle?symbol=${encodeURIComponent(symbol)}`, {method: 'POST'}); }
-            catch (e) { alert('Failed: ' + e.message); location.reload(); }
+            catch (e) { setSymbolStatus('Failed: ' + e.message, 'error'); location.reload(); }
         }
 
         async function updateWeight(id, symbol, weight) {
@@ -91,16 +128,22 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({max_weight: parseFloat(weight)}),
                 });
-                if (!resp.ok) alert('Failed to update');
-            } catch (e) { alert('Error: ' + e.message); }
+                if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
+                else setSymbolStatus(`${symbol} weight updated.`, 'success');
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
         async function removeSymbol(id, symbol) {
             if (!confirm(`Delete ${symbol}?`)) return;
             try {
                 const resp = await fetch(`/api/symbols/${id}?symbol=${encodeURIComponent(symbol)}`, {method: 'DELETE'});
-                if (resp.ok) document.querySelector(`.sym-row[data-id="${id}"]`).remove();
-            } catch (e) { alert('Error: ' + e.message); }
+                if (resp.ok) {
+                    document.querySelector(`.sym-row[data-id="${id}"]`).remove();
+                    setSymbolStatus(`${symbol} deleted.`, 'success');
+                } else {
+                    setSymbolStatus(`Failed to delete ${symbol}.`, 'error');
+                }
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
         document.getElementById('symbol-input').addEventListener('keypress', e => {
