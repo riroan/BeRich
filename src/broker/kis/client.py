@@ -55,6 +55,20 @@ def _marketable_limit_price(
     return price * factor
 
 
+# Overseas US 현재가 조회 venue(EXCD) — 세션별. 본장(REGULAR)만 정규 거래소 코드를
+# 쓰고, 그 외 세션(주간거래/프리/애프터)에는 미국 확장 venue 'B' 코드를 쓴다.
+# 정규 NAS/NYS/AMS의 'last'는 본장 외 시간엔 직전 정규 종가에 고정되므로, 주간거래
+# 중에는 NAS로 조회하면 시세가 멈춘 것처럼 보인다.
+_EXCD_REGULAR = {Market.NYSE: "NYS", Market.NASDAQ: "NAS", Market.AMEX: "AMS"}
+_EXCD_EXTENDED = {Market.NYSE: "BAY", Market.NASDAQ: "BAQ", Market.AMEX: "BAA"}
+
+
+def _overseas_quote_excd(market: Market, session: Session) -> str:
+    """현재가 조회용 EXCD 코드. 본장이면 정규 코드, 그 외 세션이면 확장 코드."""
+    table = _EXCD_REGULAR if session == Session.REGULAR else _EXCD_EXTENDED
+    return table.get(market, table[Market.NASDAQ])
+
+
 def _canon_odno(odno: str | None) -> str:
     """KIS ODNO is sometimes zero-padded, sometimes not. Canonicalize
     (strip leading zeros) for matching; keep the raw value for API calls.
@@ -734,20 +748,20 @@ class KISBroker:
             return Decimal(data["output"]["stck_prpr"])
 
     async def _get_overseas_price(self, symbol: str, market: Market) -> Decimal:
-        """Get overseas stock current price"""
+        """Get overseas stock current price.
+
+        EXCD는 세션별로 다르다: 본장(정규장)은 NAS/NYS/AMS, 그 외 세션
+        (주간거래/프리/애프터)은 BAQ/BAY/BAA. 정규 코드의 'last'는 본장 외
+        시간엔 직전 정규 종가에 고정되어, 주간거래 중 시세가 멈춘다.
+        """
         tr_id = "HHDFS00000300"
         endpoint = "/uapi/overseas-price/v1/quotations/price"
         headers = self._auth.get_headers(tr_id)
 
-        exchange_map = {
-            Market.NYSE: "NYS",
-            Market.NASDAQ: "NAS",
-            Market.AMEX: "AMS",
-        }
-
+        session = get_current_session(datetime.now())
         params = {
             "AUTH": "",
-            "EXCD": exchange_map.get(market, "NAS"),
+            "EXCD": _overseas_quote_excd(market, session),
             "SYMB": symbol,
         }
 

@@ -6,7 +6,7 @@ from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.broker.kis.client import (
-    KISBroker, _canon_odno, _marketable_limit_price,
+    KISBroker, _canon_odno, _marketable_limit_price, _overseas_quote_excd,
 )
 from src.broker.kis.mapper import KISMapper
 from src.core.exceptions import BrokerError, OrderError
@@ -508,3 +508,69 @@ class TestSessionOrderRouting:
         order = _open_order("x", Market.NASDAQ)
         with pytest.raises(OrderError):
             await broker._submit_overseas_day_order(order)
+
+
+class _PriceResp:
+    """Minimal async-context-manager stand-in for aiohttp's response."""
+
+    def __init__(self, payload: dict):
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def json(self):
+        return self._payload
+
+
+class TestOverseasQuoteEXCD:
+    """본장(REGULAR)만 정규 거래소 코드, 그 외 세션은 확장 'B' 코드로 시세 조회."""
+
+    def test_regular_uses_regular_codes(self):
+        assert _overseas_quote_excd(Market.NASDAQ, Session.REGULAR) == "NAS"
+        assert _overseas_quote_excd(Market.NYSE, Session.REGULAR) == "NYS"
+        assert _overseas_quote_excd(Market.AMEX, Session.REGULAR) == "AMS"
+
+    def test_nonregular_sessions_use_extended_codes(self):
+        for sess in (Session.DAY_MARKET, Session.PRE, Session.AFTER):
+            assert _overseas_quote_excd(Market.NASDAQ, sess) == "BAQ"
+            assert _overseas_quote_excd(Market.NYSE, sess) == "BAY"
+            assert _overseas_quote_excd(Market.AMEX, sess) == "BAA"
+
+    def _capture_excd(self, broker, captured):
+        broker._auth.get_headers = MagicMock(return_value={})
+
+        def _get(url, headers=None, params=None):
+            captured["params"] = params
+            return _PriceResp({"rt_cd": "0", "output": {"last": "123.45"}})
+
+        broker._session = MagicMock()
+        broker._session.get = _get
+
+    @pytest.mark.asyncio
+    async def test_daymarket_quote_uses_extended_excd(self):
+        broker = _make_broker(hts_id="")
+        captured = {}
+        self._capture_excd(broker, captured)
+        with patch(
+            "src.broker.kis.client.get_current_session",
+            return_value=Session.DAY_MARKET,
+        ):
+            price = await broker._get_overseas_price("AAPL", Market.NASDAQ)
+        assert price == Decimal("123.45")
+        assert captured["params"]["EXCD"] == "BAQ"
+
+    @pytest.mark.asyncio
+    async def test_regular_quote_uses_regular_excd(self):
+        broker = _make_broker(hts_id="")
+        captured = {}
+        self._capture_excd(broker, captured)
+        with patch(
+            "src.broker.kis.client.get_current_session",
+            return_value=Session.REGULAR,
+        ):
+            await broker._get_overseas_price("AAPL", Market.NASDAQ)
+        assert captured["params"]["EXCD"] == "NAS"
