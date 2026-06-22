@@ -127,13 +127,12 @@ class DashboardSyncMixin:
                             )
                             changed = await replace_positions(market, positions)
                             stored_positions = stored_positions or changed
-                            for position in positions:
-                                await self.storage.save_price_rsi(
-                                    symbol=position["symbol"],
-                                    market=market,
-                                    price=Decimal(str(position["current_price"])),
-                                    rsi=position.get("rsi"),
-                                )
+                            # NOTE: price_rsi는 tick 경로(_process_symbol_tick)가
+                            # 단일 소스로 기록한다. 여기서 잔고 API 평가가
+                            # (ovrs_now_pric1)를 추가로 저장하면 같은 테이블에
+                            # 출처/정밀도 다른 가격이 섞이고, 그 행의 rsi는 tick
+                            # 가격으로 계산된 값이라 (가격,rsi)가 어긋난다 →
+                            # 차트 빗살/노이즈. 그래서 저장하지 않는다.
                         except Exception as e:
                             storage_failed = True
                             logger.warning(
