@@ -158,7 +158,6 @@
             grid: '#1e293b',
             up: '#10b981',
             down: '#ef4444',
-            extended: '#f59e0b',
             rsi: '#3b82f6',
             oversold: '#10b981',
             overbought: '#ef4444',
@@ -192,33 +191,10 @@
             },
         });
 
-        // 정규장(regular) / 그 외(extended: 주간거래·프리·애프터) 2색 라인.
-        // 각 점은 자기 세션 시리즈에만 값, 다른 시리즈엔 whitespace를 넣어
-        // 세션 경계에서 라인이 끊기게 한다. 마커/크로스헤어는 regular에 붙임
-        // (regular 시리즈가 전체 타임라인을 whitespace로 갖고 있어 어느 시각이든 정렬됨).
-        const regularSeries = priceChart.addLineSeries({
+        const priceSeries = priceChart.addLineSeries({
             color: colors.up,
             lineWidth: 2,
         });
-        const extendedSeries = priceChart.addLineSeries({
-            color: colors.extended,
-            lineWidth: 2,
-        });
-
-        function setPriceData(data) {
-            const reg = [], ext = [];
-            for (const p of data) {
-                if (p.session === 'regular') {
-                    reg.push({ time: p.time, value: p.value });
-                    ext.push({ time: p.time });
-                } else {
-                    ext.push({ time: p.time, value: p.value });
-                    reg.push({ time: p.time });
-                }
-            }
-            regularSeries.setData(reg);
-            extendedSeries.setData(ext);
-        }
 
         // Create RSI chart
         const rsiChartContainer = document.getElementById('rsi-chart');
@@ -318,10 +294,9 @@
                     priceData = data.prices.map(p => ({
                         time: parseTime(p.time),
                         value: p.close,
-                        session: p.session,
                     })).sort((a, b) => a.time - b.time)
                       .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
-                    setPriceData(priceData);
+                    priceSeries.setData(priceData);
 
                     if (data.trade_points && data.trade_points.length > 0) {
                         const markers = data.trade_points.map(tp => ({
@@ -331,7 +306,7 @@
                             shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
                             text: tp.action.toUpperCase(),
                         }));
-                        regularSeries.setMarkers(markers);
+                        priceSeries.setMarkers(markers);
                     }
 
                     priceChart.timeScale().fitContent();
@@ -377,10 +352,9 @@
                 const newPricePoints = data.prices.map(p => ({
                     time: parseTime(p.time),
                     value: p.close,
-                    session: p.session,
                 }));
                 priceData = mergeSorted(priceData, newPricePoints);
-                setPriceData(priceData);
+                priceSeries.setData(priceData);
 
                 if (data.rsi && data.rsi.length > 0) {
                     const newRsiPoints = data.rsi.map(r => ({
@@ -408,10 +382,9 @@
                 const newPricePoints = data.prices.map(p => ({
                     time: parseTime(p.time),
                     value: p.close,
-                    session: p.session,
                 }));
                 priceData = mergeSorted(priceData, newPricePoints);
-                setPriceData(priceData);
+                priceSeries.setData(priceData);
 
                 if (data.trade_points && data.trade_points.length > 0) {
                     const markers = data.trade_points.map(tp => ({
@@ -421,7 +394,7 @@
                         shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
                         text: tp.action.toUpperCase(),
                     }));
-                    regularSeries.setMarkers(markers);
+                    priceSeries.setMarkers(markers);
                 }
 
                 if (data.rsi && data.rsi.length > 0) {
@@ -499,7 +472,7 @@
             isSyncingCrosshair = true;
 
             if (param.time) {
-                priceChart.setCrosshairPosition(undefined, param.time, regularSeries);
+                priceChart.setCrosshairPosition(undefined, param.time, priceSeries);
             } else {
                 priceChart.clearCrosshairPosition();
             }

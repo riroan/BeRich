@@ -8,7 +8,6 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Request, Form, HTTPException, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, FileResponse
@@ -27,23 +26,6 @@ logger = logging.getLogger(__name__)
 
 # Base directory for templates and static files
 BASE_DIR = Path(__file__).parent
-
-
-def _session_category(ts: datetime) -> str:
-    """정규장(regular) vs 그 외(extended: 주간거래/프리/애프터) — 차트 라인 색 구분용.
-
-    ``ts``는 KST naive datetime. 그 시점의 미국 DST를 환산해 세션을 판정한다.
-    """
-    from src.utils.scheduler import get_current_session, Session
-    et = ts.replace(tzinfo=ZoneInfo("Asia/Seoul")).astimezone(
-        ZoneInfo("America/New_York")
-    )
-    dst = et.utcoffset().total_seconds() == -4 * 3600
-    return (
-        "regular"
-        if get_current_session(ts, dst=dst) == Session.REGULAR
-        else "extended"
-    )
 
 
 class ConnectionManager:
@@ -1343,7 +1325,6 @@ def create_app() -> FastAPI:
                         "low": price,
                         "close": price,
                         "volume": 0,
-                        "session": _session_category(record["timestamp"]),
                     })
                     rsi_points.append({"time": ts, "value": record["rsi"]})
                 return {
@@ -1362,15 +1343,7 @@ def create_app() -> FastAPI:
             rsi = [r for r in rsi if r["time"] < before]
         return {
             "symbol": symbol,
-            "prices": [
-                {
-                    **p.model_dump(),
-                    "session": _session_category(
-                        datetime.strptime(p.time, "%Y-%m-%d %H:%M")
-                    ),
-                }
-                for p in prices[-limit:]
-            ],
+            "prices": [p.model_dump() for p in prices[-limit:]],
             "rsi": rsi[-limit:],
             "trade_points": trade_points[-limit:],
         }
