@@ -324,6 +324,36 @@ class TestDashboardSyncMixin:
         assert "AAPL" in states
         assert states["AAPL"]["buy_stage"] == 1
 
+    def test_restore_strategy_stage_state_from_positions(self, bot_with_dashboard):
+        """DB-backed current positions restore only strategy stage counters."""
+        bot = bot_with_dashboard
+
+        db_position = MagicMock()
+        db_position.market = "NASDAQ"
+        db_position.quantity = 1
+        db_position.buy_stage = 2
+        db_position.sell_stage = 1
+        bot.dashboard.positions = {"AAPL": db_position}
+
+        mock_strategy = MagicMock()
+        mock_strategy.market = Market.NASDAQ
+        mock_strategy.symbols = ["AAPL"]
+        mock_strategy._positions = {"AAPL": 2}
+        mock_strategy._entry_prices = {"AAPL": Decimal("120")}
+        mock_strategy._buy_stages = {"AAPL": 1}
+        mock_strategy._sell_stages = {"AAPL": 0}
+
+        mock_engine = MagicMock()
+        mock_engine.get_strategies.return_value = [mock_strategy]
+        bot.strategy_engine = mock_engine
+
+        bot.restore_strategy_stage_state_from_positions()
+
+        assert mock_strategy._buy_stages["AAPL"] == 2
+        assert mock_strategy._sell_stages["AAPL"] == 1
+        assert mock_strategy._positions["AAPL"] == 2
+        assert mock_strategy._entry_prices["AAPL"] == Decimal("120")
+
     @pytest.mark.asyncio
     async def test_update_dashboard_status(self, bot_with_dashboard):
         """Test dashboard status update"""

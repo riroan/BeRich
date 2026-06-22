@@ -367,6 +367,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Update dashboard
         self.dashboard.strategy_names = new_names
         self.dashboard.strategy_instances = new_list
+        self.restore_strategy_stage_state_from_positions()
 
         logger.info(
             f"Strategies reloaded: {len(new_list)} active"
@@ -536,6 +537,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Load historical data
         await self.load_current_positions()
+        self.restore_strategy_stage_state_from_positions()
         await self.load_chart_history()
         await self.load_equity_history()
         await self.load_fills()

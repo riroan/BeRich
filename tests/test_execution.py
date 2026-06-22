@@ -65,12 +65,14 @@ def _make_signal(
     symbol="AAPL",
     market=Market.NASDAQ,
     strength=0.5,
+    metadata=None,
 ):
     return Signal(
         signal_type=signal_type,
         symbol=symbol,
         market=market,
         strength=strength,
+        metadata=metadata or {},
     )
 
 
@@ -213,6 +215,29 @@ class TestSignalToOrder:
         assert order is not None
         assert order.side == OrderSide.SELL
         assert order.quantity == 30  # 100 * 0.3
+
+    @pytest.mark.asyncio
+    async def test_staged_sell_rounding_to_zero_sells_minimum_one(
+        self, order_manager, broker,
+    ):
+        """A staged sell keeps the configured minimum sell quantity of 1 share."""
+        broker.get_current_price.return_value = Decimal("100")
+
+        position = MagicMock()
+        position.symbol = "AAPL"
+        position.quantity = Decimal("1")
+        broker.get_positions.return_value = [position]
+
+        signal = _make_signal(
+            signal_type=SignalType.EXIT_LONG,
+            strength=0.5,
+            metadata={"reason": "staged_sell_1"},
+        )
+        order = await order_manager._signal_to_order(signal)
+
+        assert order is not None
+        assert order.side == OrderSide.SELL
+        assert order.quantity == 1
 
     @pytest.mark.asyncio
     async def test_exit_long_no_position_returns_none(

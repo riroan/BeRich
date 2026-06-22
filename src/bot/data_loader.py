@@ -110,6 +110,42 @@ class DataLoaderMixin:
         except Exception as e:
             logger.warning(f"Failed to load current positions: {e}")
 
+    def restore_strategy_stage_state_from_positions(self: "TradingBot") -> None:
+        """Restore persisted strategy stages from DB-backed dashboard positions.
+
+        Broker position sync restores quantity and average price, but stage
+        counters are strategy state. If those counters reset on restart, the
+        same staged sell/buy level can fire again.
+        """
+        if not self.strategy_engine:
+            return
+
+        restored = 0
+        positions = self.dashboard.positions
+
+        for strategy in self.strategy_engine.get_strategies():
+            if not (
+                hasattr(strategy, "_buy_stages")
+                and hasattr(strategy, "_sell_stages")
+                and hasattr(strategy, "symbols")
+            ):
+                continue
+
+            strategy_market = strategy.market.value.upper()
+            for symbol in strategy.symbols:
+                position = positions.get(symbol)
+                if not position or position.quantity <= 0:
+                    continue
+                if position.market.upper() != strategy_market:
+                    continue
+
+                strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
+                strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)
+                restored += 1
+
+        if restored:
+            logger.info(f"Restored strategy stage state for {restored} positions")
+
     async def load_fills(self: "TradingBot") -> None:
         """Load fills from database for performance calculation and trade logs"""
         try:
