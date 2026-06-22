@@ -55,17 +55,19 @@ def _marketable_limit_price(
     return price * factor
 
 
-# Overseas US 현재가 조회 venue(EXCD) — 세션별. 본장(REGULAR)만 정규 거래소 코드를
-# 쓰고, 그 외 세션(주간거래/프리/애프터)에는 미국 확장 venue 'B' 코드를 쓴다.
-# 정규 NAS/NYS/AMS의 'last'는 본장 외 시간엔 직전 정규 종가에 고정되므로, 주간거래
-# 중에는 NAS로 조회하면 시세가 멈춘 것처럼 보인다.
+# Overseas US 현재가 조회 venue(EXCD) — 세션별.
+# 주간거래(DAY_MARKET, 미국 완전 휴장)만 확장 'B' venue(BAQ/BAY/BAA)로 조회한다.
+# 정규 NAS/NYS/AMS의 'last'는 미국 정규+장외(프리·애프터마켓)를 반영하지만, 한국
+# 낮의 주간거래 시간엔 미국이 닫혀 직전 정규 종가에 고정된다. 반대로 'B' venue는
+# 주간거래 전용이라 PRE/AFTER(미국 장외 거래 시간)엔 닫혀 종가에 고정된다.
+# → 주간거래엔 B, 그 외(REGULAR/PRE/AFTER)엔 정규 코드를 써야 양쪽 다 라이브.
 _EXCD_REGULAR = {Market.NYSE: "NYS", Market.NASDAQ: "NAS", Market.AMEX: "AMS"}
 _EXCD_EXTENDED = {Market.NYSE: "BAY", Market.NASDAQ: "BAQ", Market.AMEX: "BAA"}
 
 
 def _overseas_quote_excd(market: Market, session: Session) -> str:
-    """현재가 조회용 EXCD 코드. 본장이면 정규 코드, 그 외 세션이면 확장 코드."""
-    table = _EXCD_REGULAR if session == Session.REGULAR else _EXCD_EXTENDED
+    """현재가 조회용 EXCD 코드. 주간거래만 확장 'B' 코드, 그 외엔 정규 코드."""
+    table = _EXCD_EXTENDED if session == Session.DAY_MARKET else _EXCD_REGULAR
     return table.get(market, table[Market.NASDAQ])
 
 
@@ -750,9 +752,9 @@ class KISBroker:
     async def _get_overseas_price(self, symbol: str, market: Market) -> Decimal:
         """Get overseas stock current price.
 
-        EXCD는 세션별로 다르다: 본장(정규장)은 NAS/NYS/AMS, 그 외 세션
-        (주간거래/프리/애프터)은 BAQ/BAY/BAA. 정규 코드의 'last'는 본장 외
-        시간엔 직전 정규 종가에 고정되어, 주간거래 중 시세가 멈춘다.
+        EXCD는 세션별로 다르다: 주간거래(DAY_MARKET)만 BAQ/BAY/BAA,
+        그 외(정규/프리/애프터)는 NAS/NYS/AMS. 주간거래 시간엔 미국 정규
+        venue가 닫혀 NAS의 'last'가 종가에 고정되므로 B venue를 써야 한다.
         """
         tr_id = "HHDFS00000300"
         endpoint = "/uapi/overseas-price/v1/quotations/price"

@@ -527,18 +527,20 @@ class _PriceResp:
 
 
 class TestOverseasQuoteEXCD:
-    """본장(REGULAR)만 정규 거래소 코드, 그 외 세션은 확장 'B' 코드로 시세 조회."""
+    """주간거래(DAY_MARKET)만 확장 'B' 코드, 그 외(정규/프리/애프터)는 정규 코드."""
 
-    def test_regular_uses_regular_codes(self):
-        assert _overseas_quote_excd(Market.NASDAQ, Session.REGULAR) == "NAS"
-        assert _overseas_quote_excd(Market.NYSE, Session.REGULAR) == "NYS"
-        assert _overseas_quote_excd(Market.AMEX, Session.REGULAR) == "AMS"
+    def test_day_market_uses_extended_codes(self):
+        assert _overseas_quote_excd(Market.NASDAQ, Session.DAY_MARKET) == "BAQ"
+        assert _overseas_quote_excd(Market.NYSE, Session.DAY_MARKET) == "BAY"
+        assert _overseas_quote_excd(Market.AMEX, Session.DAY_MARKET) == "BAA"
 
-    def test_nonregular_sessions_use_extended_codes(self):
-        for sess in (Session.DAY_MARKET, Session.PRE, Session.AFTER):
-            assert _overseas_quote_excd(Market.NASDAQ, sess) == "BAQ"
-            assert _overseas_quote_excd(Market.NYSE, sess) == "BAY"
-            assert _overseas_quote_excd(Market.AMEX, sess) == "BAA"
+    def test_regular_pre_after_use_regular_codes(self):
+        # PRE/AFTER는 실제 미국 장외 거래 시간이라 정규 venue가 라이브.
+        # B venue는 그 시간엔 닫혀 종가에 고정되므로 쓰면 안 됨.
+        for sess in (Session.REGULAR, Session.PRE, Session.AFTER):
+            assert _overseas_quote_excd(Market.NASDAQ, sess) == "NAS"
+            assert _overseas_quote_excd(Market.NYSE, sess) == "NYS"
+            assert _overseas_quote_excd(Market.AMEX, sess) == "AMS"
 
     def _capture_excd(self, broker, captured):
         broker._auth.get_headers = MagicMock(return_value={})
