@@ -1366,7 +1366,19 @@ def create_app() -> FastAPI:
 
     @app.get("/api/equity-history")
     async def get_equity_history():
-        """Get equity curve data"""
+        """Get equity curve data from the DB.
+
+        Reads from storage (full 90-day window) instead of the in-memory
+        ``equity_history``, which is capped at the last 1000 snapshots and so
+        truncated the curve to only the most recent ~3-4 weeks. Falls back to
+        the in-memory cache if storage is unavailable.
+        """
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                return {"data": await storage.get_equity_history()}
+            except Exception as e:
+                logger.warning(f"Equity history DB read failed: {e}")
         return {"data": dashboard_state.equity_history}
 
     # ==================== Backtest ====================
