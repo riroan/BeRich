@@ -427,12 +427,12 @@
                 rsiSeries.setData(rsiData);
                 if (rsiData.length >= 2) {
                     oversoldLine.setData([
-                        { time: rsiData[0].time, value: 30 },
-                        { time: rsiData[rsiData.length - 1].time, value: 30 },
+                        { time: rsiData[0].time, value: 35 },
+                        { time: rsiData[rsiData.length - 1].time, value: 35 },
                     ]);
                     overboughtLine.setData([
-                        { time: rsiData[0].time, value: 70 },
-                        { time: rsiData[rsiData.length - 1].time, value: 70 },
+                        { time: rsiData[0].time, value: 65 },
+                        { time: rsiData[rsiData.length - 1].time, value: 65 },
                     ]);
                 }
 

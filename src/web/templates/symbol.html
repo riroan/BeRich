@@ -285,12 +285,12 @@
             const times = rsiData.map(r => r.time);
             if (times.length >= 2) {
                 oversoldLine.setData([
-                    { time: times[0], value: 30 },
-                    { time: times[times.length - 1], value: 30 },
+                    { time: times[0], value: 35 },
+                    { time: times[times.length - 1], value: 35 },
                 ]);
                 overboughtLine.setData([
-                    { time: times[0], value: 70 },
-                    { time: times[times.length - 1], value: 70 },
+                    { time: times[0], value: 65 },
+                    { time: times[times.length - 1], value: 65 },
                 ]);
             }
         }
