@@ -6,6 +6,7 @@ import pytest
 
 from src.utils.scheduler import (
     Session, get_current_session, is_us_market_holiday, is_us_early_close,
+    daytime_tag, DAYTIME_TAG,
 )
 
 
@@ -145,3 +146,12 @@ class TestEarlyClose:
         # KST Sat 06-27 = carryover of Fri 06-26 (normal). dst=True (summer).
         assert _at((2026, 6, 27), 4, 0, dst=True) == Session.REGULAR  # still regular
         assert _at((2026, 6, 27), 6, 0, dst=True) == Session.AFTER
+
+
+class TestDaytimeTag:
+    """주간거래(DAY_MARKET)에만 마커가 붙는다 — 로그/디스코드 공용."""
+
+    def test_marks_only_day_market(self):
+        assert daytime_tag(Session.DAY_MARKET) == DAYTIME_TAG
+        for s in (Session.REGULAR, Session.PRE, Session.AFTER, Session.CLOSED):
+            assert daytime_tag(s) == ""

@@ -8,6 +8,7 @@ import logging
 from src.bot._utils import extract_symbols
 from src.core.events import Event, EventType
 from src.core.types import Bar
+from src.utils.scheduler import daytime_tag
 
 if TYPE_CHECKING:
     from src.bot.core import TradingBot
@@ -167,7 +168,12 @@ class TickHandlerMixin:
                 )
 
             self.dashboard.last_price_update = datetime.now()
-            logger.info(f"[{symbol}] Price: {price:,}{rsi_str}")
+            # 주간거래 세션 tick은 로그에서 바로 구분되도록 마커를 붙인다
+            # (정규 외 시간엔 BAQ/BAY/BAA venue로 시세 조회 — 별도 추적용).
+            logger.info(
+                f"{daytime_tag(self._last_session)}[{symbol}] "
+                f"Price: {price:,}{rsi_str}"
+            )
 
         except Exception as e:
             logger.error(f"Error fetching {symbol}: {e}")

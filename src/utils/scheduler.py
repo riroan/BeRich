@@ -172,6 +172,21 @@ def get_current_session(ts: datetime, dst: bool | None = None) -> Session:
     return Session.REGULAR
 
 
+DAYTIME_TAG = "[DAYTIME]"
+
+
+def daytime_tag(session: "Session | None" = None) -> str:
+    """``'[DAYTIME]'`` during the 주간거래 session, else ``''``.
+
+    Shared marker for tagging logs and Discord messages so 주간거래 activity
+    is distinguishable from regular/pre/after. Pass a known session to avoid
+    recomputing; defaults to the live session.
+    """
+    if session is None:
+        session = get_current_session(datetime.now())
+    return DAYTIME_TAG if session == Session.DAY_MARKET else ""
+
+
 def get_us_session_windows_kst() -> list[tuple[time, time]]:
     """US session windows in KST (DST-aware), merged for introspection.
 

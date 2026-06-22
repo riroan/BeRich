@@ -6,6 +6,8 @@ from decimal import Decimal
 
 import logging
 
+from src.utils.scheduler import daytime_tag
+
 logger = logging.getLogger(__name__)
 
 # Color constants
@@ -236,7 +238,7 @@ class DiscordNotifier:
             amount_line = f"금액     : {value_fmt}\n"
 
         message = (
-            f"**[{symbol}] {title}**\n"
+            f"**{daytime_tag()}[{symbol}] {title}**\n"
             f"```\n"
             f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
@@ -280,7 +282,7 @@ class DiscordNotifier:
             pnl_line = f"수익     : {pnl_fmt} ({pnl_pct:+.1f}%)\n"
 
         message = (
-            f"**[{symbol}] {title}**\n"
+            f"**{daytime_tag()}[{symbol}] {title}**\n"
             f"```\n"
             f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
@@ -319,7 +321,7 @@ class DiscordNotifier:
             )
 
         message = (
-            f"🚨 **[{symbol}] {title}** 🚨\n"
+            f"🚨 **{daytime_tag()}[{symbol}] {title}** 🚨\n"
             f"```\n"
             f"{price_label}   : {price_fmt}\n"
             f"수량     : {quantity:,}주\n"
@@ -422,7 +424,7 @@ class DiscordNotifier:
         """Notify order failed - HIGH PRIORITY"""
         action = "매수" if side.lower() == "buy" else "매도"
         message = (
-            f"🚨 **[주문 실패] {symbol} {action}**\n"
+            f"🚨 **{daytime_tag()}[주문 실패] {symbol} {action}**\n"
             f"```\n"
             f"사유: {reason}\n"
             f"```"

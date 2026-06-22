@@ -17,6 +17,7 @@ from src.broker.kis.client import KISBroker
 from src.risk.manager import RiskManager
 from src.data.storage import Storage
 from src.utils.notifier import DiscordNotifier
+from src.utils.scheduler import daytime_tag
 from src.web.app import get_dashboard_state
 
 logger = logging.getLogger(__name__)
@@ -147,7 +148,8 @@ class OrderManager:
 
         # Submit order
         logger.info(
-            f"*** SUBMITTING ORDER *** | {order.side.value.upper()} {order.symbol} | "
+            f"{daytime_tag()}*** SUBMITTING ORDER *** | "
+            f"{order.side.value.upper()} {order.symbol} | "
             f"Qty: {order.quantity} | Price: {order.price:,} | "
             f"Value: {order.quantity * order.price:,}"
         )
