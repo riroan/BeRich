@@ -5,13 +5,17 @@
 ## 주요 기능
 
 - **RSI Mean Reversion 전략** - 일봉 RSI 기반 3단계 분할 매수/매도
+- **미국 주식 전 세션 대응** - 주간거래, 프리마켓, 정규장, 애프터마켓 세션별 스케줄링
+- **세션별 KIS 라우팅** - 주간거래 주문 endpoint와 PRE/REGULAR/AFTER 정규 endpoint를 구분
 - **웹 대시보드** - 실시간 포지션, RSI 모니터, 차트 (포트 9095)
 - **포트폴리오 관리** - 종목별 최대 비중 설정, 파이차트 시각화
 - **종목 관리** - 웹에서 실시간 종목 추가/삭제/활성화 (KIS API 검증)
 - **전략 설정** - 웹에서 RSI 기간, 매수/매도 레벨, 손절 등 실시간 변경
 - **페이퍼 트레이딩** - 실제 시세 + 가상 주문으로 전략 검증
+- **DB 기반 상태 복구** - 현재 포지션, 매수/매도 stage, 체결, 성과 이력을 재시작 후 복원
 - **Discord 알림** - 매수/매도 체결, 손절, 시스템 오류 알림
-- **분석** - 일간/주간/월간 리포트, 드로우다운 분석, 승률 통계
+- **분석** - 일간/주간/월간 리포트, settlement-adjusted equity curve, 드로우다운, 승률 통계
+- **모바일/PWA 대시보드** - 모바일 카드형 테이블, 햄버거 메뉴, 명시적 테마 토글
 
 ## 매매 로직
 
@@ -27,8 +31,26 @@
   3차: RSI >= 80 → 40%
 
 [손절] 평단 대비 -10% → 전량 매도
-[쿨다운] 3일 경과 + RSI 50 이상 회복 시 매수 단계 리셋
+[쿨다운] cooldown_days 경과 시 매수/매도 단계 리셋 (RSI 회복 조건 없음)
 ```
+
+## 미국장 세션
+
+US 전용 스케줄러는 KST 기준으로 KIS가 지원하는 미국 주식 세션을 구분한다. 휴장일과 단축장은 XNYS 캘린더로 게이트하며, 캘린더 캐시는 재시작마다 5년 앞까지 생성한다.
+
+| 세션 | KST 서머타임 기준 | KIS 처리 |
+|------|------------------|----------|
+| 주간거래 | 09:00-17:00 | `/daytime-order`, `TTTS6036U/6037U`, 지정가 |
+| 프리마켓 | 17:00-22:30 | 정규 해외주식 주문 endpoint, 지정가 |
+| 정규장 | 22:30-05:00 | 정규 해외주식 주문 endpoint, 지정가 |
+| 애프터마켓 | 05:00-07:00 | 정규 해외주식 주문 endpoint, 지정가 |
+| CLOSED | 07:00-09:00 | 주문 불가 |
+
+시세 조회는 세션별 venue 코드를 다르게 사용한다.
+- 주간거래: `BAQ`/`BAY`/`BAA`
+- 프리마켓, 정규장, 애프터마켓: `NAS`/`NYS`/`AMS`
+
+주간거래 활동은 로그와 Discord 알림에 `[DAYTIME]` 태그가 붙어 정규/프리/애프터와 구분된다.
 
 ## 설치 및 실행
 
@@ -85,7 +107,7 @@ docker logs quant-bot -f
 | `/settings` | 전략 파라미터 실시간 변경 |
 | `/portfolio` | 포트폴리오 비중 차트 |
 | `/trades` | 거래 내역 |
-| `/performance` | 성과 분석 |
+| `/performance` | DB 기반 equity curve와 성과 분석 |
 | `/analytics` | 리포트, 드로우다운, 승률 통계 |
 | `/symbol/{symbol}` | 종목 상세 차트 (가격 + RSI) |
 
@@ -123,16 +145,21 @@ BeRich/
 DB가 source of truth인 데이터:
 - `strategy_configs` / `strategy_params`: 전략·종목·파라미터 설정
 - `orders` / `fills`: 주문·체결 이력
-- `current_positions`: 현재 보유 포지션
-- `price_rsi`: 가격·RSI 이력
-- `equity_snapshots`: 잔고/equity curve 히스토리
+- `current_positions`: 현재 보유 포지션과 매수/매도 stage
+- `price_rsi`: tick 경로에서 기록한 가격·RSI 이력
+- `equity_snapshots`: 잔고/equity curve 히스토리, settlement adjustment 포함
+
+재시작 시 복원되는 데이터:
+- 현재 보유 포지션
+- RSI 전략의 buy/sell stage 상태
+- 체결 기반 trade log와 performance 지표
+- DB 기반 90일 equity curve
 
 아직 메모리 의존이 남아 있는 데이터:
 - 현재 잔고/현금/PnL
 - 봇 상태, pause 상태, 최근 업데이트 시각
 - 최근 signal/order 이벤트
-- 현재 RSI snapshot
-- WebSocket broadcast 상태
+- 현재 RSI snapshot과 WebSocket broadcast 상태
 
 ## 리팩토링 방향
 
