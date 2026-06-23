@@ -1062,23 +1062,7 @@ select option { background: var(--surface); color: var(--text); }
         text-align: right;
     }
     .sticky-pnl {
-        position: sticky;
-        top: 0;
-        z-index: 80;
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-        padding: 8px calc(16px + env(safe-area-inset-right)) 8px calc(16px + env(safe-area-inset-left));
-        background: var(--bg);
-        border-top: 1px solid var(--border);
-        border-bottom: 1px solid var(--border);
-        box-shadow: 0 8px 18px rgba(0,0,0,0.16);
-    }
-    .sticky-pnl > div {
-        display: flex;
-        align-items: baseline;
-        gap: 6px;
-        min-width: 0;
+        display: none;
     }
 
     /* Hamburger: show toggle, hide nav by default */

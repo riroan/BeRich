@@ -5,12 +5,12 @@
  *   - /api/*, /ws, websockets                     → bypass (always network)
  *   - /login, /logout                             → bypass (auth-sensitive)
  */
-const CACHE_VERSION = "berich-v4";
+const CACHE_VERSION = "berich-v5";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const HTML_CACHE = `${CACHE_VERSION}-html`;
 
 const PRECACHE_URLS = [
-    "/static/style.css?v=10",
+    "/static/style.css?v=11",
     "/static/script.js?v=6",
     "/static/lightweight-charts.js",
     "/static/icons/icon-192.png",
