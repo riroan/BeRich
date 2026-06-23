@@ -414,6 +414,43 @@ body {
     color: var(--dim);
     font-weight: 500;
 }
+.sort-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background: var(--bg);
+    border: 1px solid var(--card);
+    border-radius: 8px;
+    padding: 5px 28px 5px 10px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    transition: border-color .2s;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 9px center;
+}
+.sort-select:hover, .sort-select:focus { border-color: var(--blue); }
+.sort-select option { background: var(--surface); color: var(--text); }
+.sort-controls { display: flex; align-items: stretch; gap: 6px; }
+.sort-dir {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;              /* matches the dropdown's 40px height → square */
+    padding: 0;
+    background: var(--bg);
+    border: 1px solid var(--card);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: inherit;
+    transition: border-color .2s, color .2s;
+}
+.sort-dir:hover, .sort-dir:focus { border-color: var(--blue); color: var(--blue); }
 
 /* ===================== Layout ===================== */
 .two-col { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }

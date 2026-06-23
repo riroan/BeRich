@@ -150,7 +150,9 @@ class DashboardWebSocket {
             const escapedSymbol = this.escapeHTML(symbol);
             const href = `/symbol/${encodeURIComponent(symbol)}`;
             return `
-                <tr class="position-row" data-href="${href}" tabindex="0" role="link" aria-label="Open ${escapedSymbol} chart">
+                <tr class="position-row" data-href="${href}"
+                    data-symbol="${escapedSymbol}" data-pnl="${pos.pnl_pct}" data-rsi="${pos.rsi != null ? pos.rsi : ''}" data-price="${pos.current_price != null ? pos.current_price : ''}"
+                    tabindex="0" role="link" aria-label="Open ${escapedSymbol} chart">
                     <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${escapedSymbol}</a></td>
                     <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
                     <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
@@ -169,6 +171,46 @@ class DashboardWebSocket {
                 </tr>
             `;
         }).join('');
+
+        this.sortPositions();
+    }
+
+    sortPositions() {
+        const tbody = document.querySelector('#positions-table tbody');
+        if (!tbody) return;
+        const key = this._sortValue('positions-sort', 'pnl');
+        const dir = this._sortDir('positions-sort-dir');
+        const rows = Array.from(tbody.querySelectorAll('.position-row'));
+        this._applySort(rows, key, dir, tbody);
+    }
+
+    _sortValue(id, fallback) {
+        const el = document.getElementById(id);
+        return el ? el.value : fallback;
+    }
+
+    _sortDir(id) {
+        const el = document.getElementById(id);
+        return el && el.dataset.dir === 'desc' ? 'desc' : 'asc';
+    }
+
+    _applySort(items, key, dir, container) {
+        if (items.length < 2) return;
+        const mult = dir === 'desc' ? -1 : 1;
+        const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : null; };
+        items.sort((a, b) => {
+            if (key === 'symbol') {
+                return (a.dataset.symbol || '').localeCompare(b.dataset.symbol || '') * mult;
+            }
+            // numeric keys ('rsi' | 'price' | 'pnl') — missing values always last
+            const av = num(a.dataset[key]);
+            const bv = num(b.dataset[key]);
+            if (av === null && bv === null) return 0;
+            if (av === null) return 1;
+            if (bv === null) return -1;
+            return (av - bv) * mult;
+        });
+        items.forEach(item => container.appendChild(item));
     }
 
     updateRSIGrid(rsiValues, rsiPrices) {
@@ -190,7 +232,9 @@ class DashboardWebSocket {
             const href = `/symbol/${encodeURIComponent(symbol)}`;
 
             return `
-                <a class="rsi-item" href="${href}" aria-label="Open ${escapedSymbol} chart">
+                <a class="rsi-item" href="${href}"
+                   data-symbol="${escapedSymbol}" data-rsi="${rsi}" data-price="${price != null ? price : ''}"
+                   aria-label="Open ${escapedSymbol} chart">
                     <div class="rsi-left">
                         <div class="rsi-symbol">${escapedSymbol}</div>
                         <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
@@ -199,6 +243,17 @@ class DashboardWebSocket {
                 </a>
             `;
         }).join('');
+
+        this.sortRSIGrid();
+    }
+
+    sortRSIGrid() {
+        const grid = document.querySelector('.rsi-grid');
+        if (!grid) return;
+        const key = this._sortValue('rsi-sort', 'rsi');
+        const dir = this._sortDir('rsi-sort-dir');
+        const items = Array.from(grid.querySelectorAll('.rsi-item'));
+        this._applySort(items, key, dir, grid);
     }
 
     updateStatusBar(data) {
@@ -401,7 +456,44 @@ document.addEventListener('DOMContentLoaded', () => {
     initHamburgerMenu();
     initSwipeNav();
     initChartTheme();
+    initRSISort();
+    initPositionsSort();
 });
+
+function initSortControls(selectId, dirId, storageKey, apply) {
+    const select = document.getElementById(selectId);
+    const dirBtn = document.getElementById(dirId);
+    if (!select || !dirBtn) return;
+
+    const savedKey = localStorage.getItem(storageKey + 'Key');
+    const savedDir = localStorage.getItem(storageKey + 'Dir');
+    if (savedKey) select.value = savedKey;
+    if (savedDir === 'asc' || savedDir === 'desc') dirBtn.dataset.dir = savedDir;
+    dirBtn.textContent = dirBtn.dataset.dir === 'desc' ? '↓' : '↑';
+
+    const run = () => { if (dashboardWS) apply(); };
+
+    select.addEventListener('change', () => {
+        localStorage.setItem(storageKey + 'Key', select.value);
+        run();
+    });
+    dirBtn.addEventListener('click', () => {
+        const next = dirBtn.dataset.dir === 'desc' ? 'asc' : 'desc';
+        dirBtn.dataset.dir = next;
+        dirBtn.textContent = next === 'desc' ? '↓' : '↑';
+        localStorage.setItem(storageKey + 'Dir', next);
+        run();
+    });
+    run();
+}
+
+function initRSISort() {
+    initSortControls('rsi-sort', 'rsi-sort-dir', 'rsiSort', () => dashboardWS.sortRSIGrid());
+}
+
+function initPositionsSort() {
+    initSortControls('positions-sort', 'positions-sort-dir', 'positionsSort', () => dashboardWS.sortPositions());
+}
 
 function initPositionRowLinks() {
     document.addEventListener('click', event => {

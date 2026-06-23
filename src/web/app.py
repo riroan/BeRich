@@ -1032,6 +1032,8 @@ def create_app() -> FastAPI:
 
         await _load_fills_for_web()
         positions = await _get_current_positions_for_web()
+        # Default order: P&L ascending (client can re-sort by rsi/price/symbol)
+        positions.sort(key=lambda p: p.pnl_pct)
 
         # Update derived states
         dashboard_state.update_signal_candidates()
@@ -1079,7 +1081,10 @@ def create_app() -> FastAPI:
                     "price": dashboard_state.rsi_prices.get(symbol, {}).get("price"),
                     "market": dashboard_state.rsi_prices.get(symbol, {}).get("market"),
                 }
-                for symbol, rsi in dashboard_state.rsi_values.items()
+                # Default order: RSI ascending (client can re-sort by name/price)
+                for symbol, rsi in sorted(
+                    dashboard_state.rsi_values.items(), key=lambda kv: kv[1]
+                )
             },
             # Signals and orders
             "recent_signals": list(dashboard_state.recent_signals[:20]),

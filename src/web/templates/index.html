@@ -36,7 +36,18 @@
         <!-- 2. Positions + RSI Monitor -->
         <div class="two-col">
             <div class="card">
-                <div class="section-title">Positions <span class="count">{{ position_count }}</span></div>
+                <div class="section-title">
+                    <span>Positions <span class="count">{{ position_count }}</span></span>
+                    <span class="sort-controls">
+                        <select id="positions-sort" class="sort-select" aria-label="Sort positions by">
+                            <option value="pnl">P&amp;L</option>
+                            <option value="rsi">RSI</option>
+                            <option value="price">Price</option>
+                            <option value="symbol">Symbol</option>
+                        </select>
+                        <button type="button" id="positions-sort-dir" class="sort-dir" data-dir="asc" aria-label="Toggle sort direction">↑</button>
+                    </span>
+                </div>
                 <div class="table-wrap">
                 <table id="positions-table" class="center-table mobile-cards">
                     <thead>
@@ -50,7 +61,9 @@
                     </thead>
                     <tbody>
                         {% for pos in positions %}
-                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}" tabindex="0" role="link" aria-label="Open {{ pos.symbol }} chart">
+                        <tr class="position-row" data-href="/symbol/{{ pos.symbol }}"
+                            data-symbol="{{ pos.symbol }}" data-pnl="{{ pos.pnl_pct }}" data-rsi="{{ pos.rsi if pos.rsi else '' }}" data-price="{{ pos.current_price }}"
+                            tabindex="0" role="link" aria-label="Open {{ pos.symbol }} chart">
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
@@ -71,10 +84,22 @@
                 </div>
             </div>
             <div class="card">
-                <div class="section-title">RSI Monitor <span class="count">{{ rsi_with_prices|length }}</span></div>
+                <div class="section-title">
+                    <span>RSI Monitor <span class="count">{{ rsi_with_prices|length }}</span></span>
+                    <span class="sort-controls">
+                        <select id="rsi-sort" class="sort-select" aria-label="Sort RSI monitor by">
+                            <option value="rsi">RSI</option>
+                            <option value="symbol">Name</option>
+                            <option value="price">Price</option>
+                        </select>
+                        <button type="button" id="rsi-sort-dir" class="sort-dir" data-dir="asc" aria-label="Toggle sort direction">↑</button>
+                    </span>
+                </div>
                 <div class="rsi-grid">
                     {% for symbol, data in rsi_with_prices.items() %}
-                    <a class="rsi-item" href="/symbol/{{ symbol }}" aria-label="Open {{ symbol }} chart">
+                    <a class="rsi-item" href="/symbol/{{ symbol }}"
+                       data-symbol="{{ symbol }}" data-rsi="{{ data.rsi }}" data-price="{{ data.price if data.price is not none else '' }}"
+                       aria-label="Open {{ symbol }} chart">
                         <div class="rsi-left">
                             <div class="rsi-symbol">{{ symbol }}</div>
                             <div class="rsi-price">{% if data.price %}{% if data.market == 'KRX' %}{{ "{:,.0f}".format(data.price) }}{% else %}${{ "{:,.2f}".format(data.price) }}{% endif %}{% else %}-{% endif %}</div>
