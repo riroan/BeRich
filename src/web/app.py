@@ -175,7 +175,7 @@ class BacktestRequest(BaseModel):
     start_date: str  # "YYYY-MM-DD"
     end_date: str    # "YYYY-MM-DD"
     rsi_period: int = Field(14, ge=5, le=30)
-    stop_loss: float = Field(-10.0, ge=-50.0, le=-1.0)
+    stop_loss: float = Field(-10.0, ge=-100.0, le=-1.0)
     cooldown_days: int = Field(1, ge=1, le=30)
     reset_requires_recovery: bool = False
     recovery_rsi: float = Field(50.0, ge=0.0, le=100.0)

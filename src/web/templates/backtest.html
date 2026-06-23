@@ -67,14 +67,23 @@
                 <form id="bt-form" class="bt-form" onsubmit="return false;">
                     <div class="bt-row">
                         <div class="bt-field">
+                            <label for="bt-strategy-preset">Load Saved Strategy</label>
+                            <select id="bt-strategy-preset">
+                                <option value="">Manual / Custom</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="bt-row">
+                        <div class="bt-field">
                             <label for="bt-symbol">Symbol</label>
-                            <input type="text" id="bt-symbol" value="005930" placeholder="e.g. 005930 or AAPL">
+                            <input type="text" id="bt-symbol" value="GOOG" placeholder="e.g. 005930 or AAPL">
                         </div>
                         <div class="bt-field">
                             <label for="bt-market">Market</label>
                             <select id="bt-market">
                                 <option value="krx">KRX</option>
-                                <option value="nasdaq">NASDAQ</option>
+                                <option value="nasdaq" selected>NASDAQ</option>
                                 <option value="nyse">NYSE</option>
                                 <option value="amex">AMEX</option>
                             </select>
@@ -101,7 +110,7 @@
                     </div>
                     <div class="bt-slider-row">
                         <label>Stop Loss</label>
-                        <input type="range" id="bt-stop-loss" min="-50" max="-1" value="-10">
+                        <input type="range" id="bt-stop-loss" min="-100" max="-1" value="-10">
                         <span class="bt-slider-val" id="bt-stop-loss-v">-10%</span>
                     </div>
                     <div class="bt-slider-row">
@@ -238,6 +247,53 @@
                 capitalInp.value = n > 0 ? n.toLocaleString() : '';
                 const pos = Math.max(0, capitalInp.value.length - caretFromEnd);
                 capitalInp.setSelectionRange(pos, pos);
+            });
+
+            // Load saved strategy params from Settings into the form
+            const presetSelect = document.getElementById('bt-strategy-preset');
+            const presetConfigs = {};
+            const setSlider = (id, val) => {
+                if (val == null) return;
+                const el = document.getElementById(id);
+                el.value = val;
+                el.dispatchEvent(new Event('input'));  // refresh live label
+            };
+            const setLevels = (prefix, levels) => {
+                for (let i = 0; i < 3; i++) {
+                    const lvl = levels && levels[i];
+                    if (!lvl) continue;
+                    document.getElementById(`bt-${prefix}-rsi-${i + 1}`).value = lvl[0];
+                    document.getElementById(`bt-${prefix}-p-${i + 1}`).value = Math.round(lvl[1] * 100);
+                }
+            };
+            const applyStrategyPreset = (cfg) => {
+                const p = (cfg && cfg.params) || {};
+                setSlider('bt-rsi-period', p.rsi_period);
+                setSlider('bt-stop-loss', p.stop_loss);
+                setSlider('bt-cooldown', p.cooldown_days);
+                setLevels('buy', p.avg_down_levels);
+                setLevels('sell', p.sell_levels);
+                if ('reset_requires_recovery' in p) {
+                    recoveryToggle.checked = !!p.reset_requires_recovery;
+                    syncRecoveryInput();
+                }
+                if (p.recovery_rsi != null) recoveryRsi.value = p.recovery_rsi;
+            };
+            fetch('/api/strategies')
+                .then(r => r.ok ? r.json() : { strategies: [] })
+                .then(data => {
+                    for (const cfg of (data.strategies || [])) {
+                        presetConfigs[cfg.name] = cfg;
+                        const opt = document.createElement('option');
+                        opt.value = cfg.name;
+                        opt.textContent = cfg.name;
+                        presetSelect.appendChild(opt);
+                    }
+                })
+                .catch(() => {});
+            presetSelect.addEventListener('change', () => {
+                const cfg = presetConfigs[presetSelect.value];
+                if (cfg) applyStrategyPreset(cfg);
             });
 
             const colors = {
