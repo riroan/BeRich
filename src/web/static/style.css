@@ -260,7 +260,7 @@ body {
 .page-dots { color: var(--dim); padding: 0 4px; }
 
 /* Symbols page */
-.sym-add-form { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.sym-add-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
 .form-field {
     display: flex;
     flex: 1;
@@ -1369,7 +1369,7 @@ select option { background: var(--surface); color: var(--text); }
     .alloc-wrap { flex-direction: column; gap: 16px; }
 
     /* Symbols page */
-    .sym-add-form { flex-direction: column; gap: 8px; }
+    .sym-add-form { flex-direction: column; gap: 8px; align-items: center; }
     .sym-add-form .form-field { width: 100%; min-width: unset; }
     .sym-add-form input, .sym-add-form select { width: 100%; min-width: unset; }
 
