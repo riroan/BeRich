@@ -1130,6 +1130,9 @@ select option { background: var(--surface); color: var(--text); }
         gap: 6px;
         border-bottom: none;
     }
+    /* Keep the [hidden] attribute working: the display:grid above otherwise
+       overrides the UA [hidden]{display:none}, breaking JS filtering/pagination. */
+    .mobile-cards tbody tr[hidden] { display: none; }
     .mobile-cards tbody tr:hover { background: var(--card); }
     .mobile-cards td {
         padding: 4px 0;
