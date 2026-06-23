@@ -1425,7 +1425,7 @@ select option { background: var(--surface); color: var(--text); }
 
     /* Pills & buttons */
     .pill { padding: 4px 8px; font-size: 10px; }
-    .pause-btn { min-height: 44px; padding: 0 14px; font-size: 12px; }
+    .pause-btn { padding: 4px 8px; font-size: 10px; }
     .ws-status { padding: 4px 8px; font-size: 10px; }
 
     /* Strategy tabs: horizontal scroll */
