@@ -1075,7 +1075,7 @@ select option { background: var(--surface); color: var(--text); }
         left: 0;
         right: 0;
         background: var(--surface);
-        padding: calc(60px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) 16px calc(16px + env(safe-area-inset-left));
+        padding: calc(60px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
         z-index: 100;
         max-height: 0;
         overflow: hidden;
@@ -1098,7 +1098,9 @@ select option { background: var(--surface); color: var(--text); }
     }
     .nav.open {
         display: flex;
-        max-height: 500px;
+        max-height: 100vh;
+        max-height: 100dvh;
+        overflow-y: auto;
         transition: max-height 0.3s ease-in;
     }
     .nav a, .nav-link {
@@ -1109,7 +1111,12 @@ select option { background: var(--surface); color: var(--text); }
         flex-shrink: 0;
     }
     .nav-secondary .logout-btn { margin-left: 0; }
-    .logout-btn { margin-top: 4px; color: var(--red); }
+    .logout-btn {
+        margin-top: 8px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border);
+        color: var(--red);
+    }
 
     /* Card conversion: table → cards */
     .mobile-cards thead { display: none; }
