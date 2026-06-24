@@ -229,6 +229,7 @@ class TestCurrentPositions:
                     "avg_price": 100,
                     "buy_stage": 1,
                     "sell_stage": 2,
+                    "stage_cooldown_days": 7,
                     "last_buy_date": "2026-06-20T09:30:00",
                     "last_sell_date": "2026-06-21T10:45:00",
                     "stop_loss_pct": -8,
@@ -255,6 +256,7 @@ class TestCurrentPositions:
         assert positions[0]["rsi"] == 42.5
         assert positions[0]["buy_stage"] == 1
         assert positions[0]["sell_stage"] == 2
+        assert positions[0]["stage_cooldown_days"] == 7
         assert positions[0]["last_buy_date"] == "2026-06-20T09:30:00"
         assert positions[0]["last_sell_date"] == "2026-06-21T10:45:00"
 

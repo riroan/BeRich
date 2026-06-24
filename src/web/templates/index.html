@@ -69,10 +69,27 @@
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
                             <td data-label="RSI" class="{% if pos.rsi %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi else '-' }}</td>
                             <td data-label="Stage">
-                                <div class="stage-bar">
-                                    {% for i in range(pos.max_buy_stages) %}
-                                    <span class="stage-dot {{ 'filled' if i < pos.buy_stage else '' }}"></span>
-                                    {% endfor %}
+                                <div class="stage-stack">
+                                    <div class="stage-line">
+                                        <span class="stage-kind">B</span>
+                                        <span class="stage-count">{{ pos.buy_stage }}/{{ pos.max_buy_stages }}</span>
+                                        <div class="stage-bar">
+                                            {% for i in range(pos.max_buy_stages) %}
+                                            <span class="stage-dot {{ 'filled' if i < pos.buy_stage else '' }}"></span>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="stage-reset">{{ pos.buy_stage_reset_remaining or '-' }}</span>
+                                    </div>
+                                    <div class="stage-line sell">
+                                        <span class="stage-kind">S</span>
+                                        <span class="stage-count">{{ pos.sell_stage }}/{{ pos.max_sell_stages }}</span>
+                                        <div class="stage-bar">
+                                            {% for i in range(pos.max_sell_stages) %}
+                                            <span class="stage-dot {{ 'filled' if i < pos.sell_stage else '' }}"></span>
+                                            {% endfor %}
+                                        </div>
+                                        <span class="stage-reset">{{ pos.sell_stage_reset_remaining or '-' }}</span>
+                                    </div>
                                 </div>
                             </td>
                         </tr>

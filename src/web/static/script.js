@@ -161,18 +161,41 @@ class DashboardWebSocket {
                     <td data-label="RSI" class="${this.getRSIClass(pos.rsi)}">
                         ${pos.rsi ? pos.rsi.toFixed(1) : '-'}
                     </td>
-                    <td data-label="Stage">
-                        <div class="stage-bar">
-                            ${Array.from({length: pos.max_buy_stages || 3}, (_, i) =>
-                                `<span class="stage-dot ${i < (pos.buy_stage || 0) ? 'filled' : ''}"></span>`
-                            ).join('')}
-                        </div>
-                    </td>
+                    <td data-label="Stage">${this.renderStageCell(pos)}</td>
                 </tr>
             `;
         }).join('');
 
         this.sortPositions();
+    }
+
+    renderStageCell(pos) {
+        const buyStage = pos.buy_stage || 0;
+        const sellStage = pos.sell_stage || 0;
+        const maxBuy = pos.max_buy_stages || 3;
+        const maxSell = pos.max_sell_stages || 3;
+        const buyReset = this.escapeHTML(pos.buy_stage_reset_remaining || '-');
+        const sellReset = this.escapeHTML(pos.sell_stage_reset_remaining || '-');
+        const dots = (stage, max) => Array.from({length: max}, (_, i) =>
+            `<span class="stage-dot ${i < stage ? 'filled' : ''}"></span>`
+        ).join('');
+
+        return `
+            <div class="stage-stack">
+                <div class="stage-line">
+                    <span class="stage-kind">B</span>
+                    <span class="stage-count">${buyStage}/${maxBuy}</span>
+                    <div class="stage-bar">${dots(buyStage, maxBuy)}</div>
+                    <span class="stage-reset">${buyReset}</span>
+                </div>
+                <div class="stage-line sell">
+                    <span class="stage-kind">S</span>
+                    <span class="stage-count">${sellStage}/${maxSell}</span>
+                    <div class="stage-bar">${dots(sellStage, maxSell)}</div>
+                    <span class="stage-reset">${sellReset}</span>
+                </div>
+            </div>
+        `;
     }
 
     sortPositions() {

@@ -69,10 +69,12 @@ class TestDashboardPositionRecords:
                 "pnl_pct": 10,
                 "rsi": 42.5,
                 "buy_stage": 1,
-                "sell_stage": 0,
+                "sell_stage": 2,
                 "max_buy_stages": 3,
                 "max_sell_stages": 3,
-                "last_buy_date": "01-02 03:04",
+                "stage_cooldown_days": 7,
+                "last_buy_date": "2026-06-20T09:30:00",
+                "last_sell_date": "2026-06-21T10:45:00",
                 "stop_loss_pct": -8,
                 "stop_loss_distance": 18,
             },
@@ -80,5 +82,7 @@ class TestDashboardPositionRecords:
 
         assert state.positions["AAPL"].current_price == 110
         assert state.positions["AAPL"].market == "NASDAQ"
+        assert state.positions["AAPL"].buy_stage_reset_remaining
+        assert state.positions["AAPL"].sell_stage_reset_remaining
         assert state.rsi_values["AAPL"] == 42.5
         assert state.rsi_prices["AAPL"] == {"price": 110, "market": "NASDAQ"}

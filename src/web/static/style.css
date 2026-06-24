@@ -81,6 +81,15 @@ body {
     color: var(--white);
     margin-left: 12px;
 }
+.brand-link {
+    color: inherit;
+    text-decoration: none;
+    cursor: pointer;
+}
+.brand-link:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 4px;
+}
 .header h1 span { color: var(--blue); }
 .header-right {
     display: flex;
@@ -511,6 +520,13 @@ tr:hover { background: rgba(59,130,246,0.04); }
 .stage-bar, .stage-indicator { display: flex; gap: 3px; align-items: center; }
 .stage-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--card); }
 .stage-dot.filled { background: var(--blue); }
+.stage-stack { display: inline-flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 132px; }
+.stage-line { display: grid; grid-template-columns: 12px 28px 34px 1fr; gap: 5px; align-items: center; font-size: 10px; color: var(--muted); line-height: 1; }
+.stage-kind { font-weight: 700; color: var(--blue); }
+.stage-line.sell .stage-kind { color: var(--red); }
+.stage-line.sell .stage-dot.filled { background: var(--red); }
+.stage-count { color: var(--text); font-variant-numeric: tabular-nums; }
+.stage-reset { min-width: 44px; text-align: left; font-variant-numeric: tabular-nums; color: var(--muted); }
 
 /* ===================== RSI Grid ===================== */
 .rsi-grid {
@@ -731,6 +747,7 @@ tr:hover { background: rgba(59,130,246,0.04); }
 }
 .center-table .sym-badge { display: inline; }
 .center-table .stage-bar { justify-content: center; }
+.center-table .stage-stack { margin: 0 auto; }
 
 /* ===================== Positions Table (Index) ===================== */
 .portfolio-summary { margin-bottom: 4px; }
@@ -1219,8 +1236,8 @@ select option { background: var(--surface); color: var(--text); }
     #positions-table td[data-label="Stage"]::before {
         display: block;
     }
-    #positions-table td[data-label="Stage"] .stage-bar {
-        justify-content: center;
+    #positions-table td[data-label="Stage"] .stage-stack {
+        margin: 0 auto;
     }
 
     /* Trades: dense log cards for mobile scanning */

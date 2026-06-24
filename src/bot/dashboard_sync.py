@@ -168,6 +168,9 @@ class DashboardSyncMixin:
                                 "sell_levels", [(70, 0.3), (75, 0.4), (80, 0.5)]
                             )
                         ),
+                        "stage_cooldown_days": int(
+                            strategy.params.get("cooldown_days", 1)
+                        ),
                         "last_buy_time": strategy._last_buy_time.get(symbol),
                         "last_sell_time": getattr(
                             strategy, "_last_sell_time", {},
@@ -222,6 +225,7 @@ class DashboardSyncMixin:
                     "sell_stage": state.get("sell_stage", 0),
                     "max_buy_stages": state.get("max_buy_stages", 3),
                     "max_sell_stages": state.get("max_sell_stages", 3),
+                    "stage_cooldown_days": state.get("stage_cooldown_days", 0),
                     "last_buy_date": last_buy_date,
                     "last_sell_date": last_sell_date,
                     "stop_loss_pct": stop_loss_pct,

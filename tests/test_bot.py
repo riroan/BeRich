@@ -313,6 +313,7 @@ class TestDashboardSyncMixin:
         mock_strategy._buy_stages = {"AAPL": 1}
         mock_strategy._sell_stages = {"AAPL": 0}
         mock_strategy._last_buy_time = {}
+        mock_strategy._last_sell_time = {}
         mock_strategy.params = {}
 
         mock_engine = MagicMock()
@@ -323,6 +324,7 @@ class TestDashboardSyncMixin:
 
         assert "AAPL" in states
         assert states["AAPL"]["buy_stage"] == 1
+        assert states["AAPL"]["stage_cooldown_days"] == 1
 
     def test_restore_strategy_stage_state_from_positions(self, bot_with_dashboard):
         """DB-backed current positions restore only strategy stage counters."""

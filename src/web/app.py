@@ -93,8 +93,11 @@ class PositionInfo(BaseModel):
     sell_stage: int = 0
     max_buy_stages: int = 3
     max_sell_stages: int = 3
+    stage_cooldown_days: int = 0
     last_buy_date: str | None = None
     last_sell_date: str | None = None
+    buy_stage_reset_remaining: str | None = None
+    sell_stage_reset_remaining: str | None = None
     stop_loss_pct: float = -10.0
     stop_loss_distance: float = 0.0  # how far from stop loss
 
@@ -305,6 +308,7 @@ class DashboardState:
         sell_stage: int = 0,
         max_buy_stages: int = 3,
         max_sell_stages: int = 3,
+        stage_cooldown_days: int = 0,
         last_buy_date: str | None = None,
         last_sell_date: str | None = None,
         stop_loss_pct: float = -10.0,
@@ -326,12 +330,48 @@ class DashboardState:
             sell_stage=sell_stage,
             max_buy_stages=max_buy_stages,
             max_sell_stages=max_sell_stages,
+            stage_cooldown_days=stage_cooldown_days,
             last_buy_date=last_buy_date,
             last_sell_date=last_sell_date,
+            buy_stage_reset_remaining=self._stage_reset_remaining(
+                buy_stage, last_buy_date, stage_cooldown_days,
+            ),
+            sell_stage_reset_remaining=self._stage_reset_remaining(
+                sell_stage, last_sell_date, stage_cooldown_days,
+            ),
             stop_loss_pct=stop_loss_pct,
             stop_loss_distance=stop_loss_distance,
         )
         self.last_update = datetime.now()
+
+    @staticmethod
+    def _stage_reset_remaining(
+        stage: int,
+        last_date: str | None,
+        cooldown_days: int,
+    ) -> str | None:
+        if stage <= 0:
+            return None
+        if not last_date or cooldown_days <= 0:
+            return "Ready"
+        try:
+            started = datetime.fromisoformat(last_date.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+
+        now = datetime.now(started.tzinfo) if started.tzinfo else datetime.now()
+        remaining = started + timedelta(days=cooldown_days) - now
+        if remaining.total_seconds() <= 0:
+            return "Ready"
+
+        total_minutes = int((remaining.total_seconds() + 59) // 60)
+        days, minutes = divmod(total_minutes, 24 * 60)
+        hours, minutes = divmod(minutes, 60)
+        if days > 0:
+            return f"{days}d {hours}h"
+        if hours > 0:
+            return f"{hours}h {minutes}m"
+        return f"{minutes}m"
 
     @staticmethod
     def _position_from_record(record: dict[str, Any] | PositionInfo) -> PositionInfo:
@@ -354,6 +394,11 @@ class DashboardState:
             )
         )
         stop_loss_pct = float(record.get("stop_loss_pct", -10.0))
+        buy_stage = int(record.get("buy_stage", 0))
+        sell_stage = int(record.get("sell_stage", 0))
+        stage_cooldown_days = int(record.get("stage_cooldown_days", 0))
+        last_buy_date = record.get("last_buy_date")
+        last_sell_date = record.get("last_sell_date")
 
         return PositionInfo(
             symbol=str(record["symbol"]).upper(),
@@ -367,12 +412,19 @@ class DashboardState:
                 float(record["rsi"])
                 if record.get("rsi") is not None else None
             ),
-            buy_stage=int(record.get("buy_stage", 0)),
-            sell_stage=int(record.get("sell_stage", 0)),
+            buy_stage=buy_stage,
+            sell_stage=sell_stage,
             max_buy_stages=int(record.get("max_buy_stages", 3)),
             max_sell_stages=int(record.get("max_sell_stages", 3)),
-            last_buy_date=record.get("last_buy_date"),
-            last_sell_date=record.get("last_sell_date"),
+            stage_cooldown_days=stage_cooldown_days,
+            last_buy_date=last_buy_date,
+            last_sell_date=last_sell_date,
+            buy_stage_reset_remaining=DashboardState._stage_reset_remaining(
+                buy_stage, last_buy_date, stage_cooldown_days,
+            ),
+            sell_stage_reset_remaining=DashboardState._stage_reset_remaining(
+                sell_stage, last_sell_date, stage_cooldown_days,
+            ),
             stop_loss_pct=stop_loss_pct,
             stop_loss_distance=float(
                 record.get("stop_loss_distance", pnl_pct - stop_loss_pct)

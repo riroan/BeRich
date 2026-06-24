@@ -97,6 +97,7 @@ class CurrentPositionModel(Base):
     sell_stage = Column(Integer, nullable=False, default=0)
     max_buy_stages = Column(Integer, nullable=False, default=3)
     max_sell_stages = Column(Integer, nullable=False, default=3)
+    stage_cooldown_days = Column(Integer, nullable=False, default=0)
     last_buy_date = Column(String(20))
     last_sell_date = Column(String(20))
     stop_loss_pct = Column(Numeric(10, 4), nullable=False, default=-10.0)

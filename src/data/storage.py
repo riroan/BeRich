@@ -84,6 +84,15 @@ class Storage:
                     logger.info(
                         "Migrated: added last_sell_date column to current_positions"
                     )
+                    cols.add("last_sell_date")
+                if "stage_cooldown_days" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE current_positions "
+                        "ADD COLUMN stage_cooldown_days INTEGER NOT NULL DEFAULT 0"
+                    ))
+                    logger.info(
+                        "Migrated: added stage_cooldown_days column to current_positions"
+                    )
 
             if "equity_snapshots" in insp.get_table_names():
                 cols = {c["name"] for c in insp.get_columns("equity_snapshots")}
@@ -465,6 +474,9 @@ class Storage:
                     "sell_stage": int(position.get("sell_stage", 0)),
                     "max_buy_stages": int(position.get("max_buy_stages", 3)),
                     "max_sell_stages": int(position.get("max_sell_stages", 3)),
+                    "stage_cooldown_days": int(
+                        position.get("stage_cooldown_days", 0)
+                    ),
                     "last_buy_date": position.get("last_buy_date"),
                     "last_sell_date": position.get("last_sell_date"),
                     "stop_loss_pct": Decimal(str(
@@ -492,6 +504,7 @@ class Storage:
                         item["sell_stage"],
                         item["max_buy_stages"],
                         item["max_sell_stages"],
+                        item["stage_cooldown_days"],
                         item["last_buy_date"],
                         item["last_sell_date"],
                         item["stop_loss_pct"],
@@ -504,6 +517,7 @@ class Storage:
                     item.sell_stage,
                     item.max_buy_stages,
                     item.max_sell_stages,
+                    item.stage_cooldown_days,
                     item.last_buy_date,
                     item.last_sell_date,
                     Decimal(str(item.stop_loss_pct)),
@@ -531,6 +545,7 @@ class Storage:
                     sell_stage=position["sell_stage"],
                     max_buy_stages=position["max_buy_stages"],
                     max_sell_stages=position["max_sell_stages"],
+                    stage_cooldown_days=position["stage_cooldown_days"],
                     last_buy_date=position["last_buy_date"],
                     last_sell_date=position["last_sell_date"],
                     stop_loss_pct=position["stop_loss_pct"],
@@ -604,6 +619,7 @@ class Storage:
                     "sell_stage": row.sell_stage,
                     "max_buy_stages": row.max_buy_stages,
                     "max_sell_stages": row.max_sell_stages,
+                    "stage_cooldown_days": row.stage_cooldown_days,
                     "last_buy_date": row.last_buy_date,
                     "last_sell_date": row.last_sell_date,
                     "stop_loss_pct": float(stop_loss_pct),
