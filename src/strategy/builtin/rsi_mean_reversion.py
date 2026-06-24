@@ -4,7 +4,7 @@ RSI Mean Reversion Strategy (Daily RSI)
 Rules:
 - Buy: Daily RSI <= 30 (oversold), with averaging down
 - Sell: Daily RSI >= 65/70/75 (staged selling) OR Stop Loss -10%
-- Reset stages after cooldown period
+- Repeat current stages after cooldown period
 
 Note: RSI is calculated from daily bars, not intraday data.
 Current price updates today's daily close for real-time RSI estimation.
@@ -32,8 +32,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._buy_stages: dict[str, int] = {}
         # Track sell stages (how many times we've sold)
         self._sell_stages: dict[str, int] = {}
-        # Track last buy time for cooldown reset
+        # Track last buy time for buy-stage repetition cooldown
         self._last_buy_time: dict[str, datetime] = {}
+        # Track last staged sell time for sell-stage repetition cooldown
+        self._last_sell_time: dict[str, datetime] = {}
         # CONFIRMED regular-session daily bars (immutable base for RSI)
         self._daily_bars: dict[str, pd.DataFrame] = {}
         # Live/forming price — updated every tick in ALL sessions; layered
@@ -203,18 +205,15 @@ class RSIMeanReversionStrategy(BaseStrategy):
         current_buy_stage = self._buy_stages.get(symbol, 0)
         current_sell_stage = self._sell_stages.get(symbol, 0)
 
-        # Check cooldown reset for buy stages.
-        # C' (confirmed 2026-06-18): cooldown elapsed is the ONLY gate —
-        # the "RSI must recover to >= 50" condition was removed. After a
-        # stop-loss, once cooldown_days pass a fresh cycle may start even
-        # while still oversold (mean-reversion "bottom-fishing").
+        buy_repeat_ready = False
         if symbol in self._last_buy_time:
             time_since_last_buy = datetime.now() - self._last_buy_time[symbol]
-            if time_since_last_buy >= timedelta(days=cooldown_days):
-                self._buy_stages[symbol] = 0
-                self._sell_stages[symbol] = 0
-                current_buy_stage = 0
-                logger.info(f"[{symbol}] Buy/sell stages reset (cooldown)")
+            buy_repeat_ready = time_since_last_buy >= timedelta(days=cooldown_days)
+
+        sell_repeat_ready = False
+        if current_position > 0 and symbol in self._last_sell_time:
+            time_since_last_sell = datetime.now() - self._last_sell_time[symbol]
+            sell_repeat_ready = time_since_last_sell >= timedelta(days=cooldown_days)
 
         # Check stop loss first (if in position)
         if current_position > 0 and symbol in self._entry_prices:
@@ -248,14 +247,30 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     },
                 )
 
-        # Staged selling: Check each sell level
+        # Staged selling: progress to the next stage immediately when its
+        # threshold is hit. Cooldown repeats the current stage, except after
+        # the final stage where it restarts the ladder at stage 1.
         if current_position > 0:
-            next_sell_threshold = None
-            for stage, (rsi_threshold, portion) in enumerate(sell_levels):
-                if current_sell_stage > stage:
-                    continue
-                next_sell_threshold = rsi_threshold
-                break
+            sell_stage_idx = None
+            next_sell_threshold = (
+                sell_levels[current_sell_stage][0]
+                if current_sell_stage < len(sell_levels)
+                else None
+            )
+
+            if (
+                current_sell_stage < len(sell_levels)
+                and current_rsi >= sell_levels[current_sell_stage][0]
+            ):
+                sell_stage_idx = current_sell_stage
+            elif current_sell_stage > 0 and sell_repeat_ready:
+                repeat_idx = (
+                    0 if current_sell_stage >= len(sell_levels)
+                    else current_sell_stage - 1
+                )
+                next_sell_threshold = sell_levels[repeat_idx][0]
+                if current_rsi >= next_sell_threshold:
+                    sell_stage_idx = repeat_idx
 
             avg_price = self._entry_prices.get(symbol, current_price)
             pnl_pct = float(
@@ -268,57 +283,68 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 f"Stage: {current_sell_stage}/{len(sell_levels)} | PnL: {pnl_pct:.1f}%"
             )
 
-            for stage, (rsi_threshold, portion) in enumerate(sell_levels):
-                # Skip if already sold at this stage
-                if current_sell_stage > stage:
-                    continue
+            if sell_stage_idx is not None:
+                rsi_threshold, portion = sell_levels[sell_stage_idx]
+                avg_price = self._entry_prices.get(symbol, current_price)
+                pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
-                # Check if RSI is above threshold
-                if current_rsi >= rsi_threshold:
-                    avg_price = self._entry_prices.get(symbol, current_price)
-                    pnl_pct = float((current_price - avg_price) / avg_price * 100)
+                # Check if this is the last sell stage
+                is_final_sell = (sell_stage_idx + 1) >= len(sell_levels)
 
-                    # Check if this is the last sell stage
-                    is_final_sell = (stage + 1) >= len(sell_levels)
+                # Calculate PnL for the sold portion
+                sell_qty = int(current_position * Decimal(str(portion)))
+                pnl = (current_price - avg_price) * sell_qty
 
-                    # Calculate PnL for the sold portion
-                    sell_qty = int(current_position * Decimal(str(portion)))
-                    pnl = (current_price - avg_price) * sell_qty
+                logger.info(
+                    f"[{symbol}] *** SELL SIGNAL GENERATED *** | "
+                    f"RSI: {current_rsi:.1f} >= {rsi_threshold} | "
+                    f"Stage {sell_stage_idx + 1}/{len(sell_levels)} | "
+                    f"Portion: {portion*100:.0f}% | PnL: {pnl_pct:.1f}%"
+                )
 
-                    logger.info(
-                        f"[{symbol}] *** SELL SIGNAL GENERATED *** | "
-                        f"RSI: {current_rsi:.1f} >= {rsi_threshold} | "
-                        f"Stage {stage + 1}/{len(sell_levels)} | "
-                        f"Portion: {portion*100:.0f}% | PnL: {pnl_pct:.1f}%"
-                    )
+                # Stage advance + final-exit reset moved to on_fill
+                # (target stage carried in metadata["stage"]).
+                return Signal(
+                    signal_type=SignalType.EXIT_LONG,
+                    symbol=symbol,
+                    market=self.market,
+                    strength=portion,  # Portion to sell
+                    metadata={
+                        "rsi": float(current_rsi),
+                        "reason": f"staged_sell_{sell_stage_idx + 1}",
+                        "pnl": pnl,
+                        "pnl_pct": pnl_pct,
+                        "avg_price": float(avg_price),
+                        "sell_portion": portion,
+                        "stage": sell_stage_idx + 1,
+                        "total_stages": len(sell_levels),
+                        "is_final": is_final_sell,
+                    },
+                )
 
-                    # Stage advance + final-exit reset moved to on_fill
-                    # (target stage carried in metadata["stage"]).
-                    return Signal(
-                        signal_type=SignalType.EXIT_LONG,
-                        symbol=symbol,
-                        market=self.market,
-                        strength=portion,  # Portion to sell
-                        metadata={
-                            "rsi": float(current_rsi),
-                            "reason": f"staged_sell_{stage + 1}",
-                            "pnl": pnl,
-                            "pnl_pct": pnl_pct,
-                            "avg_price": float(avg_price),
-                            "sell_portion": portion,
-                            "stage": stage + 1,
-                            "total_stages": len(sell_levels),
-                            "is_final": is_final_sell,
-                        },
-                    )
+        # Buy signals: progress to the next stage immediately when its
+        # threshold is hit. Cooldown repeats the current stage, except after
+        # the final stage where it restarts the ladder at stage 1.
+        buy_stage_idx = None
+        next_buy_threshold = (
+            avg_down_levels[current_buy_stage][0]
+            if current_buy_stage < len(avg_down_levels)
+            else None
+        )
 
-        # Buy signals: Check each averaging down level
-        next_buy_threshold = None
-        for stage, (rsi_threshold, portion) in enumerate(avg_down_levels):
-            if current_buy_stage > stage:
-                continue
-            next_buy_threshold = rsi_threshold
-            break
+        if (
+            current_buy_stage < len(avg_down_levels)
+            and current_rsi <= avg_down_levels[current_buy_stage][0]
+        ):
+            buy_stage_idx = current_buy_stage
+        elif current_buy_stage > 0 and buy_repeat_ready:
+            repeat_idx = (
+                0 if current_buy_stage >= len(avg_down_levels)
+                else current_buy_stage - 1
+            )
+            next_buy_threshold = avg_down_levels[repeat_idx][0]
+            if current_rsi <= next_buy_threshold:
+                buy_stage_idx = repeat_idx
 
         # Log buy condition check
         logger.info(
@@ -327,44 +353,41 @@ class RSIMeanReversionStrategy(BaseStrategy):
             f"Stage: {current_buy_stage}/{len(avg_down_levels)} | Pos: {current_position}"
         )
 
-        for stage, (rsi_threshold, portion) in enumerate(avg_down_levels):
-            if current_buy_stage > stage:
-                continue
+        if buy_stage_idx is not None:
+            rsi_threshold, portion = avg_down_levels[buy_stage_idx]
+            # Stage advance and last-buy time both move to on_fill
+            # (target stage carried in metadata["stage"]).
+            # Counters now reflect ACTUAL fills, so an unfilled order
+            # leaves the stage retryable next tick (in-flight guard in
+            # the order manager prevents duplicate orders meanwhile).
 
-            if current_rsi <= rsi_threshold:
-                # Stage advance, last-buy time, and sell-stage reset all
-                # move to on_fill (target stage carried in metadata["stage"]).
-                # Counters now reflect ACTUAL fills, so an unfilled order
-                # leaves the stage retryable next tick (in-flight guard in
-                # the order manager prevents duplicate orders meanwhile).
+            # FIX-007: Don't set entry price on signal generation
+            # Entry price is set ONLY via on_fill() or sync_position()
+            # to ensure it reflects actual fill price, not signal price
 
-                # FIX-007: Don't set entry price on signal generation
-                # Entry price is set ONLY via on_fill() or sync_position()
-                # to ensure it reflects actual fill price, not signal price
+            logger.info(
+                f"[{symbol}] *** BUY SIGNAL GENERATED *** | "
+                f"RSI: {current_rsi:.1f} <= {rsi_threshold} | "
+                f"Stage {buy_stage_idx + 1}/{len(avg_down_levels)} | "
+                f"Portion: {portion*100:.0f}% | Price: {current_price:,}"
+            )
 
-                logger.info(
-                    f"[{symbol}] *** BUY SIGNAL GENERATED *** | "
-                    f"RSI: {current_rsi:.1f} <= {rsi_threshold} | "
-                    f"Stage {stage + 1}/{len(avg_down_levels)} | "
-                    f"Portion: {portion*100:.0f}% | Price: {current_price:,}"
-                )
-
-                return Signal(
-                    signal_type=SignalType.ENTRY_LONG,
-                    symbol=symbol,
-                    market=self.market,
-                    strength=portion,
-                    target_price=current_price * Decimal("1.10"),
-                    stop_loss=current_price * Decimal(str(1 + stop_loss_pct / 100)),
-                    metadata={
-                        "rsi": float(current_rsi),
-                        "reason": f"avg_down_stage_{stage + 1}",
-                        "entry_price": float(current_price),
-                        "avg_price": float(self._entry_prices.get(symbol, current_price)),
-                        "stage": stage + 1,
-                        "total_stages": len(avg_down_levels),
-                    },
-                )
+            return Signal(
+                signal_type=SignalType.ENTRY_LONG,
+                symbol=symbol,
+                market=self.market,
+                strength=portion,
+                target_price=current_price * Decimal("1.10"),
+                stop_loss=current_price * Decimal(str(1 + stop_loss_pct / 100)),
+                metadata={
+                    "rsi": float(current_rsi),
+                    "reason": f"avg_down_stage_{buy_stage_idx + 1}",
+                    "entry_price": float(current_price),
+                    "avg_price": float(self._entry_prices.get(symbol, current_price)),
+                    "stage": buy_stage_idx + 1,
+                    "total_stages": len(avg_down_levels),
+                },
+            )
 
         return None
 
@@ -407,6 +430,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._sell_stages[symbol]
         if symbol in self._last_buy_time:
             del self._last_buy_time[symbol]
+        if symbol in self._last_sell_time:
+            del self._last_sell_time[symbol]
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI indicator using Wilder's smoothing method"""
@@ -466,7 +491,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
             if target_stage is not None:
                 self._buy_stages[symbol] = target_stage
             self._last_buy_time[symbol] = datetime.now()
-            self._sell_stages[symbol] = 0
+            if old_qty <= 0:
+                self._sell_stages[symbol] = 0
 
         await super().on_fill(fill)  # updates _positions
 
@@ -474,14 +500,15 @@ class RSIMeanReversionStrategy(BaseStrategy):
             # Staged-sell counter advances on the fill.
             if reason != "stop_loss" and target_stage is not None:
                 self._sell_stages[symbol] = target_stage
+                self._last_sell_time[symbol] = datetime.now()
 
             # Position-closing exits reset all tracking. A stop-loss is a
             # full exit — reset only once the position is actually flat
-            # (a partial stop-loss fill must not wipe state). A final
-            # staged sell intentionally keeps a residual, so it resets on
-            # the fill to restart the cycle on the remaining shares.
+            # (a partial stop-loss fill must not wipe state). Staged sells
+            # keep their counter until the sell cooldown resets it; if a
+            # staged sell fully flattens the position, reset immediately.
             if reason == "stop_loss":
                 if self.get_position(symbol) <= 0:
                     self._reset_position(symbol)
-            elif meta.get("is_final"):
+            elif self.get_position(symbol) <= 0:
                 self._reset_position(symbol)

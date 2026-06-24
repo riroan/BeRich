@@ -169,6 +169,9 @@ class DashboardSyncMixin:
                             )
                         ),
                         "last_buy_time": strategy._last_buy_time.get(symbol),
+                        "last_sell_time": getattr(
+                            strategy, "_last_sell_time", {},
+                        ).get(symbol),
                         "stop_loss_pct": strategy.params.get("stop_loss", -10),
                     }
         return strategy_states
@@ -185,7 +188,14 @@ class DashboardSyncMixin:
                 state = strategy_states.get(pos.symbol, {})
                 last_buy_date = None
                 if state.get("last_buy_time"):
-                    last_buy_date = f"{state['last_buy_time']:%m-%d %H:%M}"
+                    last_buy_date = state["last_buy_time"].isoformat(
+                        timespec="seconds"
+                    )
+                last_sell_date = None
+                if state.get("last_sell_time"):
+                    last_sell_date = state["last_sell_time"].isoformat(
+                        timespec="seconds"
+                    )
 
                 pnl_pct = 0
                 if pos.avg_entry_price > 0:
@@ -213,6 +223,7 @@ class DashboardSyncMixin:
                     "max_buy_stages": state.get("max_buy_stages", 3),
                     "max_sell_stages": state.get("max_sell_stages", 3),
                     "last_buy_date": last_buy_date,
+                    "last_sell_date": last_sell_date,
                     "stop_loss_pct": stop_loss_pct,
                     "stop_loss_distance": pnl_pct - stop_loss_pct,
                 })

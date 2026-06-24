@@ -76,6 +76,14 @@ class Storage:
                     logger.info(
                         "Migrated: recreated current_positions with holding-only schema"
                     )
+                elif "last_sell_date" not in cols:
+                    sync_conn.execute(text(
+                        "ALTER TABLE current_positions "
+                        "ADD COLUMN last_sell_date VARCHAR(20)"
+                    ))
+                    logger.info(
+                        "Migrated: added last_sell_date column to current_positions"
+                    )
 
             if "equity_snapshots" in insp.get_table_names():
                 cols = {c["name"] for c in insp.get_columns("equity_snapshots")}
@@ -458,6 +466,7 @@ class Storage:
                     "max_buy_stages": int(position.get("max_buy_stages", 3)),
                     "max_sell_stages": int(position.get("max_sell_stages", 3)),
                     "last_buy_date": position.get("last_buy_date"),
+                    "last_sell_date": position.get("last_sell_date"),
                     "stop_loss_pct": Decimal(str(
                         position.get("stop_loss_pct", -10.0),
                     )),
@@ -484,6 +493,7 @@ class Storage:
                         item["max_buy_stages"],
                         item["max_sell_stages"],
                         item["last_buy_date"],
+                        item["last_sell_date"],
                         item["stop_loss_pct"],
                     )
                 return (
@@ -495,6 +505,7 @@ class Storage:
                     item.max_buy_stages,
                     item.max_sell_stages,
                     item.last_buy_date,
+                    item.last_sell_date,
                     Decimal(str(item.stop_loss_pct)),
                 )
 
@@ -521,6 +532,7 @@ class Storage:
                     max_buy_stages=position["max_buy_stages"],
                     max_sell_stages=position["max_sell_stages"],
                     last_buy_date=position["last_buy_date"],
+                    last_sell_date=position["last_sell_date"],
                     stop_loss_pct=position["stop_loss_pct"],
                     updated_at=now,
                 ))
@@ -593,6 +605,7 @@ class Storage:
                     "max_buy_stages": row.max_buy_stages,
                     "max_sell_stages": row.max_sell_stages,
                     "last_buy_date": row.last_buy_date,
+                    "last_sell_date": row.last_sell_date,
                     "stop_loss_pct": float(stop_loss_pct),
                     "stop_loss_distance": float(stop_loss_distance),
                     "updated_at": (

@@ -333,6 +333,8 @@ class TestDashboardSyncMixin:
         db_position.quantity = 1
         db_position.buy_stage = 2
         db_position.sell_stage = 1
+        db_position.last_buy_date = "2026-06-20T09:30:00"
+        db_position.last_sell_date = "2026-06-21T10:45:00"
         bot.dashboard.positions = {"AAPL": db_position}
 
         mock_strategy = MagicMock()
@@ -342,6 +344,8 @@ class TestDashboardSyncMixin:
         mock_strategy._entry_prices = {"AAPL": Decimal("120")}
         mock_strategy._buy_stages = {"AAPL": 1}
         mock_strategy._sell_stages = {"AAPL": 0}
+        mock_strategy._last_buy_time = {}
+        mock_strategy._last_sell_time = {}
 
         mock_engine = MagicMock()
         mock_engine.get_strategies.return_value = [mock_strategy]
@@ -351,6 +355,14 @@ class TestDashboardSyncMixin:
 
         assert mock_strategy._buy_stages["AAPL"] == 2
         assert mock_strategy._sell_stages["AAPL"] == 1
+        assert (
+            mock_strategy._last_buy_time["AAPL"].isoformat()
+            == "2026-06-20T09:30:00"
+        )
+        assert (
+            mock_strategy._last_sell_time["AAPL"].isoformat()
+            == "2026-06-21T10:45:00"
+        )
         assert mock_strategy._positions["AAPL"] == 2
         assert mock_strategy._entry_prices["AAPL"] == Decimal("120")
 

@@ -228,6 +228,9 @@ class TestCurrentPositions:
                     "quantity": 2,
                     "avg_price": 100,
                     "buy_stage": 1,
+                    "sell_stage": 2,
+                    "last_buy_date": "2026-06-20T09:30:00",
+                    "last_sell_date": "2026-06-21T10:45:00",
                     "stop_loss_pct": -8,
                 },
             ],
@@ -251,6 +254,9 @@ class TestCurrentPositions:
         assert positions[0]["stop_loss_distance"] == 18.0
         assert positions[0]["rsi"] == 42.5
         assert positions[0]["buy_stage"] == 1
+        assert positions[0]["sell_stage"] == 2
+        assert positions[0]["last_buy_date"] == "2026-06-20T09:30:00"
+        assert positions[0]["last_sell_date"] == "2026-06-21T10:45:00"
 
     @pytest.mark.asyncio
     async def test_replace_current_positions_skips_unchanged_state(

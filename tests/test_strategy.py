@@ -246,6 +246,67 @@ class TestRSIMeanReversionStrategy:
             assert signal.signal_type == SignalType.EXIT_LONG
 
     @pytest.mark.asyncio
+    async def test_next_sell_stage_ignores_cooldown(self, strategy):
+        """SELL2 can fire before the sell cooldown if its RSI threshold is hit."""
+        bars = []
+        for i in range(50):
+            price = 50.0 + (i * 1.0)
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=50 - i)
+            bar.open = price - 0.5
+            bar.high = price + 1
+            bar.low = price - 1
+            bar.close = price
+            bar.volume = 1000000
+            bars.append(bar)
+
+        strategy.initialize({"AAPL": bars})
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("60")
+        strategy._buy_stages["AAPL"] = 2
+        strategy._sell_stages["AAPL"] = 1
+        strategy._last_buy_time["AAPL"] = datetime.now() - timedelta(days=10)
+        strategy._last_sell_time["AAPL"] = datetime.now()
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert strategy._buy_stages["AAPL"] == 2
+        assert strategy._sell_stages["AAPL"] == 1
+        assert signal is not None
+        assert signal.metadata["reason"] == "staged_sell_2"
+
+    @pytest.mark.asyncio
+    async def test_sell_cooldown_allows_same_stage_again(self, strategy):
+        """After sell cooldown, the sell ladder can start again at SELL1."""
+        bars = []
+        for i in range(50):
+            price = 90.0 + (i * 0.1)
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=50 - i)
+            bar.open = price - 0.5
+            bar.high = price + 1
+            bar.low = price - 1
+            bar.close = price
+            bar.volume = 1000000
+            bars.append(bar)
+
+        strategy.initialize({"AAPL": bars})
+        df = strategy.get_daily_dataframe("AAPL")
+        strategy._calculate_rsi = MagicMock(
+            return_value=pd.Series([72.0] * len(df), index=df.index)
+        )
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("60")
+        strategy._sell_stages["AAPL"] = 1
+        strategy._last_sell_time["AAPL"] = datetime.now() - timedelta(days=10)
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert strategy._sell_stages["AAPL"] == 1
+        assert signal is not None
+        assert signal.metadata["reason"] == "staged_sell_1"
+
+    @pytest.mark.asyncio
     async def test_stop_loss_signal(self, strategy, sample_bars):
         """Test stop loss signal"""
         strategy.initialize({"AAPL": sample_bars})
@@ -290,6 +351,7 @@ class TestRSIMeanReversionStrategy:
         strategy._buy_stages["AAPL"] = 2
         strategy._sell_stages["AAPL"] = 1
         strategy._last_buy_time["AAPL"] = datetime.now()
+        strategy._last_sell_time["AAPL"] = datetime.now()
 
         # Reset
         strategy._reset_position("AAPL")
@@ -298,6 +360,7 @@ class TestRSIMeanReversionStrategy:
         assert "AAPL" not in strategy._buy_stages
         assert "AAPL" not in strategy._sell_stages
         assert "AAPL" not in strategy._last_buy_time
+        assert "AAPL" not in strategy._last_sell_time
 
     def _fill(self, side, qty, price, metadata=None):
         fill = MagicMock()
@@ -351,6 +414,21 @@ class TestRSIMeanReversionStrategy:
         assert strategy._sell_stages["AAPL"] == 0
 
     @pytest.mark.asyncio
+    async def test_on_fill_buy_keeps_existing_sell_stage(self, strategy, sample_bars):
+        """Buy fills advance buy stage without resetting the sell counter."""
+        strategy.initialize({"AAPL": sample_bars})
+        strategy._positions["AAPL"] = 70
+        strategy._entry_prices["AAPL"] = Decimal("100")
+        strategy._sell_stages["AAPL"] = 1
+
+        await strategy.on_fill(
+            self._fill("buy", 30, 80, {"stage": 1, "reason": "avg_down_stage_1"})
+        )
+
+        assert strategy._buy_stages["AAPL"] == 1
+        assert strategy._sell_stages["AAPL"] == 1
+
+    @pytest.mark.asyncio
     async def test_on_fill_sell_advances_sell_stage(self, strategy, sample_bars):
         """Staged-sell counter advances on the fill."""
         strategy.initialize({"AAPL": sample_bars})
@@ -362,6 +440,7 @@ class TestRSIMeanReversionStrategy:
         )
 
         assert strategy._sell_stages["AAPL"] == 1
+        assert "AAPL" in strategy._last_sell_time
         # Non-final sell: position reduced but state kept.
         assert strategy._positions["AAPL"] == 70
         assert "AAPL" in strategy._entry_prices
@@ -387,9 +466,8 @@ class TestRSIMeanReversionStrategy:
         assert "AAPL" not in strategy._buy_stages
 
     @pytest.mark.asyncio
-    async def test_on_fill_final_sell_resets(self, strategy, sample_bars):
-        """Final staged sell resets state to restart the cycle on the
-        residual holding."""
+    async def test_on_fill_final_sell_keeps_residual_state(self, strategy, sample_bars):
+        """Final staged sell keeps state until sell cooldown or full exit."""
         strategy.initialize({"AAPL": sample_bars})
         strategy._positions["AAPL"] = 100
         strategy._entry_prices["AAPL"] = Decimal("100")
@@ -400,6 +478,26 @@ class TestRSIMeanReversionStrategy:
             {"stage": 3, "reason": "staged_sell_3", "is_final": True},
         ))
 
+        assert strategy._positions["AAPL"] == 50
+        assert strategy._entry_prices["AAPL"] == Decimal("100")
+        assert strategy._buy_stages["AAPL"] == 2
+        assert strategy._sell_stages["AAPL"] == 3
+        assert "AAPL" in strategy._last_sell_time
+
+    @pytest.mark.asyncio
+    async def test_on_fill_staged_sell_resets_when_flat(self, strategy, sample_bars):
+        """Any staged sell that fully exits clears symbol tracking."""
+        strategy.initialize({"AAPL": sample_bars})
+        strategy._positions["AAPL"] = 50
+        strategy._entry_prices["AAPL"] = Decimal("100")
+        strategy._buy_stages["AAPL"] = 2
+
+        await strategy.on_fill(self._fill(
+            "sell", 50, 120,
+            {"stage": 3, "reason": "staged_sell_3", "is_final": True},
+        ))
+
+        assert strategy.get_position("AAPL") <= 0
         assert "AAPL" not in strategy._entry_prices
         assert "AAPL" not in strategy._buy_stages
         assert "AAPL" not in strategy._sell_stages

@@ -94,6 +94,7 @@ class PositionInfo(BaseModel):
     max_buy_stages: int = 3
     max_sell_stages: int = 3
     last_buy_date: str | None = None
+    last_sell_date: str | None = None
     stop_loss_pct: float = -10.0
     stop_loss_distance: float = 0.0  # how far from stop loss
 
@@ -305,6 +306,7 @@ class DashboardState:
         max_buy_stages: int = 3,
         max_sell_stages: int = 3,
         last_buy_date: str | None = None,
+        last_sell_date: str | None = None,
         stop_loss_pct: float = -10.0,
     ):
         pnl = (current_price - avg_price) * quantity
@@ -325,6 +327,7 @@ class DashboardState:
             max_buy_stages=max_buy_stages,
             max_sell_stages=max_sell_stages,
             last_buy_date=last_buy_date,
+            last_sell_date=last_sell_date,
             stop_loss_pct=stop_loss_pct,
             stop_loss_distance=stop_loss_distance,
         )
@@ -369,6 +372,7 @@ class DashboardState:
             max_buy_stages=int(record.get("max_buy_stages", 3)),
             max_sell_stages=int(record.get("max_sell_stages", 3)),
             last_buy_date=record.get("last_buy_date"),
+            last_sell_date=record.get("last_sell_date"),
             stop_loss_pct=stop_loss_pct,
             stop_loss_distance=float(
                 record.get("stop_loss_distance", pnl_pct - stop_loss_pct)

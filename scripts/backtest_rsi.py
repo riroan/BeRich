@@ -93,6 +93,7 @@ def _run_simulation(
     buy_stage = 0
     sell_stage = 0
     last_buy_date = None
+    last_sell_date = None
     rsi_recovered = False
 
     for date, row in df.iterrows():
@@ -100,21 +101,10 @@ def _run_simulation(
         price = row["Close"]
 
         # Optional legacy gate: require RSI to recover once after a buy
-        # before cooldown can reset stages. Default matches the live bot:
-        # cooldown_days alone resets stages.
+        # before cooldown can repeat the current buy stage. Default matches
+        # the live bot: cooldown_days alone unlocks stage repetition.
         if reset_requires_recovery and last_buy_date is not None and rsi >= recovery_rsi:
             rsi_recovered = True
-
-        # Cooldown reset: live default is elapsed time only; the backtest UI
-        # can opt into the legacy RSI recovery gate for comparison.
-        if last_buy_date is not None:
-            days_since_buy = (date - last_buy_date).days
-            if days_since_buy >= cooldown_days and (
-                not reset_requires_recovery or rsi_recovered
-            ):
-                buy_stage = 0
-                sell_stage = 0
-                rsi_recovered = False
 
         if position_shares > 0:
             avg_price = position_cost / position_shares
@@ -136,65 +126,95 @@ def _run_simulation(
                 position_cost = 0.0
                 buy_stage = 0
                 sell_stage = 0
+                last_sell_date = None
                 continue
 
         if position_shares > 0:
-            for stage_idx, (rsi_threshold, portion) in enumerate(sell_levels):
-                if sell_stage > stage_idx:
-                    continue
-                if rsi >= rsi_threshold:
-                    shares_to_sell = int(position_shares * portion)
-                    if shares_to_sell == 0 and stage_idx == len(sell_levels) - 1:
-                        shares_to_sell = position_shares
-                    if shares_to_sell > 0:
-                        sell_value = shares_to_sell * price
-                        capital += sell_value
-                        avg_price = position_cost / position_shares
-                        pnl_pct = (price - avg_price) / avg_price * 100
-                        trade = Trade(
-                            symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
-                            buy_stage=buy_stage, portion=portion, shares=shares_to_sell,
-                            sell_date=date, sell_price=price,
-                            sell_reason=f"sell_stage_{stage_idx+1}", pnl_pct=pnl_pct,
-                        )
-                        trades.append(trade)
-                        if verbose:
-                            print(f"[SELL{stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | PnL:{pnl_pct:+.1f}%")
-                        position_cost -= avg_price * shares_to_sell
-                        position_shares -= shares_to_sell
-                        sell_stage = stage_idx + 1
-                        if position_shares == 0:
-                            buy_stage = 0
-                            sell_stage = 0
-                            position_cost = 0.0
-                    break
+            sell_stage_idx = None
+            if sell_stage < len(sell_levels):
+                next_threshold = sell_levels[sell_stage][0]
+                if rsi >= next_threshold:
+                    sell_stage_idx = sell_stage
 
-        for stage_idx, (rsi_threshold, portion) in enumerate(avg_down_levels):
-            if buy_stage > stage_idx:
-                continue
-            if rsi <= rsi_threshold:
-                # Match live bot: buy_amount = (max_symbol_value − current_value) × portion
-                # Single-symbol backtest → max_symbol_value = initial_capital, mark-to-market.
-                current_value = position_shares * price
-                remaining_room = max(initial_capital - current_value, 0)
-                buy_amount = min(remaining_room * portion, capital)
-                shares_to_buy = int(buy_amount / price)
-                if shares_to_buy > 0 and capital >= shares_to_buy * price:
-                    cost = shares_to_buy * price
-                    capital -= cost
-                    position_shares += shares_to_buy
-                    position_cost += cost
-                    buy_stage = stage_idx + 1
-                    sell_stage = 0
-                    last_buy_date = date
-                    buy_events.append({
-                        "date": date.strftime("%Y-%m-%d"),
-                        "price": float(price),
-                        "stage": stage_idx + 1,
-                    })
+            if sell_stage_idx is None and sell_stage > 0 and last_sell_date is not None:
+                days_since_sell = (date - last_sell_date).days
+                repeat_idx = 0 if sell_stage >= len(sell_levels) else sell_stage - 1
+                repeat_threshold = sell_levels[repeat_idx][0]
+                if days_since_sell >= cooldown_days and rsi >= repeat_threshold:
+                    sell_stage_idx = repeat_idx
+
+            if sell_stage_idx is not None:
+                rsi_threshold, portion = sell_levels[sell_stage_idx]
+                shares_to_sell = int(position_shares * portion)
+                if shares_to_sell == 0 and position_shares > 0 and portion > 0:
+                    shares_to_sell = 1
+                if shares_to_sell > 0:
+                    sell_value = shares_to_sell * price
+                    capital += sell_value
+                    avg_price = position_cost / position_shares
+                    pnl_pct = (price - avg_price) / avg_price * 100
+                    trade = Trade(
+                        symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
+                        buy_stage=buy_stage, portion=portion, shares=shares_to_sell,
+                        sell_date=date, sell_price=price,
+                        sell_reason=f"sell_stage_{sell_stage_idx+1}", pnl_pct=pnl_pct,
+                    )
+                    trades.append(trade)
                     if verbose:
-                        print(f"[BUY{stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | Shares:{shares_to_buy}")
-                break
+                        print(f"[SELL{sell_stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | PnL:{pnl_pct:+.1f}")
+                    position_cost -= avg_price * shares_to_sell
+                    position_shares -= shares_to_sell
+                    sell_stage = sell_stage_idx + 1
+                    last_sell_date = date
+                    if position_shares == 0:
+                        buy_stage = 0
+                        sell_stage = 0
+                        position_cost = 0.0
+                        last_sell_date = None
+
+        buy_stage_idx = None
+        if buy_stage < len(avg_down_levels):
+            next_threshold = avg_down_levels[buy_stage][0]
+            if rsi <= next_threshold:
+                buy_stage_idx = buy_stage
+
+        if buy_stage_idx is None and buy_stage > 0 and last_buy_date is not None:
+            days_since_buy = (date - last_buy_date).days
+            repeat_idx = 0 if buy_stage >= len(avg_down_levels) else buy_stage - 1
+            repeat_threshold = avg_down_levels[repeat_idx][0]
+            if (
+                days_since_buy >= cooldown_days
+                and (not reset_requires_recovery or rsi_recovered)
+                and rsi <= repeat_threshold
+            ):
+                buy_stage_idx = repeat_idx
+
+        if buy_stage_idx is not None:
+            rsi_threshold, portion = avg_down_levels[buy_stage_idx]
+            # Match live bot: buy_amount = (max_symbol_value − current_value) × portion
+            # Single-symbol backtest → max_symbol_value = initial_capital, mark-to-market.
+            current_value = position_shares * price
+            remaining_room = max(initial_capital - current_value, 0)
+            buy_amount = min(remaining_room * portion, capital)
+            shares_to_buy = int(buy_amount / price)
+            if shares_to_buy > 0 and capital >= shares_to_buy * price:
+                cost = shares_to_buy * price
+                capital -= cost
+                had_position = position_shares > 0
+                position_shares += shares_to_buy
+                position_cost += cost
+                buy_stage = buy_stage_idx + 1
+                if not had_position:
+                    sell_stage = 0
+                last_buy_date = date
+                rsi_recovered = False
+                buy_events.append({
+                    "date": date.strftime("%Y-%m-%d"),
+                    "price": float(price),
+                    "stage": buy_stage_idx + 1,
+                })
+                if verbose:
+                    print(f"[BUY{buy_stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | Shares:{shares_to_buy}")
 
     if position_shares > 0:
         last_price = df.iloc[-1]["Close"]

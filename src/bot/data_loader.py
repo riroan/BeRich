@@ -1,6 +1,7 @@
 """Data loading utilities for trading bot"""
 
 from typing import TYPE_CHECKING
+from datetime import datetime
 import logging
 
 from src.bot._utils import extract_symbols
@@ -141,6 +142,30 @@ class DataLoaderMixin:
 
                 strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
                 strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)
+                last_buy_date = getattr(position, "last_buy_date", None)
+                if (
+                    hasattr(strategy, "_last_buy_time")
+                    and isinstance(last_buy_date, str)
+                    and last_buy_date
+                ):
+                    try:
+                        strategy._last_buy_time[symbol] = datetime.fromisoformat(
+                            last_buy_date
+                        )
+                    except ValueError:
+                        pass
+                last_sell_date = getattr(position, "last_sell_date", None)
+                if (
+                    hasattr(strategy, "_last_sell_time")
+                    and isinstance(last_sell_date, str)
+                    and last_sell_date
+                ):
+                    try:
+                        strategy._last_sell_time[symbol] = datetime.fromisoformat(
+                            last_sell_date
+                        )
+                    except ValueError:
+                        pass
                 restored += 1
 
         if restored:

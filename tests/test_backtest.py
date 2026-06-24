@@ -103,6 +103,88 @@ class TestRunSimulation:
         sell_stages = [t["stage"] for t in result["sell_trades"] if t["reason"].startswith("sell_stage_")]
         assert len(sell_stages) >= 1
 
+    def test_sell_stage_uses_own_cooldown(self):
+        # SELL2/SELL3 can fire immediately when their RSI thresholds are hit,
+        # and repeating the current sell stage requires the sell cooldown.
+        down = list(np.linspace(100, 60, 30))
+        up = list(np.linspace(60, 120, 60))
+        df = _make_df(down + up)
+        result = _run_simulation(
+            df,
+            "TEST",
+            _params(stop_loss=-100, cooldown_days=7),
+        )
+        sell_stages = [
+            t["stage"]
+            for t in result["sell_trades"]
+            if t["reason"].startswith("sell_stage_")
+        ]
+        assert sell_stages[:6] == [1, 2, 3, 1, 2, 3]
+
+        staged_sells = [
+            t for t in result["sell_trades"]
+            if t["reason"].startswith("sell_stage_")
+        ]
+        first_dates = [pd.Timestamp(t["date"]) for t in staged_sells[:3]]
+        assert (first_dates[1] - first_dates[0]).days < 7
+        assert (first_dates[2] - first_dates[1]).days < 7
+
+        stage_3_dates = [
+            pd.Timestamp(t["date"]) for t in staged_sells if t["stage"] == 3
+        ]
+        assert len(stage_3_dates) >= 2
+        assert all(
+            (curr - prev).days >= 7
+            for prev, curr in zip(stage_3_dates, stage_3_dates[1:])
+        )
+
+    def test_sell_cooldown_repeats_current_stage_when_next_threshold_not_hit(self):
+        down = list(np.linspace(100, 60, 30))
+        up = list(np.linspace(60, 120, 60))
+        df = _make_df(down + up)
+        result = _run_simulation(
+            df,
+            "TEST",
+            _params(
+                stop_loss=-100,
+                cooldown_days=7,
+                sell_levels=[[65, 0.3], [101, 0.3], [102, 0.4]],
+            ),
+        )
+        staged_sells = [
+            t for t in result["sell_trades"]
+            if t["reason"].startswith("sell_stage_")
+        ]
+        assert [t["stage"] for t in staged_sells[:3]] == [1, 1, 1]
+
+        stage_1_dates = [pd.Timestamp(t["date"]) for t in staged_sells]
+        assert all(
+            (curr - prev).days >= 7
+            for prev, curr in zip(stage_1_dates, stage_1_dates[1:])
+        )
+
+    def test_staged_sell_rounding_to_zero_sells_minimum_one(self):
+        # Match live order sizing: if a positive sell portion rounds to zero
+        # shares, sell one share instead of silently skipping the signal.
+        down = list(np.linspace(100, 60, 30))
+        up = list(np.linspace(60, 120, 60))
+        df = _make_df(down + up)
+        result = _run_simulation(
+            df,
+            "TEST",
+            _params(
+                stop_loss=-100,
+                cooldown_days=7,
+                avg_down_levels=[[30, 1.0], [25, 1.0], [20, 1.0]],
+            ),
+            initial_capital=100,
+        )
+
+        assert any(
+            t["reason"] == "sell_stage_1"
+            for t in result["sell_trades"]
+        )
+
     def test_cooldown_reset(self):
         # Two distinct dip cycles separated by recovery + cooldown days
         closes = (
@@ -116,7 +198,7 @@ class TestRunSimulation:
         stage_1_buys = [t for t in result["buy_trades"] if t["stage"] == 1]
         assert len(stage_1_buys) >= 2
 
-    def test_cooldown_reset_does_not_require_rsi_recovery_by_default(self):
+    def test_buy_cooldown_repeats_current_stage_without_rsi_recovery_by_default(self):
         closes = list(np.linspace(100, 60, 60))
         df = _make_df(closes)
         result = _run_simulation(
@@ -129,8 +211,9 @@ class TestRunSimulation:
             ),
         )
 
-        stage_1_buys = [t for t in result["buy_trades"] if t["stage"] == 1]
-        assert len(stage_1_buys) > 1
+        buy_stages = [t["stage"] for t in result["buy_trades"]]
+        assert buy_stages[:6] == [1, 2, 3, 1, 2, 3]
+        assert buy_stages.count(3) > 1
 
     def test_cooldown_reset_can_require_rsi_recovery(self):
         closes = list(np.linspace(100, 60, 60))
