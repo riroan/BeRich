@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import delete, select
+from sqlalchemy.exc import DBAPIError
 import logging
 
 from src.core.types import Bar, Order, Fill, Market, OrderStatus
@@ -44,6 +45,41 @@ class Storage:
 
         def _check_and_migrate(sync_conn):
             insp = inspect(sync_conn)
+
+            def _column_names(table_name: str) -> set[str]:
+                if hasattr(insp, "clear_cache"):
+                    insp.clear_cache()
+                return {c["name"] for c in insp.get_columns(table_name)}
+
+            def _is_duplicate_column_error(exc: DBAPIError) -> bool:
+                orig = getattr(exc, "orig", exc)
+                args = getattr(orig, "args", ())
+                if args and args[0] == 1060:
+                    return True
+                return "duplicate column" in str(orig).lower()
+
+            def _add_column_if_missing(
+                table_name: str,
+                column_name: str,
+                ddl: str,
+                log_message: str,
+            ) -> set[str]:
+                cols = _column_names(table_name)
+                if column_name in cols:
+                    return cols
+                try:
+                    sync_conn.execute(text(ddl))
+                    logger.info(log_message)
+                except DBAPIError as exc:
+                    if not _is_duplicate_column_error(exc):
+                        raise
+                    logger.info(
+                        "Migration skipped: %s.%s already exists",
+                        table_name,
+                        column_name,
+                    )
+                return _column_names(table_name)
+
             # Add rsi to fills if missing
             if "fills" in insp.get_table_names():
                 cols = [c["name"] for c in insp.get_columns("fills")]
@@ -62,7 +98,7 @@ class Storage:
                     logger.info("Migrated: added reason column to fills")
 
             if "current_positions" in insp.get_table_names():
-                cols = {c["name"] for c in insp.get_columns("current_positions")}
+                cols = _column_names("current_positions")
                 obsolete_cols = {
                     "current_price",
                     "pnl",
@@ -76,22 +112,24 @@ class Storage:
                     logger.info(
                         "Migrated: recreated current_positions with holding-only schema"
                     )
+                    cols = _column_names("current_positions")
                 elif "last_sell_date" not in cols:
-                    sync_conn.execute(text(
+                    cols = _add_column_if_missing(
+                        "current_positions",
+                        "last_sell_date",
                         "ALTER TABLE current_positions "
-                        "ADD COLUMN last_sell_date VARCHAR(20)"
-                    ))
-                    logger.info(
-                        "Migrated: added last_sell_date column to current_positions"
+                        "ADD COLUMN last_sell_date VARCHAR(20)",
+                        "Migrated: added last_sell_date column "
+                        "to current_positions",
                     )
-                    cols.add("last_sell_date")
                 if "stage_cooldown_days" not in cols:
-                    sync_conn.execute(text(
+                    _add_column_if_missing(
+                        "current_positions",
+                        "stage_cooldown_days",
                         "ALTER TABLE current_positions "
-                        "ADD COLUMN stage_cooldown_days INTEGER NOT NULL DEFAULT 0"
-                    ))
-                    logger.info(
-                        "Migrated: added stage_cooldown_days column to current_positions"
+                        "ADD COLUMN stage_cooldown_days INTEGER NOT NULL DEFAULT 0",
+                        "Migrated: added stage_cooldown_days column "
+                        "to current_positions",
                     )
 
             if "equity_snapshots" in insp.get_table_names():

@@ -1211,12 +1211,16 @@ select option { background: var(--surface); color: var(--text); }
     }
     table.mobile-cards { min-width: unset; }
 
-    /* Positions table: Symbol top, Price|P&L|RSI|Stage in one row */
+    /* Positions table: Symbol|Price top, then P&L|RSI|Stage */
     #positions-table tbody tr {
-        grid-template-columns: 20% 30% 20% auto;
+        grid-template-columns:
+            minmax(0, 0.8fr)
+            minmax(0, 0.65fr)
+            minmax(0, 0.7fr)
+            minmax(0, 1.25fr);
     }
     #positions-table td[data-label="Symbol"] {
-        grid-column: 1 / -1;
+        grid-column: 1 / 3;
         padding-bottom: 4px;
         border-bottom: 1px solid var(--border);
         margin-bottom: 2px;
@@ -1228,16 +1232,57 @@ select option { background: var(--surface); color: var(--text); }
         display: none;
     }
     #positions-table td {
+        min-width: 0;
         text-align: center;
     }
     #positions-table td::before {
         font-size: 9px;
     }
+    #positions-table td[data-label="Price"] {
+        grid-column: 3 / -1;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        padding-bottom: 4px;
+        padding-right: 5px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 2px;
+        text-align: right;
+        white-space: nowrap;
+    }
+    #positions-table td[data-label="Price"]::before {
+        display: none;
+    }
+    #positions-table td[data-label="Stage"] {
+        grid-column: 3 / -1;
+    }
     #positions-table td[data-label="Stage"]::before {
         display: block;
     }
     #positions-table td[data-label="Stage"] .stage-stack {
+        width: 100%;
+        min-width: 0;
+        max-width: 116px;
         margin: 0 auto;
+    }
+    #positions-table td[data-label="Stage"] .stage-line {
+        grid-template-columns: 10px 24px 24px minmax(0, 1fr);
+        gap: 3px;
+        font-size: 9px;
+    }
+    #positions-table td[data-label="Stage"] .stage-bar {
+        gap: 2px;
+    }
+    #positions-table td[data-label="Stage"] .stage-dot {
+        width: 6px;
+        height: 6px;
+    }
+    #positions-table td[data-label="Stage"] .stage-reset {
+        min-width: 0;
+        text-align: right;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        line-height: 1.05;
     }
 
     /* Trades: dense log cards for mobile scanning */
