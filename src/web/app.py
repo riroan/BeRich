@@ -1219,6 +1219,26 @@ def create_app() -> FastAPI:
             context=context,
         )
 
+    @app.get("/menu", response_class=HTMLResponse)
+    async def menu_page(request: Request):
+        """Mobile menu page"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        context = {
+            "request": request,
+            "active_page": "menu",
+            "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
+            "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="menu.html",
+            context=context,
+        )
+
     @app.get("/api/status")
     async def get_status():
         """Get current bot status"""

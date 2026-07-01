@@ -1,8 +1,5 @@
     <div class="header">
         <h1><a class="brand-link" href="/" aria-label="Dashboard">Be<span>Rich</span></a></h1>
-        <button class="mobile-menu-toggle" id="menu-toggle" aria-label="Menu" aria-expanded="false">
-            <span></span><span></span><span></span>
-        </button>
         <div class="header-right" aria-live="polite">
             <span id="ws-status" class="ws-status disconnected">OFFLINE</span>
             {% set is_running = bot_status.running if bot_status else false %}
@@ -22,7 +19,6 @@
             <span id="last-update-time" class="pill time update-time">Last: {{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span>
         </div>
     </div>
-    <div class="menu-backdrop" id="menu-backdrop"></div>
     {% set sticky_pnl = pnl_usd if pnl_usd is defined else none %}
     <div class="sticky-pnl" aria-live="polite">
         <div><span class="sticky-label">P&L</span> <span id="sticky-pnl-usd" class="sticky-value {{ 'positive' if sticky_pnl is not none and sticky_pnl >= 0 else ('negative' if sticky_pnl is not none else '') }}">{% if sticky_pnl is not none %}${{ "{:+,.2f}".format(sticky_pnl) }}{% else %}N/A{% endif %}</span></div>

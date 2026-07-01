@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}Menu - BeRich Dashboard{% endblock %}
+
+{% macro menu_icon(name) -%}
+    {% if name == 'dashboard' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+    {% elif name == 'portfolio' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.4 6.4"/></svg>
+    {% elif name == 'symbols' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+    {% elif name == 'trades' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h13l-4-4"/><path d="M17 14H4l4 4"/></svg>
+    {% elif name == 'performance' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+    {% elif name == 'analytics' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19V5"/><path d="M4 19h16"/><rect x="7" y="11" width="3" height="5" rx="1"/><rect x="12" y="7" width="3" height="9" rx="1"/><rect x="17" y="9" width="3" height="7" rx="1"/></svg>
+    {% elif name == 'backtest' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5v6h6"/><path d="M20 19v-6h-6"/><path d="M20 13a8 8 0 0 0-13.7-5.6L4 11"/><path d="M4 11a8 8 0 0 0 13.7 5.6L20 13"/></svg>
+    {% elif name == 'settings' %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.8 1.8 0 0 0 .36 1.98l.04.04a2.1 2.1 0 1 1-2.97 2.97l-.04-.04a1.8 1.8 0 0 0-1.98-.36 1.8 1.8 0 0 0-1.09 1.65V21a2.1 2.1 0 1 1-4.2 0v-.06a1.8 1.8 0 0 0-1.09-1.65 1.8 1.8 0 0 0-1.98.36l-.04.04a2.1 2.1 0 1 1-2.97-2.97l.04-.04A1.8 1.8 0 0 0 4.6 15a1.8 1.8 0 0 0-1.65-1.09H3a2.1 2.1 0 1 1 0-4.2h.06A1.8 1.8 0 0 0 4.71 8.6a1.8 1.8 0 0 0-.36-1.98l-.04-.04a2.1 2.1 0 1 1 2.97-2.97l.04.04A1.8 1.8 0 0 0 9.3 4a1.8 1.8 0 0 0 1.09-1.65V2.3a2.1 2.1 0 1 1 4.2 0v.06A1.8 1.8 0 0 0 15.68 4a1.8 1.8 0 0 0 1.98-.36l.04-.04a2.1 2.1 0 1 1 2.97 2.97l-.04.04A1.8 1.8 0 0 0 19.4 8.6a1.8 1.8 0 0 0 1.65 1.09H21a2.1 2.1 0 1 1 0 4.2h-.06A1.8 1.8 0 0 0 19.4 15z"/></svg>
+    {% else %}
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>
+    {% endif %}
+{%- endmacro %}
+
+{% macro menu_link(href, label, icon, extra_class='') -%}
+    <a href="{{ href }}" class="menu-link {{ extra_class }}">
+        <span class="menu-link-icon">{{ menu_icon(icon) }}</span>
+        <span class="menu-link-label">{{ label }}</span>
+        <span class="menu-link-arrow" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </span>
+    </a>
+{%- endmacro %}
+
+{% block content %}
+    <section class="menu-page" aria-label="Menu">
+        <div class="menu-grid">
+            <nav class="menu-group" aria-label="Primary">
+                <h2>Primary</h2>
+                <div class="menu-list">
+                    {{ menu_link('/', 'Dashboard', 'dashboard') }}
+                    {{ menu_link('/portfolio', 'Portfolio', 'portfolio') }}
+                    {{ menu_link('/symbols', 'Symbols', 'symbols') }}
+                    {{ menu_link('/trades', 'Trades', 'trades') }}
+                    {{ menu_link('/performance', 'Performance', 'performance') }}
+                </div>
+            </nav>
+            <nav class="menu-group" aria-label="Tools">
+                <h2>Tools</h2>
+                <div class="menu-list">
+                    {{ menu_link('/analytics', 'Analytics', 'analytics') }}
+                    {{ menu_link('/backtest', 'Backtest', 'backtest') }}
+                    {{ menu_link('/settings', 'Settings', 'settings') }}
+                </div>
+            </nav>
+            <nav class="menu-group menu-group-danger" aria-label="Account">
+                <h2>Account</h2>
+                <div class="menu-list">
+                    {{ menu_link('/logout', 'Logout', 'logout', 'menu-link-danger') }}
+                </div>
+            </nav>
+        </div>
+    </section>
+{% endblock %}

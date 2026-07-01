@@ -183,19 +183,30 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 3px;
     flex: 1;
     min-width: 0;
+    min-height: 44px;
     padding: 2px 0;
+    background: transparent;
+    border: 0;
     color: var(--text-muted);
     text-decoration: none;
     font-size: 9.5px;
     font-weight: 500;
+    font-family: inherit;
+    cursor: pointer;
+    touch-action: manipulation;
     transition: color .2s;
 }
 .bottom-nav-item.active { color: var(--blue); font-weight: 600; }
 .bottom-nav-item:hover { color: var(--text); }
 .bottom-nav-item svg { width: 22px; height: 22px; }
+.bottom-nav-item:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
 
 /* ===================== Container ===================== */
 .container {
@@ -1122,42 +1133,6 @@ select option { background: var(--surface); color: var(--text); }
 .symbol-title { font-size: 20px; gap: 8px; }
 .symbol-title span:first-child { margin-left: 8px; }
 
-/* ===================== Hamburger Menu ===================== */
-.mobile-menu-toggle {
-    display: none;
-    flex-direction: column;
-    gap: 5px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 12px;
-    flex-shrink: 0;
-    min-width: 44px;
-    min-height: 44px;
-    align-items: center;
-    justify-content: center;
-}
-.mobile-menu-toggle span {
-    display: block;
-    width: 22px;
-    height: 2px;
-    background: var(--white);
-    border-radius: 1px;
-    transition: transform 0.25s, opacity 0.25s;
-}
-/* gap(5) + height(2) = 7px center-to-center */
-.mobile-menu-toggle.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
-.mobile-menu-toggle.open span:nth-child(2) { opacity: 0; }
-.mobile-menu-toggle.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-.menu-backdrop {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    z-index: 90;
-}
-.menu-backdrop.show { display: block; }
-
 /* ===================== Sticky P&L Header ===================== */
 .sticky-pnl {
     display: none;
@@ -1186,6 +1161,96 @@ select option { background: var(--surface); color: var(--text); }
 .mobile-cards .empty-card .empty-icon { font-size: 24px; margin-bottom: 8px; opacity: 0.5; }
 .mobile-cards .empty-card .empty-hint { font-size: 11px; color: var(--text-muted); margin-top: 4px; }
 
+/* ===================== Menu page ===================== */
+.menu-page {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.menu-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+.menu-group {
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+.menu-group h2 {
+    margin: 0 0 12px;
+    color: var(--dim);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+}
+.menu-group-danger {
+    grid-column: 1 / -1;
+}
+.menu-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.menu-link {
+    display: grid;
+    grid-template-columns: 40px minmax(0, 1fr) 20px;
+    align-items: center;
+    min-height: 56px;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    text-decoration: none;
+    transition: background .2s, border-color .2s, color .2s;
+    touch-action: manipulation;
+}
+.menu-link:hover,
+.menu-link:focus-visible {
+    background: var(--card);
+    border-color: rgba(59,130,246,0.5);
+    color: var(--white);
+}
+.menu-link:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+.menu-link-icon {
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--blue);
+}
+.menu-link-label {
+    min-width: 0;
+    font-size: 14px;
+    font-weight: 600;
+}
+.menu-link-arrow {
+    color: var(--text-muted);
+    display: inline-flex;
+    justify-content: flex-end;
+}
+.menu-link-danger {
+    color: var(--red);
+}
+.menu-link-danger .menu-link-icon {
+    background: rgba(239,68,68,0.12);
+    color: var(--red);
+}
+.menu-link-danger:hover,
+.menu-link-danger:focus-visible {
+    border-color: rgba(239,68,68,0.5);
+    color: var(--red);
+}
+
 /* ===================== Touch Feedback ===================== */
 
 /* ===================== Responsive ===================== */
@@ -1201,7 +1266,7 @@ select option { background: var(--surface); color: var(--text); }
 
 /* Mobile (≤768px) */
 @media (max-width: 768px) {
-    /* Header: logo left, hamburger right, badges below */
+    /* Header: logo left, badges below */
     .header {
         padding: 12px 16px;
         padding-top: calc(12px + env(safe-area-inset-top));
@@ -1227,57 +1292,8 @@ select option { background: var(--surface); color: var(--text); }
         display: none;
     }
 
-    /* Hamburger: show toggle, hide nav by default */
-    .mobile-menu-toggle { display: flex; flex-direction: column; z-index: 101; }
     .nav {
         display: none;
-        flex-direction: column;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        background: var(--surface);
-        padding: calc(60px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
-        z-index: 100;
-        max-height: 0;
-        overflow: hidden;
-        transition: max-height 0.2s ease-out;
-        gap: 2px;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-    }
-    .nav-section {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        width: 100%;
-    }
-    .nav-secondary {
-        flex: initial;
-        margin-left: 0;
-        margin-top: 8px;
-        padding-top: 8px;
-        border-top: 1px solid var(--border);
-    }
-    .nav.open {
-        display: flex;
-        max-height: 100vh;
-        max-height: 100dvh;
-        overflow-y: auto;
-        transition: max-height 0.3s ease-in;
-    }
-    .nav a, .nav-link {
-        width: 100%;
-        padding: 12px 16px;
-        font-size: 14px;
-        border-radius: 8px;
-        flex-shrink: 0;
-    }
-    .nav-secondary .logout-btn { margin-left: 0; }
-    .logout-btn {
-        margin-top: 8px;
-        padding-top: 14px;
-        border-top: 1px solid var(--border);
-        color: var(--red);
     }
 
     /* Card conversion: table → cards */
@@ -1562,6 +1578,18 @@ select option { background: var(--surface); color: var(--text); }
     }
     .card .label { font-size: 10px; }
     .card .delta { font-size: 11px; }
+
+    .menu-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+    .menu-group {
+        padding: 12px;
+    }
+    .menu-link {
+        min-height: 56px;
+        padding: 10px;
+    }
 
     /* Multi-column layouts → single col */
     .two-col, .three-col, .summary-row {
@@ -1885,7 +1913,6 @@ select option { background: var(--surface); color: var(--text); }
     }
     .sys-cell { background: var(--card); }
     .nav { background: var(--bg); }
-    .nav.open { background: var(--surface); box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
     .sticky-pnl { background: var(--surface); border-bottom-color: rgba(0,0,0,0.06); }
     .mobile-cards tbody tr { background: var(--card); }
     .mobile-cards tbody tr:hover { background: #e2e8f0; }
