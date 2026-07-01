@@ -3,8 +3,31 @@
 {% block title %}Portfolio - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <!-- Portfolio Summary -->
-        <div class="cards-row">
+        <!-- Portfolio Summary — mobile hero (≤768px) -->
+        <div class="mobile-hero">
+            <div class="hero-label">Total Value</div>
+            <div class="hero-balance">${{ "{:,.2f}".format(total_value) }}</div>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Invested</div>
+                    <div class="hero-stat-value">${{ "{:,.0f}".format(total_value - cash_total) }}</div>
+                    <div class="hero-stat-sub">{{ "{:.1f}".format(100 - cash_weight) }}%</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Cash</div>
+                    <div class="hero-stat-value">${{ "{:,.0f}".format(cash_total) }}</div>
+                    <div class="hero-stat-sub">{{ "{:.1f}".format(cash_weight) }}%</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Positions</div>
+                    <div class="hero-stat-value">{{ portfolio|length }}</div>
+                    <div class="hero-stat-sub">holdings</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Summary — desktop cards (>768px) -->
+        <div class="cards-row summary-desktop">
             <div class="card">
                 <div class="label">Total Value</div>
                 <div class="value small">${{ "{:,.2f}".format(total_value) }}</div>
@@ -87,6 +110,45 @@
                 </div>
             </div>
         </section>
+
+        <!-- Holdings — mobile cards (4a, ≤768px). Colors match the allocation donut. -->
+        {% set palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6','#a855f7','#0ea5e9','#84cc16','#e11d48','#6366f1','#d946ef','#22d3ee','#facc15','#fb923c','#34d399','#c084fc'] %}
+        <section class="portfolio-holdings-mobile">
+            <div class="section-title">
+                <span>Holdings <span class="count">{{ portfolio|length }}</span></span>
+                <span class="sort-controls">
+                    <select id="holdings-sort" class="sort-select" aria-label="Sort holdings by">
+                        <option value="value">Value</option>
+                        <option value="weight">Weight</option>
+                        <option value="pnl">P&amp;L</option>
+                        <option value="symbol">Symbol</option>
+                    </select>
+                    <button type="button" id="holdings-sort-dir" class="sort-dir" data-dir="desc" aria-label="Toggle sort direction">↓</button>
+                </span>
+            </div>
+            <div class="holdings-cards">
+                {% for pos in portfolio %}
+                <a class="holding-card" href="/symbol/{{ pos.symbol }}" style="border-left-color:{{ palette[loop.index0 % (palette|length)] }}"
+                   data-symbol="{{ pos.symbol }}" data-value="{{ pos.value }}" data-weight="{{ pos.weight }}" data-pnl="{{ pos.pnl_pct }}"
+                   aria-label="Open {{ pos.symbol }} chart">
+                    <div class="holding-main">
+                        <div class="holding-sym-row">
+                            <span class="sym-badge">{{ pos.symbol }}</span>
+                            <span class="market-badge market-{{ pos.market|lower }}">{{ pos.market }}</span>
+                        </div>
+                        <div class="holding-sub">{{ pos.quantity }} QTY · {% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.avg_price) }}{% else %}${{ "{:,.2f}".format(pos.avg_price) }}{% endif %}</div>
+                    </div>
+                    <div class="holding-value">
+                        <div class="holding-val-amt">${{ "{:,.0f}".format(pos.value) }}</div>
+                        <div class="holding-val-pct">{{ "{:.1f}".format(pos.weight) }}%</div>
+                    </div>
+                    <div class="holding-pnl {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</div>
+                </a>
+                {% else %}
+                <div class="empty-state">No holdings</div>
+                {% endfor %}
+            </div>
+        </section>
 {% endblock %}
 
 {% block scripts %}
@@ -108,6 +170,10 @@
             {% endfor %}
             {label: 'Cash', value: {{ cash_weight }}, color: '#475569'},
         ];
+
+        // Center default: invested amount (4a)
+        const investedValue = {{ total_value - cash_total }};
+        const investedPct = {{ 100 - cash_weight }};
 
         // Store slice angles for hit detection
         const slices = [];
@@ -151,17 +217,27 @@
                 angle += slice;
             });
 
-            // Center label on hover
+            // Center label: highlighted slice on hover, else invested total
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
             if (highlightIdx !== undefined && highlightIdx >= 0) {
                 const h = data[highlightIdx];
                 ctx.fillStyle = '#f8fafc';
                 ctx.font = 'bold 18px Inter, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
                 ctx.fillText(h.label, cx, cy - 10);
                 ctx.font = '14px Inter, sans-serif';
                 ctx.fillStyle = '#94a3b8';
                 ctx.fillText(h.value.toFixed(1) + '%', cx, cy + 12);
+            } else {
+                ctx.fillStyle = '#64748b';
+                ctx.font = '600 10px Inter, sans-serif';
+                ctx.fillText('INVESTED', cx, cy - 20);
+                ctx.fillStyle = '#f8fafc';
+                ctx.font = 'bold 18px Inter, sans-serif';
+                ctx.fillText('$' + investedValue.toLocaleString('en-US', { maximumFractionDigits: 0 }), cx, cy + 2);
+                ctx.fillStyle = '#64748b';
+                ctx.font = '11px Inter, sans-serif';
+                ctx.fillText(investedPct.toFixed(1) + '%', cx, cy + 20);
             }
         }
 
@@ -255,5 +331,48 @@
         buildLegend();
         updateLegend();
         updateSelectionLabel();
+
+        // Holdings sort (same control as the dashboard: select + direction toggle)
+        (function () {
+            const sel = document.getElementById('holdings-sort');
+            const dirBtn = document.getElementById('holdings-sort-dir');
+            const container = document.querySelector('.holdings-cards');
+            if (!sel || !dirBtn || !container) return;
+
+            const STORE = 'holdingsSort';
+            const savedKey = localStorage.getItem(STORE + 'Key');
+            const savedDir = localStorage.getItem(STORE + 'Dir');
+            if (savedKey) sel.value = savedKey;
+            if (savedDir === 'asc' || savedDir === 'desc') dirBtn.dataset.dir = savedDir;
+            dirBtn.textContent = dirBtn.dataset.dir === 'desc' ? '↓' : '↑';
+
+            function apply() {
+                const key = sel.value;
+                const mult = dirBtn.dataset.dir === 'desc' ? -1 : 1;
+                const cards = Array.from(container.querySelectorAll('.holding-card'));
+                cards.sort((a, b) => {
+                    if (key === 'symbol') {
+                        return (a.dataset.symbol || '').localeCompare(b.dataset.symbol || '') * mult;
+                    }
+                    const av = parseFloat(a.dataset[key]) || 0;
+                    const bv = parseFloat(b.dataset[key]) || 0;
+                    return (av - bv) * mult;
+                });
+                cards.forEach(c => container.appendChild(c));
+            }
+
+            sel.addEventListener('change', () => {
+                localStorage.setItem(STORE + 'Key', sel.value);
+                apply();
+            });
+            dirBtn.addEventListener('click', () => {
+                const next = dirBtn.dataset.dir === 'desc' ? 'asc' : 'desc';
+                dirBtn.dataset.dir = next;
+                dirBtn.textContent = next === 'desc' ? '↓' : '↑';
+                localStorage.setItem(STORE + 'Dir', next);
+                apply();
+            });
+            apply();
+        })();
     </script>
 {% endblock %}

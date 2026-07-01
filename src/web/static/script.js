@@ -134,6 +134,30 @@ class DashboardWebSocket {
             stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true);
             stickyUsdPnl.className = `sticky-value ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
+
+        // Mobile hero summary (mirrors the desktop cards above)
+        const heroBalance = document.getElementById('hero-balance');
+        if (heroBalance && data.balance_usd !== undefined) {
+            heroBalance.textContent = this.formatUSD(data.balance_usd);
+        }
+
+        const heroCash = document.getElementById('hero-cash');
+        if (heroCash && data.cash_usd !== undefined) {
+            heroCash.textContent = this.formatUSD(data.cash_usd, false, 0);
+        }
+
+        const heroPnl = document.getElementById('hero-pnl');
+        if (heroPnl && data.pnl_usd !== undefined) {
+            heroPnl.textContent = this.formatUSD(data.pnl_usd, true);
+            const sign = data.pnl_usd >= 0 ? 'positive' : 'negative';
+            heroPnl.className = `hero-stat-value ${sign}`;
+            const heroPnlPct = document.getElementById('hero-pnl-pct');
+            if (heroPnlPct && data.balance_usd) {
+                const pct = data.pnl_usd / data.balance_usd * 100;
+                heroPnlPct.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+                heroPnlPct.className = `hero-stat-sub ${sign}`;
+            }
+        }
     }
 
     updatePositionsTable(positions) {
@@ -417,10 +441,10 @@ class DashboardWebSocket {
         return formatted + ' KRW';
     }
 
-    formatUSD(value, showSign = false) {
+    formatUSD(value, showSign = false, decimals = 2) {
         const formatted = Math.abs(value).toLocaleString('en-US', {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals
         });
         if (showSign && value !== 0) {
             return (value >= 0 ? '+$' : '-$') + formatted;

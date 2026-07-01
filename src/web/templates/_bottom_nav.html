@@ -1,0 +1,22 @@
+    <nav class="bottom-nav" aria-label="Primary">
+        <a href="/" class="bottom-nav-item{% if active_page == 'dashboard' %} active{% endif %}"{% if active_page == 'dashboard' %} aria-current="page"{% endif %}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+            <span>Dashboard</span>
+        </a>
+        <a href="/portfolio" class="bottom-nav-item{% if active_page == 'portfolio' %} active{% endif %}"{% if active_page == 'portfolio' %} aria-current="page"{% endif %}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v9l6.4 6.4"/></svg>
+            <span>Portfolio</span>
+        </a>
+        <a href="/symbols" class="bottom-nav-item{% if active_page == 'symbols' %} active{% endif %}"{% if active_page == 'symbols' %} aria-current="page"{% endif %}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg>
+            <span>Symbols</span>
+        </a>
+        <a href="/trades" class="bottom-nav-item{% if active_page == 'trades' %} active{% endif %}"{% if active_page == 'trades' %} aria-current="page"{% endif %}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h13l-4-4"/><path d="M17 14H4l4 4"/></svg>
+            <span>Trades</span>
+        </a>
+        <a href="/performance" class="bottom-nav-item{% if active_page == 'performance' %} active{% endif %}"{% if active_page == 'performance' %} aria-current="page"{% endif %}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            <span>Perf</span>
+        </a>
+    </nav>

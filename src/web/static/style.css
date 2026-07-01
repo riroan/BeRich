@@ -177,6 +177,26 @@ body {
 }
 .logout-btn:hover { background: rgba(239,68,68,0.15); color: var(--red); }
 
+/* ===================== Bottom nav (mobile tab bar) ===================== */
+.bottom-nav { display: none; }
+.bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+    padding: 2px 0;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 9.5px;
+    font-weight: 500;
+    transition: color .2s;
+}
+.bottom-nav-item.active { color: var(--blue); font-weight: 600; }
+.bottom-nav-item:hover { color: var(--text); }
+.bottom-nav-item svg { width: 22px; height: 22px; }
+
 /* ===================== Container ===================== */
 .container {
     padding: 0 32px 32px;
@@ -224,6 +244,67 @@ body {
 .card .delta.up, .positive { color: var(--emerald); }
 .card .delta.down, .negative { color: var(--red); }
 .card .delta.dim, .dim { color: var(--dim); }
+
+/* Mobile hero summary (hidden on desktop, shown ≤768px) */
+.mobile-hero {
+    display: none;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 16px;
+    box-shadow: var(--shadow);
+}
+.mobile-hero .hero-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .6px;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+.mobile-hero .hero-balance {
+    font-size: 27px;
+    font-weight: 700;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+    margin-top: 3px;
+}
+.mobile-hero .hero-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 13px;
+}
+.mobile-hero .hero-stat { min-width: 0; }
+.mobile-hero .hero-stat + .hero-stat {
+    padding-left: 12px;
+    border-left: 1px solid var(--border);
+}
+.mobile-hero .hero-stat-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: var(--dim);
+}
+.mobile-hero .hero-stat-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--white);
+    font-variant-numeric: tabular-nums;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.mobile-hero .hero-stat-sub {
+    font-size: 11px;
+    color: var(--dim);
+    margin-top: 1px;
+}
+.mobile-hero .hero-stat-value.positive,
+.mobile-hero .hero-stat-sub.positive { color: var(--emerald); }
+.mobile-hero .hero-stat-value.negative,
+.mobile-hero .hero-stat-sub.negative { color: var(--red); }
+
 /* Monthly returns grid */
 .monthly-grid {
     display: grid;
@@ -329,6 +410,7 @@ body {
 .market-nyse { background: rgba(16,185,129,0.15); color: var(--emerald); }
 .market-amex { background: rgba(245,158,11,0.15); color: var(--amber); }
 .market-krx { background: rgba(139,92,246,0.15); color: #8b5cf6; }
+.market-krx { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 .sym-weight, .sym-controls {
     display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
@@ -388,6 +470,32 @@ body {
     font-variant-numeric: tabular-nums;
     min-width: 55px; text-align: right;
 }
+
+/* Portfolio holdings — mobile cards (4a, shown ≤768px) */
+.portfolio-holdings-mobile { display: none; }
+.holdings-cards { display: flex; flex-direction: column; gap: 8px; }
+.holding-card {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px;
+    align-items: center;
+    background: var(--surface);
+    border-radius: 14px;
+    border-left: 3px solid var(--blue);
+    padding: 13px;
+    text-decoration: none;
+    color: inherit;
+    transition: background .2s;
+}
+.holding-card:hover, .holding-card:focus-visible { background: var(--card); }
+.holding-sym-row { display: flex; align-items: center; gap: 7px; }
+.holding-sym-row .sym-badge { font-size: 15px; font-weight: 700; }
+.holding-sym-row .market-badge { font-size: 9px; padding: 2px 7px; }
+.holding-sub { font-size: 11px; color: var(--text-muted); margin-top: 3px; font-variant-numeric: tabular-nums; }
+.holding-value { text-align: right; }
+.holding-val-amt { font-size: 14px; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; }
+.holding-val-pct { font-size: 11px; color: var(--text-muted); }
+.holding-pnl { text-align: right; min-width: 52px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .clickable { cursor: pointer; }
 .card .sparkline {
     height: 40px;
@@ -1211,79 +1319,102 @@ select option { background: var(--surface); color: var(--text); }
     }
     table.mobile-cards { min-width: unset; }
 
-    /* Positions table: Symbol|Price top, then P&L|RSI|Stage */
+    /* Positions: 3b compact single row — Symbol+price | P&L | RSI | Stage dots.
+       Rows sit in one container (thin borders, not separate cards). */
     #positions-table tbody tr {
-        grid-template-columns:
-            minmax(0, 0.8fr)
-            minmax(0, 0.65fr)
-            minmax(0, 0.7fr)
-            minmax(0, 1.25fr);
+        grid-template-columns: 1.3fr 0.7fr 0.55fr auto;
+        align-items: center;
+        gap: 6px;
+        padding: 9px 4px;
+        margin-bottom: 0;
+        background: transparent;
+        border-radius: 0;
+        border-top: 1px solid var(--border);
     }
-    #positions-table td[data-label="Symbol"] {
-        grid-column: 1 / 3;
-        padding-bottom: 4px;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 2px;
-        text-align: left;
-        font-size: 15px;
-        padding-left: 5px;
-    }
-    #positions-table td[data-label="Symbol"]::before {
-        display: none;
-    }
+    #positions-table tbody tr:first-child { border-top: none; }
+    #positions-table tbody tr:hover { background: rgba(59,130,246,0.06); }
     #positions-table td {
         min-width: 0;
-        text-align: center;
+        padding: 0;
+        text-align: right;
     }
-    #positions-table td::before {
-        font-size: 9px;
+    #positions-table td::before { display: none; }
+    #positions-table td.empty {
+        grid-column: 1 / -1;
+        text-align: center;
+        padding: 24px 0;
+    }
+    #positions-table td[data-label="Symbol"] {
+        grid-column: 1;
+        grid-row: 1;
+        text-align: left;
+        font-size: 14px;
     }
     #positions-table td[data-label="Price"] {
-        grid-column: 3 / -1;
-        display: flex;
-        justify-content: flex-end;
-        align-items: center;
-        padding-bottom: 4px;
-        padding-right: 5px;
-        border-bottom: 1px solid var(--border);
-        margin-bottom: 2px;
-        text-align: right;
+        grid-column: 1;
+        grid-row: 2;
+        text-align: left;
+        font-size: 11px;
+        color: var(--text-muted);
         white-space: nowrap;
     }
-    #positions-table td[data-label="Price"]::before {
-        display: none;
+    #positions-table td[data-label="P&L"] {
+        grid-column: 2;
+        grid-row: 1 / 3;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    #positions-table td[data-label="RSI"] {
+        grid-column: 3;
+        grid-row: 1 / 3;
+        font-size: 13px;
+        font-weight: 600;
     }
     #positions-table td[data-label="Stage"] {
-        grid-column: 3 / -1;
+        grid-column: 4;
+        grid-row: 1 / 3;
     }
-    #positions-table td[data-label="Stage"]::before {
-        display: block;
-    }
+    /* Stage: dots only (buy row over sell row); hide kind/count/reset */
     #positions-table td[data-label="Stage"] .stage-stack {
-        width: 100%;
         min-width: 0;
-        max-width: 116px;
-        margin: 0 auto;
+        width: auto;
+        max-width: none;
+        margin: 0;
+        gap: 3px;
+        align-items: flex-end;
     }
     #positions-table td[data-label="Stage"] .stage-line {
-        grid-template-columns: 10px 24px 24px minmax(0, 1fr);
-        gap: 3px;
-        font-size: 9px;
-    }
-    #positions-table td[data-label="Stage"] .stage-bar {
+        display: flex;
         gap: 2px;
+    }
+    #positions-table td[data-label="Stage"] .stage-kind,
+    #positions-table td[data-label="Stage"] .stage-count,
+    #positions-table td[data-label="Stage"] .stage-reset {
+        display: none;
     }
     #positions-table td[data-label="Stage"] .stage-dot {
         width: 6px;
         height: 6px;
     }
-    #positions-table td[data-label="Stage"] .stage-reset {
-        min-width: 0;
-        text-align: right;
-        white-space: normal;
-        overflow-wrap: anywhere;
-        line-height: 1.05;
+    /* Header row: Symbol | P&L | RSI | Stage (Price hidden — shown under symbol) */
+    #positions-table thead { display: block; }
+    #positions-table thead tr {
+        display: grid;
+        grid-template-columns: 1.3fr 0.7fr 0.55fr auto;
+        gap: 6px;
+        padding: 0 4px 6px;
+        border-bottom: 1px solid var(--border);
     }
+    #positions-table thead th {
+        padding: 0;
+        border: none;
+        font-size: 9px;
+    }
+    #positions-table thead th:nth-child(1) { grid-column: 1; text-align: left; }
+    #positions-table thead th:nth-child(2) { display: none; }
+    #positions-table thead th:nth-child(3) { grid-column: 2; text-align: right; }
+    #positions-table thead th:nth-child(4) { grid-column: 3; text-align: right; }
+    #positions-table thead th:nth-child(5) { grid-column: 4; text-align: right; }
 
     /* Trades: dense log cards for mobile scanning */
     .trades-table.mobile-cards tbody tr.trade-row {
@@ -1380,8 +1511,10 @@ select option { background: var(--surface); color: var(--text); }
         font-variant-numeric: tabular-nums;
     }
 
-    /* Signals: Buy + Sell side by side, Recent Trades below */
-    .signals-grid {
+    /* Signals: Buy + Sell side by side, Recent Trades below.
+       Needs .three-col.signals-grid specificity to beat the generic
+       .three-col { 1fr !important } rule that follows in source order. */
+    .three-col.signals-grid {
         grid-template-columns: 1fr 1fr !important;
         gap: 8px !important;
     }
@@ -1389,8 +1522,32 @@ select option { background: var(--surface); color: var(--text); }
         grid-column: 1 / -1;
     }
 
-    /* Container */
-    .container { padding: 0 12px 16px; gap: 12px; }
+    /* Container — reserve space for the fixed bottom nav */
+    .container {
+        padding: 0 12px 16px;
+        padding-bottom: calc(88px + env(safe-area-inset-bottom));
+        gap: 12px;
+    }
+
+    /* Bottom nav: fixed mobile tab bar */
+    .bottom-nav {
+        display: flex;
+        justify-content: space-around;
+        align-items: flex-end;
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 90;
+        background: var(--surface);
+        border-top: 1px solid var(--border);
+        padding: 8px calc(6px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left));
+        box-shadow: 0 -4px 20px rgba(0,0,0,0.25);
+    }
+
+    /* Summary: swap desktop 3-card row for the compact hero */
+    .summary-desktop { display: none; }
+    .mobile-hero { display: block; }
 
     /* Cards: 2-col on mobile */
     .cards-row, .summary-cards, .metrics-grid {
@@ -1411,10 +1568,32 @@ select option { background: var(--surface); color: var(--text); }
         grid-template-columns: 1fr !important;
         gap: 12px;
     }
-    .rsi-grid { grid-template-columns: 1fr; gap: 8px; }
-    .rsi-item { padding: 10px 12px; }
-    .rsi-item .rsi-symbol { font-size: 13px; }
-    .rsi-item .rsi-value { font-size: 18px; min-width: 50px; }
+    /* RSI Monitor: compact 3-col heatmap (all symbols, no per-row scroll) */
+    .rsi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .rsi-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0;
+        padding: 9px 10px;
+    }
+    .rsi-item .rsi-left { width: 100%; min-width: 0; }
+    .rsi-item .rsi-symbol {
+        font-size: 12px;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .rsi-item .rsi-price { font-size: 10px; margin-top: 1px; }
+    .rsi-item .rsi-value {
+        font-size: 18px;
+        text-align: left;
+        min-width: 0;
+        margin-top: 4px;
+    }
+    /* Heatmap tint by RSI zone (matches value text semantics) */
+    .rsi-item:has(.rsi-danger) { background: rgba(239,68,68,.10); }
+    .rsi-item:has(.rsi-warning) { background: rgba(245,158,11,.10); }
 
     /* System status */
     .sys-grid-row {
@@ -1554,9 +1733,29 @@ select option { background: var(--surface); color: var(--text); }
     .pagination { gap: 2px; }
     .page-btn { min-width: 40px; min-height: 40px; padding: 0 10px; font-size: 12px; }
 
-    /* Portfolio */
-    .portfolio-holdings { order: 2; }
-    .portfolio-allocation-card { order: 3; }
+    /* Portfolio (4a): summary hero → allocation → holdings cards (DOM order) */
+    .portfolio-holdings { display: none; }
+    .portfolio-holdings-mobile { display: block; }
+    /* Allocation legend as a compact 2-col list */
+    .alloc-legend {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4px 12px;
+        width: 100%;
+        align-items: stretch;
+    }
+    .alloc-item { min-height: 0; padding: 5px 6px; gap: 8px; }
+    .alloc-dot { width: 9px; height: 9px; border-radius: 3px; }
+    .alloc-name {
+        width: auto;
+        flex: 1;
+        font-size: 12px;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .alloc-pct { min-width: 0; font-size: 12px; font-weight: 600; }
     .portfolio-summary .summary-row { grid-template-columns: 1fr; }
     .summary-group .summary-cards { flex-direction: column; }
     .summary-row-item { padding: 8px 10px; }
@@ -1595,7 +1794,11 @@ select option { background: var(--surface); color: var(--text); }
         padding-left: calc(12px + env(safe-area-inset-left));
         padding-right: calc(12px + env(safe-area-inset-right));
     }
-    .container { padding: 0 10px 12px; }
+    /* Keep the fixed bottom-nav reservation (padding shorthand above would reset it) */
+    .container {
+        padding: 0 10px 12px;
+        padding-bottom: calc(88px + env(safe-area-inset-bottom));
+    }
 
     /* Cards: keep 2-col on small mobile for compact layout */
     .cards-row, .summary-cards, .metrics-grid {
@@ -1612,6 +1815,13 @@ select option { background: var(--surface); color: var(--text); }
     .sys-grid-row { grid-template-columns: repeat(2, 1fr); }
 
     /* Signals: keep one-line layout */
+
+    /* Hero: tighten stat columns on narrow phones */
+    .mobile-hero { padding: 14px; }
+    .mobile-hero .hero-stats { gap: 8px; }
+    .mobile-hero .hero-stat + .hero-stat { padding-left: 8px; }
+    .mobile-hero .hero-stat-value { font-size: 14px; }
+    .mobile-hero .hero-stat-sub { font-size: 10px; }
 
     /* RSI grid items */
     .rsi-item .rsi-value { font-size: 16px; }

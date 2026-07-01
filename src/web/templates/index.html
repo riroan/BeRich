@@ -3,8 +3,31 @@
 {% block title %}BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <!-- 1. Summary Cards (통일된 글자 크기) -->
-        <div class="cards-row cols-3">
+        <!-- 1a. Mobile hero summary (shown ≤768px) -->
+        <div class="mobile-hero">
+            <div class="hero-label">Total Balance</div>
+            <div class="hero-balance" id="hero-balance">${{ "{:,.2f}".format(balance_usd) }}</div>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Today P&L</div>
+                    <div class="hero-stat-value {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl">${{ "{:+,.2f}".format(pnl_usd) }}</div>
+                    <div class="hero-stat-sub {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Cash</div>
+                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.0f}".format(cash_usd) }}</div>
+                    <div class="hero-stat-sub">{{ "{:.0f}% free".format(cash_ratio_usd) }}</div>
+                </div>
+                <div class="hero-stat">
+                    <div class="hero-stat-label">Positions</div>
+                    <div class="hero-stat-value">{{ position_count }}</div>
+                    <div class="hero-stat-sub">{{ rsi_with_prices|length }} watched</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1b. Desktop summary cards (shown >768px) -->
+        <div class="cards-row cols-3 summary-desktop">
             <div class="card">
                 <div class="label">Total</div>
                 <div class="value small" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</div>
