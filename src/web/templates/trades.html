@@ -3,32 +3,44 @@
 {% block title %}Trade Log - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <!-- Summary Cards (top) -->
-        <div class="cards-row">
+        {% set buy_count = trade_logs|selectattr('action', 'equalto', 'buy')|list|length %}
+        {% set sell_count = trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length %}
+        {% set stop_count = trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length %}
+
+        <!-- Summary — mobile strip (6a, ≤768px) -->
+        <div class="trade-summary-strip">
+            <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">Total</div></div>
+            <div class="tss-item"><div class="tss-num positive">{{ buy_count }}</div><div class="tss-label">Buy</div></div>
+            <div class="tss-item"><div class="tss-num negative">{{ sell_count }}</div><div class="tss-label">Sell</div></div>
+            <div class="tss-item"><div class="tss-num warning">{{ stop_count }}</div><div class="tss-label">Stop</div></div>
+        </div>
+
+        <!-- Summary Cards — desktop (>768px) -->
+        <div class="cards-row summary-desktop">
             <div class="card">
                 <div class="label">Total Trades</div>
                 <div class="value small">{{ trade_logs|length }}</div>
             </div>
             <div class="card">
                 <div class="label">Buy Orders</div>
-                <div class="value small">{{ trade_logs|selectattr('action', 'equalto', 'buy')|list|length }}</div>
+                <div class="value small">{{ buy_count }}</div>
             </div>
             <div class="card">
                 <div class="label">Sell Orders</div>
-                <div class="value small">{{ trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length }}</div>
+                <div class="value small">{{ sell_count }}</div>
             </div>
             <div class="card">
                 <div class="label">Stop Losses</div>
-                <div class="value small negative">{{ trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length }}</div>
+                <div class="value small negative">{{ stop_count }}</div>
             </div>
         </div>
 
         <!-- Trade Table -->
-        <div class="card">
+        <div class="card trades-card">
             <div class="section-title">All Trades <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
 
             <div class="filter-bar">
-                <button class="filter-pill active" data-filter="all" aria-pressed="true">All</button>
+                <button class="filter-pill active" data-filter="all" aria-pressed="true">All {{ trade_logs|length }}</button>
                 <button class="filter-pill" data-filter="buy" aria-pressed="false">Buy</button>
                 <button class="filter-pill" data-filter="sell" aria-pressed="false">Sell</button>
                 <button class="filter-pill" data-filter="stop_loss" aria-pressed="false">Stop Loss</button>
@@ -52,12 +64,12 @@
                 </thead>
                 <tbody id="trades-body">
                     {% for log in trade_logs %}
-                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}">
+                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}">
                         <td data-label="Time" class="full-width">{{ log.timestamp }}</td>
                         <td data-label="Symbol"><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
                         <td data-label="Market"><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
                         <td data-label="Action">
-                            <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">
+                            <span class="signal-tag {{ 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') }}">
                                 {% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}
                             </span>
                         </td>
@@ -84,6 +96,38 @@
             </table>
             </div>
 
+            <!-- Mobile trade cards (6a) — mirror the table rows (filter/pagination sync in JS) -->
+            <div class="trades-cards-m">
+                {% for log in trade_logs %}
+                {% set tagcls = 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') %}
+                <a class="trade-card-m" href="/symbol/{{ log.symbol }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}" aria-label="{{ log.symbol }} trade">
+                    <div class="tcm-head">
+                        <span class="sym-badge">{{ log.symbol }}</span>
+                        <span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span>
+                        <span class="signal-tag {{ tagcls }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
+                        <span class="tcm-time" title="{{ log.timestamp }}">{{ log.timestamp }}</span>
+                    </div>
+                    <div class="tcm-body">
+                        <div class="tcm-metrics">
+                            <div class="tcm-metric">
+                                <div class="tcm-label">Price</div>
+                                <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %} <span class="tcm-qty">{{ log.quantity }}</span></div>
+                            </div>
+                            <div class="tcm-metric">
+                                <div class="tcm-label">RSI</div>
+                                <div class="tcm-val">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</div>
+                            </div>
+                        </div>
+                        <div class="tcm-pnl {{ 'positive' if log.pnl is not none and log.pnl >= 0 else ('negative' if log.pnl is not none else '') }}">
+                            <div class="tcm-pnl-amt">{% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}</div>
+                            <div class="tcm-pnl-pct">{{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '' }}</div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+                <div class="empty-state trades-empty-m" hidden>No trades match this filter</div>
+            </div>
+
             <!-- Pagination -->
             <div class="pagination" id="pagination"></div>
         </div>
@@ -97,6 +141,10 @@
         const rows = Array.from(document.querySelectorAll('.trade-row'));
         const emptyFilterRow = document.getElementById('trades-empty-filter');
         const visibleCount = document.getElementById('visible-trade-count');
+        // Mobile cards mirror the table rows (same filter + pagination)
+        const cardByIdx = {};
+        document.querySelectorAll('.trade-card-m').forEach(c => { cardByIdx[c.dataset.idx] = c; });
+        const emptyMobile = document.querySelector('.trades-empty-m');
 
         function rowMatchesFilter(row, filter) {
             const action = row.dataset.action;
@@ -118,9 +166,13 @@
             const pageRows = new Set(visibleRows.slice(start, end));
 
             rows.forEach(row => {
-                row.hidden = !pageRows.has(row);
+                const hidden = !pageRows.has(row);
+                row.hidden = hidden;
+                const card = cardByIdx[row.dataset.idx];
+                if (card) card.hidden = hidden;
             });
             if (emptyFilterRow) emptyFilterRow.hidden = visibleRows.length > 0 || rows.length === 0;
+            if (emptyMobile) emptyMobile.hidden = visibleRows.length > 0;
             if (visibleCount) visibleCount.textContent = visibleRows.length;
 
             renderPagination(visibleRows.length);

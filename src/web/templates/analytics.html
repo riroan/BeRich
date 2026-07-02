@@ -2,428 +2,347 @@
 
 {% block title %}Analytics - BeRich Dashboard{% endblock %}
 
-{% block head_extra %}
-    <script src="/static/lightweight-charts.js"></script>
-    <style>
-        .analytics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 16px;
-            margin-bottom: 20px;
-        }
-        .analytics-card {
-            background: var(--surface);
-            border-radius: var(--radius);
-            padding: 20px;
-            box-shadow: var(--shadow);
-        }
-        .analytics-card h3 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            color: var(--dim);
-            font-weight: 500;
-        }
-        .report-tabs {
-            display: flex;
-            gap: 4px;
-            margin-bottom: 16px;
-        }
-        .report-tab {
-            padding: 6px 14px;
-            background: transparent;
-            border: 1px solid var(--card);
-            border-radius: 20px;
-            color: var(--dim);
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: 600;
-            font-family: inherit;
-            transition: all 0.2s;
-        }
-        .report-tab:hover { border-color: var(--blue); color: var(--text); }
-        .report-tab.active {
-            background: var(--blue);
-            color: white;
-            border-color: var(--blue);
-        }
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(51,65,85,0.3);
-            font-size: 13px;
-        }
-        .stat-row:last-child { border-bottom: none; }
-        .stat-label { color: var(--dim); }
-        .stat-value { font-weight: 600; font-variant-numeric: tabular-nums; }
-        .stat-value.positive { color: var(--emerald); }
-        .stat-value.negative { color: var(--red); }
-        .stat-value.warning { color: var(--amber); }
-        .stat-value.danger { color: var(--red); }
-        .drawdown-alert {
-            padding: 12px 16px;
-            border-radius: var(--radius);
-            margin-bottom: 12px;
-        }
-        .drawdown-alert.warning {
-            background: rgba(245,158,11,0.1);
-            border: 1px solid rgba(245,158,11,0.3);
-        }
-        .drawdown-alert.danger {
-            background: rgba(239,68,68,0.1);
-            border: 1px solid rgba(239,68,68,0.3);
-        }
-        .drawdown-alert.critical {
-            background: rgba(239,68,68,0.2);
-            border: 2px solid var(--red);
-        }
-        .time-stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
-            gap: 8px;
-        }
-        .time-stat-item {
-            text-align: center;
-            padding: 8px;
-            background: var(--bg);
-            border-radius: 8px;
-        }
-        .time-stat-item .label { font-size: 11px; color: var(--dim); }
-        .time-stat-item .value { font-size: 13px; font-weight: 600; }
-        .streak-display {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 24px;
-            font-weight: 700;
-        }
-        .streak-display.win { color: var(--emerald); }
-        .streak-display.loss { color: var(--red); }
-        .chart-container-small { height: 200px; width: 100%; }
+{% macro money0(value, signed=false) -%}
+    {%- set amount = value|float -%}
+    {%- if signed and amount >= 0 -%}
+        +${{ "{:,.0f}".format(amount) }}
+    {%- elif amount < 0 -%}
+        -${{ "{:,.0f}".format(-amount) }}
+    {%- else -%}
+        ${{ "{:,.0f}".format(amount) }}
+    {%- endif -%}
+{%- endmacro %}
 
-        @media (max-width: 768px) {
-            .analytics-grid {
-                grid-template-columns: 1fr;
-            }
-            .analytics-card {
-                padding: 14px;
-                overflow: hidden;
-            }
-            .stat-row {
-                font-size: 12px;
-                gap: 8px;
-            }
-            .stat-label {
-                flex-shrink: 1;
-                min-width: 0;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .stat-value {
-                flex-shrink: 0;
-                text-align: right;
-            }
-        }
-    </style>
-{% endblock %}
+{% macro profit_factor(value, total_pnl, losing_trades) -%}
+    {%- if total_pnl > 0 and losing_trades == 0 -%}
+        &infin;
+    {%- elif value is not none -%}
+        {{ "{:.2f}".format(value) }}
+    {%- else -%}
+        -
+    {%- endif -%}
+{%- endmacro %}
 
 {% block content %}
-        <!-- Summary Highlights -->
-        <div class="cards-row">
-            <div class="card">
-                <div class="label">Overall Win Rate</div>
-                <div class="value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">{{ "{:.1f}%".format(statistics.win_rate) }}</div>
+<div class="analytics-page">
+    <header class="analytics-mobile-title">
+        <h1>Analytics</h1>
+    </header>
+
+    <section class="analytics-kpi-grid" aria-label="Analytics summary">
+        <div class="analytics-kpi-card">
+            <div class="analytics-label">Win Rate</div>
+            <div class="analytics-kpi-value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">
+                {{ "{:.1f}%".format(statistics.win_rate) }}
             </div>
-            <div class="card">
-                <div class="label">Total P&L</div>
-                <div class="value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">${{ "{:,.2f}".format(statistics.total_pnl) }}</div>
+        </div>
+        <div class="analytics-kpi-card">
+            <div class="analytics-label">Total P&amp;L</div>
+            <div class="analytics-kpi-value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">
+                {{ money0(statistics.total_pnl) }}
             </div>
-            <div class="card">
-                <div class="label">Max Drawdown</div>
-                <div class="value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</div>
+        </div>
+        <div class="analytics-kpi-card">
+            <div class="analytics-label">Max Drawdown</div>
+            <div class="analytics-kpi-value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</div>
+        </div>
+        <div class="analytics-kpi-card">
+            <div class="analytics-label">Profit Factor</div>
+            <div class="analytics-kpi-value neutral">
+                {{ profit_factor(statistics.profit_factor, statistics.total_pnl, statistics.losing_trades) }}
             </div>
-            <div class="card">
-                <div class="label">Profit Factor</div>
-                <div class="value">
-                    {% if statistics.total_pnl > 0 and statistics.losing_trades == 0 %}
-                    ∞
-                    {% elif statistics.profit_factor is not none %}
-                    {{ "{:.2f}".format(statistics.profit_factor) }}
-                    {% else %}
-                    -
-                    {% endif %}
-                </div>
+        </div>
+    </section>
+
+    <section class="analytics-card analytics-report-card" aria-labelledby="trade-reports-title">
+        <h2 id="trade-reports-title">Trade Reports</h2>
+        <div class="analytics-report-tabs" role="group" aria-label="Report period">
+            <button type="button" class="report-tab active" data-period="daily" aria-pressed="true">Daily</button>
+            <button type="button" class="report-tab" data-period="weekly" aria-pressed="false">Weekly</button>
+            <button type="button" class="report-tab" data-period="monthly" aria-pressed="false">Monthly</button>
+        </div>
+
+        <div class="analytics-report-grid" id="report-content">
+            <div class="analytics-stat-line analytics-report-extra analytics-report-period">
+                <span class="analytics-stat-label">Period</span>
+                <span class="analytics-stat-value" id="report-period">
+                    {% set display_end = daily_report.end_date - timedelta(days=1) %}
+                    {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != display_end %} ~ {{ display_end.strftime('%Y-%m-%d') }}{% endif %}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Trades</span>
+                <span class="analytics-stat-value" id="report-trades">{{ daily_report.total_trades }}</span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Win Rate</span>
+                <span class="analytics-stat-value {{ 'positive' if daily_report.win_rate >= 50 else 'negative' }}" id="report-winrate">
+                    {{ "{:.1f}%".format(daily_report.win_rate) }}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">W / L</span>
+                <span class="analytics-stat-value" id="report-wl">
+                    {{ daily_report.winning_trades }} / {{ daily_report.losing_trades }}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Total P&amp;L</span>
+                <span class="analytics-stat-value {{ 'positive' if daily_report.total_pnl >= 0 else 'negative' }}" id="report-pnl">
+                    {{ money0(daily_report.total_pnl, true) }}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Avg Win</span>
+                <span class="analytics-stat-value positive" id="report-avgwin">
+                    {{ money0(daily_report.avg_win, true) }}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Avg Loss</span>
+                <span class="analytics-stat-value negative" id="report-avgloss">
+                    {{ money0(daily_report.avg_loss) }}
+                </span>
+            </div>
+            <div class="analytics-stat-line analytics-report-extra">
+                <span class="analytics-stat-label">Profit Factor</span>
+                <span class="analytics-stat-value" id="report-pf">
+                    {{ profit_factor(daily_report.profit_factor, daily_report.total_pnl, daily_report.losing_trades) }}
+                </span>
+            </div>
+        </div>
+    </section>
+
+    {% if drawdown.alert_triggered %}
+    <div class="analytics-alert analytics-alert-{{ drawdown.alert_level }}" role="status" aria-live="polite">
+        <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.3 3.6 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.6a2 2 0 0 0-3.4 0Z"/>
+            <path d="M12 9v4"/>
+            <path d="M12 17h.01"/>
+        </svg>
+        <span>
+            <strong>{% if drawdown.alert_level == 'critical' %}CRITICAL{% else %}WARNING{% endif %}:</strong>
+            Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
+        </span>
+    </div>
+    {% endif %}
+
+    <section class="analytics-compact-grid" aria-label="Drawdown and streaks">
+        <div class="analytics-card analytics-compact-card">
+            <h2>Drawdown</h2>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Current</span>
+                <span class="analytics-stat-value {{ 'danger' if drawdown.current_drawdown_pct >= 10 else ('warning' if drawdown.current_drawdown_pct >= 5 else '') }}">
+                    {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
+                </span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">MDD</span>
+                <span class="analytics-stat-value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</span>
+            </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Max Dur</span>
+                <span class="analytics-stat-value">{{ drawdown.max_drawdown_duration_days }}d</span>
+            </div>
+            <div class="analytics-stat-line analytics-extra-row">
+                <span class="analytics-stat-label">Current Dur</span>
+                <span class="analytics-stat-value">{{ drawdown.current_drawdown_duration_days }}d</span>
             </div>
         </div>
 
-        <!-- Period Reports -->
-        <div class="card">
-            <h3>Trade Reports</h3>
-            <div class="strategy-tabs" style="margin-top:12px;">
-                <button class="report-tab active" data-period="daily">Daily</button>
-                <button class="report-tab" data-period="weekly">Weekly</button>
-                <button class="report-tab" data-period="monthly">Monthly</button>
+        <div class="analytics-card analytics-compact-card">
+            <h2>Streaks</h2>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Current</span>
+                <span class="analytics-stat-value {{ 'positive' if statistics.current_streak > 0 else ('negative' if statistics.current_streak < 0 else '') }}">
+                    {% if statistics.current_streak > 0 %}+{{ statistics.current_streak }}W{% elif statistics.current_streak < 0 %}{{ statistics.current_streak }}L{% else %}-{% endif %}
+                </span>
             </div>
-
-            <div id="report-content">
-                <div class="analytics-grid">
-                    <div>
-                        <div class="stat-row">
-                            <span class="stat-label">Period</span>
-                            <span class="stat-value" id="report-period">
-                                {% set display_end = daily_report.end_date - timedelta(days=1) %}
-                                {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != display_end %} ~ {{ display_end.strftime('%Y-%m-%d') }}{% endif %}
-                            </span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Total Trades</span>
-                            <span class="stat-value" id="report-trades">{{ daily_report.total_trades }}</span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Win Rate</span>
-                            <span class="stat-value {{ 'positive' if daily_report.win_rate >= 50 else 'negative' }}" id="report-winrate">
-                                {{ "{:.1f}%".format(daily_report.win_rate) }}
-                            </span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">W / L</span>
-                            <span class="stat-value" id="report-wl">
-                                {{ daily_report.winning_trades }} / {{ daily_report.losing_trades }}
-                            </span>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="stat-row">
-                            <span class="stat-label">Total P&L</span>
-                            <span class="stat-value {{ 'positive' if daily_report.total_pnl >= 0 else 'negative' }}" id="report-pnl">
-                                ${{ "{:+,.2f}".format(daily_report.total_pnl) }}
-                            </span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Avg Win</span>
-                            <span class="stat-value positive" id="report-avgwin">
-                                ${{ "{:,.2f}".format(daily_report.avg_win) }}
-                            </span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Avg Loss</span>
-                            <span class="stat-value negative" id="report-avgloss">
-                                ${{ "{:,.2f}".format(daily_report.avg_loss) }}
-                            </span>
-                        </div>
-                        <div class="stat-row">
-                            <span class="stat-label">Profit Factor</span>
-                            <span class="stat-value" id="report-pf">
-                                {% if daily_report.total_pnl > 0 and daily_report.losing_trades == 0 %}
-                                ∞
-                                {% elif daily_report.profit_factor is not none %}
-                                {{ "{:.2f}".format(daily_report.profit_factor) }}
-                                {% else %}
-                                -
-                                {% endif %}
-                            </span>
-                        </div>
-                    </div>
-                </div>
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Max Win</span>
+                <span class="analytics-stat-value positive">{{ statistics.max_win_streak }}</span>
             </div>
-        </section>
-
-        <div class="two-col">
-            <!-- Drawdown Analysis -->
-            <div class="card">
-                <div class="section-title">Drawdown Analysis</div>
-
-                {% if drawdown.alert_triggered %}
-                <div class="drawdown-alert {{ drawdown.alert_level }}">
-                    {% if drawdown.alert_level == 'critical' %}
-                    CRITICAL: Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
-                    {% elif drawdown.alert_level == 'danger' %}
-                    WARNING: Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
-                    {% else %}
-                    Drawdown at {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
-                    {% endif %}
-                </div>
-                {% endif %}
-
-                <div class="stat-row">
-                    <span class="stat-label">Current Equity</span>
-                    <span class="stat-value">${{ "{:,.2f}".format(drawdown.current_equity) }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Peak Equity</span>
-                    <span class="stat-value">${{ "{:,.2f}".format(drawdown.peak_equity) }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Current Drawdown</span>
-                    <span class="stat-value {{ 'danger' if drawdown.current_drawdown_pct >= 10 else ('warning' if drawdown.current_drawdown_pct >= 5 else '') }}">
-                        {{ "{:.2f}%".format(drawdown.current_drawdown_pct) }}
-                    </span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Max Drawdown (MDD)</span>
-                    <span class="stat-value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Avg Drawdown</span>
-                    <span class="stat-value">{{ "{:.2f}%".format(drawdown.avg_drawdown_pct) }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Max DD Duration</span>
-                    <span class="stat-value">{{ drawdown.max_drawdown_duration_days }} days</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Current DD Duration</span>
-                    <span class="stat-value">{{ drawdown.current_drawdown_duration_days }} days</span>
-                </div>
-
+            <div class="analytics-stat-line">
+                <span class="analytics-stat-label">Max Loss</span>
+                <span class="analytics-stat-value negative">{{ statistics.max_loss_streak }}</span>
             </div>
-
-            <!-- Streaks -->
-            <div class="card">
-                <div class="section-title">Trading Streaks</div>
-
-                <div class="stat-row">
-                    <span class="stat-label">Current Streak</span>
-                    <span class="stat-value {{ 'positive' if statistics.current_streak > 0 else ('negative' if statistics.current_streak < 0 else '') }}">
-                        {% if statistics.current_streak > 0 %}+{{ statistics.current_streak }}W{% elif statistics.current_streak < 0 %}{{ statistics.current_streak }}L{% else %}-{% endif %}
-                    </span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Max Win Streak</span>
-                    <span class="stat-value positive">{{ statistics.max_win_streak }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Max Loss Streak</span>
-                    <span class="stat-value negative">{{ statistics.max_loss_streak }}</span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Last 7 Days Win Rate</span>
-                    <span class="stat-value {{ 'positive' if statistics.last_7_days_win_rate >= 50 else 'negative' }}">
-                        {{ "{:.1f}%".format(statistics.last_7_days_win_rate) }}
-                    </span>
-                </div>
-                <div class="stat-row">
-                    <span class="stat-label">Last 30 Days Win Rate</span>
-                    <span class="stat-value {{ 'positive' if statistics.last_30_days_win_rate >= 50 else 'negative' }}">
-                        {{ "{:.1f}%".format(statistics.last_30_days_win_rate) }}
-                    </span>
-                </div>
+            <div class="analytics-stat-line analytics-extra-row">
+                <span class="analytics-stat-label">30D Win</span>
+                <span class="analytics-stat-value {{ 'positive' if statistics.last_30_days_win_rate >= 50 else 'negative' }}">
+                    {{ "{:.1f}%".format(statistics.last_30_days_win_rate) }}
+                </span>
             </div>
         </div>
+    </section>
 
-        <div style="margin-top:12px;"></div>
+    <section class="analytics-symbols-section" aria-labelledby="analytics-symbols-title">
+        <h2 class="analytics-symbols-title" id="analytics-symbols-title">By Symbol</h2>
+        {% if statistics.by_symbol %}
+        <div class="analytics-symbol-cards">
+            {% for s in statistics.by_symbol %}
+            <a class="analytics-symbol-card" href="/symbol/{{ s.symbol }}" data-symbol-idx="{{ loop.index0 }}" aria-label="{{ s.symbol }} analytics">
+                <div class="analytics-symbol-main">
+                    <strong>{{ s.symbol }}</strong>
+                    <span>{{ s.total_trades }} trades &middot; PF {{ profit_factor(s.profit_factor, s.total_pnl, s.losing_trades) }}</span>
+                </div>
+                <div class="analytics-symbol-metrics">
+                    <div>
+                        <span>Win</span>
+                        <strong class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}">{{ "{:.0f}%".format(s.win_rate) }}</strong>
+                    </div>
+                    <div>
+                        <span>P&amp;L</span>
+                        <strong class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}">{{ money0(s.total_pnl, true) }}</strong>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
 
-        <!-- Symbol Statistics -->
-        <div class="card">
-            <div class="section-title">Performance by Symbol</div>
-            {% if statistics.by_symbol %}
-            <div class="table-wrap">
-            <table class="symbol-stats-table center-table mobile-cards">
+        <div class="table-wrap analytics-symbol-table-wrap">
+            <table class="symbol-stats-table center-table">
                 <thead>
                     <tr>
                         <th>Symbol</th>
                         <th>Trades</th>
                         <th>Win Rate</th>
-                        <th>P&L</th>
+                        <th>P&amp;L</th>
                         <th>PF</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for s in statistics.by_symbol %}
-                    <tr>
-                        <td class="full-width" data-label="Symbol"><a href="/symbol/{{ s.symbol }}">{{ s.symbol }}</a></td>
-                        <td data-label="Trades">{{ s.total_trades }}</td>
-                        <td class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}" data-label="Win Rate">
+                    <tr data-symbol-idx="{{ loop.index0 }}">
+                        <td><a href="/symbol/{{ s.symbol }}" class="sym-badge">{{ s.symbol }}</a></td>
+                        <td>{{ s.total_trades }}</td>
+                        <td class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}">
                             {{ "{:.1f}%".format(s.win_rate) }}
                         </td>
-                        <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}" data-label="Total P&L">
-                            ${{ "{:+,.2f}".format(s.total_pnl) }}
+                        <td class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}">
+                            {{ money0(s.total_pnl, true) }}
                         </td>
-                        <td data-label="PF">
-                            {% if s.total_pnl > 0 and s.losing_trades == 0 %}
-                            ∞
-                            {% elif s.profit_factor is not none %}
-                            {{ "{:.2f}".format(s.profit_factor) }}
-                            {% else %}
-                            -
-                            {% endif %}
-                        </td>
+                        <td>{{ profit_factor(s.profit_factor, s.total_pnl, s.losing_trades) }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-            </div>
-            {% else %}
-            <p class="empty">No trade data available</p>
-            {% endif %}
-            <div class="pagination" id="symbol-pagination"></div>
         </div>
+        {% else %}
+        <p class="empty">No trade data available</p>
+        {% endif %}
+        <div class="pagination" id="symbol-pagination"></div>
+    </section>
+</div>
 {% endblock %}
 
 {% block scripts %}
-    <script>
-        // Symbol table pagination
-        const symRows = Array.from(document.querySelectorAll('.symbol-stats-table tbody tr'));
-        const SYM_PER_PAGE = 10;
-        let symPage = 1;
+<script>
+    const symRows = Array.from(document.querySelectorAll('.symbol-stats-table tbody tr'));
+    const symCards = Array.from(document.querySelectorAll('.analytics-symbol-card'));
+    const SYM_PER_PAGE = 10;
+    let symPage = 1;
 
-        function showSymPage(page) {
-            symPage = page;
-            const start = (page - 1) * SYM_PER_PAGE;
-            const end = start + SYM_PER_PAGE;
-            symRows.forEach((row, i) => {
-                row.style.display = (i >= start && i < end) ? '' : 'none';
-            });
-            renderSymPagination();
+    function setSymbolItemVisibility(index, visible) {
+        const row = symRows[index];
+        const card = symCards[index];
+        if (row) {
+            row.hidden = !visible;
+            row.style.display = visible ? '' : 'none';
         }
+        if (card) card.hidden = !visible;
+    }
 
-        function renderSymPagination() {
-            const container = document.getElementById('symbol-pagination');
-            const pages = Math.ceil(symRows.length / SYM_PER_PAGE);
-            if (pages <= 1) { container.innerHTML = ''; return; }
-            let html = '';
-            for (let i = 1; i <= pages; i++) {
-                html += '<button class="page-btn ' + (i === symPage ? 'active' : '') + '" onclick="showSymPage(' + i + ')">' + i + '</button>';
-            }
-            container.innerHTML = html;
+    function showSymPage(page) {
+        const total = Math.max(symRows.length, symCards.length);
+        const pages = Math.max(1, Math.ceil(total / SYM_PER_PAGE));
+        symPage = Math.min(Math.max(page, 1), pages);
+        const start = (symPage - 1) * SYM_PER_PAGE;
+        const end = start + SYM_PER_PAGE;
+        for (let i = 0; i < total; i += 1) {
+            setSymbolItemVisibility(i, i >= start && i < end);
         }
+        renderSymPagination(total);
+    }
 
-        if (symRows.length > 0) showSymPage(1);
+    function renderSymPagination(total) {
+        const container = document.getElementById('symbol-pagination');
+        if (!container) return;
+        const pages = Math.ceil(total / SYM_PER_PAGE);
+        if (pages <= 1) {
+            container.innerHTML = '';
+            return;
+        }
+        let html = '';
+        for (let i = 1; i <= pages; i += 1) {
+            html += `<button type="button" class="page-btn ${i === symPage ? 'active' : ''}" data-page="${i}" ${i === symPage ? 'aria-current="page"' : ''}>${i}</button>`;
+        }
+        container.innerHTML = html;
+    }
 
-        // Report tabs
-        const reportTabs = document.querySelectorAll('.report-tab');
-        reportTabs.forEach(tab => {
-            tab.addEventListener('click', async () => {
-                reportTabs.forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-
-                const period = tab.dataset.period;
-                const res = await fetch(`/api/analytics/reports?period=${period}`);
-                const data = await res.json();
-
-                const start = data.start_date.split('T')[0];
-                // end_date is exclusive (half-open interval), subtract 1 day via string to avoid timezone issues
-                const [ey, em, ed] = data.end_date.split('T')[0].split('-').map(Number);
-                const endDate = new Date(Date.UTC(ey, em - 1, ed - 1));
-                const end = endDate.toISOString().split('T')[0];
-                document.getElementById('report-period').textContent = (start === end) ? start : start + ' ~ ' + end;
-                document.getElementById('report-trades').textContent = data.total_trades;
-                document.getElementById('report-winrate').textContent = data.win_rate.toFixed(1) + '%';
-                document.getElementById('report-winrate').className = 'stat-value ' + (data.win_rate >= 50 ? 'positive' : 'negative');
-                document.getElementById('report-wl').textContent = `${data.winning_trades} / ${data.losing_trades}`;
-                document.getElementById('report-pnl').textContent = '$' + data.total_pnl.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('report-pnl').className = 'stat-value ' + (data.total_pnl >= 0 ? 'positive' : 'negative');
-                document.getElementById('report-avgwin').textContent = '$' + data.avg_win.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('report-avgloss').textContent = '$' + data.avg_loss.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                let pfText = '-';
-                if (data.total_pnl > 0 && data.losing_trades === 0) {
-                    pfText = '∞';
-                } else if (data.profit_factor !== null && data.profit_factor !== undefined) {
-                    pfText = Number(data.profit_factor).toFixed(2);
-                }
-                document.getElementById('report-pf').textContent = pfText;
-            });
+    const symbolPagination = document.getElementById('symbol-pagination');
+    if (symbolPagination) {
+        symbolPagination.addEventListener('click', event => {
+            const btn = event.target.closest('.page-btn[data-page]');
+            if (!btn) return;
+            showSymPage(Number(btn.dataset.page));
         });
-    </script>
+    }
+
+    if (symRows.length > 0 || symCards.length > 0) showSymPage(1);
+
+    function formatMoney(value, signed = false) {
+        const amount = Number(value || 0);
+        const formatted = Math.abs(amount).toLocaleString(undefined, {
+            maximumFractionDigits: 0,
+        });
+        if (signed && amount >= 0) return `+$${formatted}`;
+        if (amount < 0) return `-$${formatted}`;
+        return `$${formatted}`;
+    }
+
+    function setMetricText(id, value, className) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+        if (className) el.className = `analytics-stat-value ${className}`;
+    }
+
+    const reportTabs = document.querySelectorAll('.report-tab');
+    reportTabs.forEach(tab => {
+        tab.addEventListener('click', async () => {
+            reportTabs.forEach(t => {
+                t.classList.remove('active');
+                t.setAttribute('aria-pressed', 'false');
+            });
+            tab.classList.add('active');
+            tab.setAttribute('aria-pressed', 'true');
+
+            const period = tab.dataset.period;
+            const res = await fetch(`/api/analytics/reports?period=${period}`);
+            const data = await res.json();
+
+            const start = data.start_date.split('T')[0];
+            const [ey, em, ed] = data.end_date.split('T')[0].split('-').map(Number);
+            const endDate = new Date(Date.UTC(ey, em - 1, ed - 1));
+            const end = endDate.toISOString().split('T')[0];
+            const periodEl = document.getElementById('report-period');
+            if (periodEl) periodEl.textContent = (start === end) ? start : `${start} ~ ${end}`;
+
+            setMetricText('report-trades', data.total_trades, '');
+            setMetricText('report-winrate', `${data.win_rate.toFixed(1)}%`, data.win_rate >= 50 ? 'positive' : 'negative');
+            setMetricText('report-wl', `${data.winning_trades} / ${data.losing_trades}`, '');
+            setMetricText('report-pnl', formatMoney(data.total_pnl, true), data.total_pnl >= 0 ? 'positive' : 'negative');
+            setMetricText('report-avgwin', formatMoney(data.avg_win, true), 'positive');
+            setMetricText('report-avgloss', formatMoney(data.avg_loss), data.avg_loss < 0 ? 'negative' : '');
+
+            let pfText = '-';
+            if (data.total_pnl > 0 && data.losing_trades === 0) {
+                pfText = '∞';
+            } else if (data.profit_factor !== null && data.profit_factor !== undefined) {
+                pfText = Number(data.profit_factor).toFixed(2);
+            }
+            setMetricText('report-pf', pfText, '');
+        });
+    });
+</script>
 {% endblock %}
