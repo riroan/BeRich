@@ -7,6 +7,7 @@
         {% set sell_count = trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length %}
         {% set stop_count = trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length %}
 
+        <header class="page-mobile-title"><h1>Trades</h1></header>
         <!-- Summary — mobile strip (6a, ≤768px) -->
         <div class="trade-summary-strip">
             <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">Total</div></div>

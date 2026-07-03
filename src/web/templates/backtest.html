@@ -167,6 +167,7 @@
                 gap: 10px;
             }
             .page-backtest .bt-capital-field { grid-column: 1 / -1; }
+            .page-backtest .bt-date-field { grid-column: 1 / -1; }
             .page-backtest .bt-field { gap: 5px; min-width: 0; }
             .page-backtest .bt-field label {
                 font-size: 9px;
@@ -181,6 +182,8 @@
             .page-backtest .bt-field input[type="number"],
             .page-backtest .bt-field select {
                 width: 100%;
+                min-width: 0;
+                box-sizing: border-box;
                 min-height: 44px;
                 border: 1px solid rgba(148,163,184,0.26);
                 border-radius: 9px;
@@ -191,6 +194,24 @@
                 font-weight: 800;
                 line-height: 44px;
                 letter-spacing: 0;
+            }
+            /* iOS WebKit: native date/month controls have an intrinsic min-width
+               that ignores width:100% and overflows; strip the native chrome and
+               left-align the value so they fit the container. */
+            .page-backtest .bt-field input[type="date"],
+            .page-backtest .bt-field input[type="month"] {
+                -webkit-appearance: none;
+                appearance: none;
+            }
+            .page-backtest .bt-field input[type="date"]::-webkit-date-and-time-value,
+            .page-backtest .bt-field input[type="month"]::-webkit-date-and-time-value {
+                margin: 0;
+                text-align: left;
+                min-width: 0;
+            }
+            .page-backtest .bt-field input[type="date"]::-webkit-calendar-picker-indicator,
+            .page-backtest .bt-field input[type="month"]::-webkit-calendar-picker-indicator {
+                margin-left: auto;
             }
             .page-backtest .bt-field select {
                 appearance: none;
@@ -447,6 +468,7 @@
 {% endblock %}
 
 {% block content %}
+        <header class="page-mobile-title"><h1>Backtest</h1></header>
         <div class="section-title">
             <span>Backtest — RSI Mean Reversion</span>
         </div>
@@ -480,11 +502,11 @@
                                 <option value="amex">AMEX</option>
                             </select>
                         </div>
-                        <div class="bt-field">
+                        <div class="bt-field bt-date-field">
                             <label for="bt-start">Start</label>
                             <input type="date" id="bt-start">
                         </div>
-                        <div class="bt-field">
+                        <div class="bt-field bt-date-field">
                             <label for="bt-end">End</label>
                             <input type="date" id="bt-end">
                         </div>

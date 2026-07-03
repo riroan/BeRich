@@ -490,9 +490,15 @@ body {
 .sym-controls {
     display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
+.sym-controls input[type="text"],
+.sym-controls input[type="number"] {
+    width: 60px; text-align: right; padding: 6px 8px; font-size: 13px;
+}
+.sym-controls .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
 
-/* Symbols 5a — these appear only on mobile (cards, FAB, bottom sheet) */
+/* Symbols 5a — these appear only on mobile (cards, steppers, FAB, bottom sheet) */
 .sym-off-badge,
+.step-btn,
 .sym-fab,
 .sheet-grabber,
 .sheet-close,
@@ -606,6 +612,8 @@ body {
     font-size: 12px;
     color: var(--dim);
     font-weight: 500;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 .sort-select {
     appearance: none;
@@ -2250,16 +2258,35 @@ select option { background: var(--surface); color: var(--text); }
     .sym-toggle { margin-left: auto; width: 44px; height: 24px; }
     .sym-toggle .slider { top: 0; right: 0; bottom: 0; left: 0; }
 
-    /* Keep destructive action aligned with the row controls */
+    /* Controls become the second row: stepper + weight + delete */
     .sym-controls {
-        width: auto;
+        width: 100%;
         margin-left: 0;
         gap: 8px;
+        padding-top: 11px;
+        border-top: 1px solid var(--border);
     }
+    .step-btn {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 30px; height: 30px; border-radius: 8px; border: none;
+        background: var(--bg); color: var(--text);
+        font-size: 16px; font-weight: 600; line-height: 1;
+        cursor: pointer; font-family: inherit; flex-shrink: 0;
+    }
+    .step-btn:active { background: var(--card); }
+    .sym-controls input[type="number"] {
+        width: 46px; min-height: 0; text-align: center;
+        background: transparent; border: none; padding: 0;
+        font-size: 15px; font-weight: 700; color: var(--white);
+        -moz-appearance: textfield;
+    }
+    .sym-controls input[type="number"]::-webkit-outer-spin-button,
+    .sym-controls input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+    .sym-controls .pct { margin-left: -4px; color: var(--text-muted); }
     .sym-controls .btn-danger {
         width: 30px; height: 30px; min-width: 30px; min-height: 30px;
         padding: 0; display: flex; align-items: center; justify-content: center;
-        flex-shrink: 0;
+        margin-left: auto; flex-shrink: 0;
     }
 
     /* FAB (opens the add-symbol bottom sheet) */
@@ -2700,6 +2727,8 @@ select option { background: var(--surface); color: var(--text); }
     }
     .perf-hero-stats {
         margin-top: 18px;
+        /* give Balance more room; trim CAGR/MDD so Balance stops truncating */
+        grid-template-columns: 1.4fr 0.8fr 0.8fr;
     }
     .perf-hero-stat {
         padding-right: 10px;
@@ -3223,4 +3252,161 @@ select option { background: var(--surface); color: var(--text); }
 }
 .bottom-nav-item:active {
     background: rgba(255,255,255,0.05);
+}
+
+/* ===================== Header status — icon pills =====================
+   Icons are CSS ::before masks (not inline SVG) because script.js rewrites
+   these elements' innerHTML/className on every WS tick. We hook the state
+   classes JS keeps (.running/.stopped/.paper/.real/.connected/.paused),
+   so dynamic updates stay intact. */
+.header-right .ws-status,
+.header-right .bot-status,
+.header-right .mode,
+.header-right .warmup,
+.header-right .pause-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 11px;
+    border-radius: 9px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    line-height: 1;
+}
+.header-right .ws-status::before,
+.header-right .bot-status::before,
+.header-right .mode::before,
+.header-right .warmup::before,
+.header-right .pause-btn::before {
+    content: "";
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    background-color: currentColor;
+    -webkit-mask: center / contain no-repeat;
+    mask: center / contain no-repeat;
+}
+/* WS — wifi glyph (icon only; JS clears its text) */
+.header-right .ws-status {
+    width: auto;
+    padding: 0 10px;
+    font-size: 0;
+    box-shadow: none;
+}
+.header-right .ws-status::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13a10 10 0 0 1 14 0'/%3E%3Cpath d='M8.5 16.5a5 5 0 0 1 7 0'/%3E%3Cpath d='M12 20h.01'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 13a10 10 0 0 1 14 0'/%3E%3Cpath d='M8.5 16.5a5 5 0 0 1 7 0'/%3E%3Cpath d='M12 20h.01'/%3E%3C/svg%3E");
+}
+.header-right .ws-status.connected { color: var(--emerald); border-color: rgba(16,185,129,.32); }
+.header-right .ws-status.disconnected { color: var(--red); border-color: rgba(239,68,68,.32); }
+/* BOT — hide the old pulsing dot, show a cpu glyph */
+.header-right .bot-status .bot-status-dot { display: none; }
+.header-right .bot-status .bot-status-label { font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+.header-right .bot-status::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='8' width='16' height='12' rx='2'/%3E%3Cpath d='M12 8V4'/%3E%3Cpath d='M9 14h.01'/%3E%3Cpath d='M15 14h.01'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='4' y='8' width='16' height='12' rx='2'/%3E%3Cpath d='M12 8V4'/%3E%3Cpath d='M9 14h.01'/%3E%3Cpath d='M15 14h.01'/%3E%3C/svg%3E");
+}
+.header-right .bot-status.running { color: var(--emerald); border-color: rgba(16,185,129,.32); }
+.header-right .bot-status.stopped { color: var(--red); border-color: rgba(239,68,68,.32); }
+/* MODE — shield glyph + P/R */
+.header-right .mode.paper,
+.header-right .mode.real { min-width: 0; padding: 0 11px; }
+.header-right .mode::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z'/%3E%3C/svg%3E");
+}
+.header-right .mode.paper { color: var(--amber); border-color: rgba(245,158,11,.32); }
+.header-right .mode.real { color: var(--red); border-color: rgba(239,68,68,.32); }
+/* WARMUP — clock glyph (amber) */
+.header-right .warmup { color: var(--amber); border-color: rgba(245,158,11,.32); }
+.header-right .warmup::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
+}
+/* TRADING — the one filled, primary action. Icon shows current state:
+   running = play glyph, paused = pause glyph. */
+.header-right .pause-btn {
+    padding: 0 14px;
+    background: var(--emerald);
+    color: #04150f;
+    border: none;
+    font-weight: 800;
+    box-shadow: 0 2px 10px rgba(16,185,129,.28);
+}
+.header-right .pause-btn::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Cpath d='M7 5l12 7-12 7z'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Cpath d='M7 5l12 7-12 7z'/%3E%3C/svg%3E");
+}
+.header-right .pause-btn.paused {
+    background: rgba(239,68,68,.16);
+    color: var(--red);
+    box-shadow: none;
+}
+.header-right .pause-btn.paused::before {
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Crect x='6' y='5' width='4' height='14' rx='1'/%3E%3Crect x='14' y='5' width='4' height='14' rx='1'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23000'%3E%3Crect x='6' y='5' width='4' height='14' rx='1'/%3E%3Crect x='14' y='5' width='4' height='14' rx='1'/%3E%3C/svg%3E");
+}
+.header-right .pause-btn:hover { opacity: .9; }
+
+/* Mobile: clean two rows — brand alone on row 1, status chips + timestamp
+   together on a single row 2 (previously the timestamp was forced onto a 3rd
+   row and the wide chips overflowed the brand's row). */
+@media (max-width: 768px) {
+    /* natural-width brand so the full-width status cluster drops to its own row */
+    .header h1 { flex: 0 0 auto; }
+    .header-right { width: 100%; gap: 4px; row-gap: 6px; }
+    /* compact chips */
+    .header-right .ws-status,
+    .header-right .bot-status,
+    .header-right .mode,
+    .header-right .warmup,
+    .header-right .pause-btn { gap: 5px; }
+    .header-right .ws-status,
+    .header-right .bot-status,
+    .header-right .mode { padding: 0 8px; }
+    .header-right .pause-btn { padding: 0 11px; }
+}
+
+/* Icon-only header chips — text labels hidden (kept in the a11y tree via
+   aria-label / the button's own text node); only glyphs show. Warmup keeps its
+   remaining-count number beside the clock glyph. */
+.header-right .bot-status .bot-status-label { display: none; }
+.header-right .mode,
+.header-right .pause-btn { font-size: 0; }
+.header-right .ws-status,
+.header-right .bot-status,
+.header-right .mode,
+.header-right .pause-btn {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 34px;          /* reset .ws-status' flex:0 0 10px so it stays square */
+    padding: 0;
+    gap: 0;
+    justify-content: center;
+}
+.header-right .mode.paper,
+.header-right .mode.real { padding: 0; min-width: 0; }
+.header-right .warmup { gap: 5px; }
+
+/* Shared mobile page-title header (Portfolio, Symbols, Trades, Menu, Backtest).
+   Hidden on desktop where the top nav already shows context. */
+.page-mobile-title { display: none; }
+@media (max-width: 768px) {
+    .page-mobile-title {
+        display: flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 4px 2px;
+        margin-bottom: 4px;
+    }
+    .page-mobile-title h1 {
+        color: var(--white);
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1;
+    }
 }

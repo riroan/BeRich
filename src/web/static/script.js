@@ -327,7 +327,8 @@ class DashboardWebSocket {
             const warmupSpan = document.getElementById('bot-warmup-status') || document.querySelector('.status-bar .warmup');
             if (warmupSpan) {
                 if (data.bot_status.warmup_remaining) {
-                    warmupSpan.textContent = `WARMUP: ${data.bot_status.warmup_remaining}`;
+                    warmupSpan.textContent = `${data.bot_status.warmup_remaining}`;
+                    warmupSpan.setAttribute('aria-label', `Warmup ${data.bot_status.warmup_remaining} remaining`);
                     warmupSpan.hidden = false;
                 } else {
                     warmupSpan.hidden = true;
@@ -352,28 +353,20 @@ class DashboardWebSocket {
     }
 
     updateLastUpdateTime(lastUpdate) {
-        const updateTime = document.getElementById('last-update-time') || document.querySelector('.update-time');
-        if (updateTime) {
-            const date = new Date(lastUpdate);
-            if (Number.isNaN(date.getTime())) {
-                const fallback = lastUpdate || 'N/A';
-                updateTime.textContent = `Last: ${fallback}`;
-                const stickyLast = document.getElementById('sticky-last-update');
-                if (stickyLast) stickyLast.textContent = fallback;
-                return;
-            }
-            const formattedTime = date.toLocaleTimeString('ko-KR', {
+        const date = new Date(lastUpdate);
+        const formattedTime = Number.isNaN(date.getTime())
+            ? (lastUpdate || 'N/A')
+            : date.toLocaleTimeString('ko-KR', {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
                 hour12: false,
             });
-            updateTime.textContent = `Last: ${formattedTime}`;
-            const stickyLast = document.getElementById('sticky-last-update');
-            if (stickyLast) {
-                stickyLast.textContent = formattedTime;
-            }
-        }
+        // Header timestamp was removed; keep the desktop sticky-pnl "Last" in sync.
+        const updateTime = document.getElementById('last-update-time') || document.querySelector('.update-time');
+        if (updateTime) updateTime.textContent = `Last: ${formattedTime}`;
+        const stickyLast = document.getElementById('sticky-last-update');
+        if (stickyLast) stickyLast.textContent = formattedTime;
     }
 
     updateConnectionStatus(connected) {
