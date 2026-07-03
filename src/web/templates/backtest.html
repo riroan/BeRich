@@ -13,6 +13,10 @@
             background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
             padding: 8px 12px; color: var(--text); font-size: 13px;
         }
+        .bt-field input[type="month"] {
+            background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
+            padding: 8px 12px; color: var(--text); font-size: 13px;
+        }
         .bt-field input:disabled { opacity: 0.45; cursor: not-allowed; }
         .bt-field input.bt-num { font-variant-numeric: tabular-nums; text-align: right; }
         .bt-slider-row { display: grid; grid-template-columns: 110px 1fr 60px; gap: 12px; align-items: center; }
@@ -25,35 +29,321 @@
             color: var(--text); font-size: 13px;
         }
         .bt-check input { width: 16px; height: 16px; accent-color: var(--blue); }
-        .bt-stage-row { display: grid; grid-template-columns: 60px 80px 1fr 80px 1fr; gap: 8px; align-items: center; font-size: 12px; }
-        .bt-stage-row input[type="number"] {
+        .bt-levels-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .bt-level-card { display: grid; gap: 8px; }
+        .bt-stage-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12px; }
+        .bt-stage-name { color: var(--dim); font-weight: 600; }
+        .bt-stage-short { display: none; }
+        .bt-stage-control {
+            display: grid; grid-template-columns: auto minmax(0, 74px); align-items: center; gap: 6px;
+            color: var(--dim); min-width: 0;
+        }
+        .bt-stage-control input[type="number"] {
             background: var(--bg); border: 1px solid var(--card); border-radius: 6px;
             padding: 4px 8px; color: var(--text); font-size: 12px; text-align: right;
             font-variant-numeric: tabular-nums;
         }
+        .bt-stage-percent { display: none; }
+        .bt-section-h.bt-buy-title { color: var(--emerald); }
+        .bt-section-h.bt-sell-title { color: var(--red); }
         .bt-section-h { font-size: 12px; text-transform: uppercase; color: var(--dim); letter-spacing: 0.5px; margin-top: 8px; }
+        .bt-run-actions { display: flex; }
         .bt-run-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 8px;
             background: var(--blue); color: white; border: none; border-radius: 20px;
             padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer;
             transition: all 0.2s;
         }
+        .bt-run-btn svg { width: 14px; height: 14px; fill: currentColor; flex: 0 0 auto; }
         .bt-run-btn:hover:not(:disabled) { background: #2563eb; box-shadow: 0 0 16px rgba(59,130,246,0.4); }
         .bt-run-btn:disabled { opacity: 0.5; cursor: wait; }
         .bt-results { display: none; }
         .bt-results.shown { display: block; animation: bt-fade 0.3s ease; }
         @keyframes bt-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-        .bt-source-pill {
-            display: inline-block; padding: 3px 10px; border-radius: 20px;
-            font-size: 11px; font-weight: 600; margin-left: 8px;
+        .bt-result-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
         }
-        .bt-source-kis { background: rgba(16,185,129,0.15); color: #10b981; }
-        .bt-source-yfinance { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .bt-result-grid .card {
+            min-height: 76px;
+            padding: 14px 16px;
+            border-radius: 10px;
+        }
+        .bt-result-grid .card .label {
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1;
+            letter-spacing: .35px;
+            color: var(--text-muted);
+        }
+        .bt-result-grid .card .value.small {
+            margin-top: 8px;
+            font-size: 19px;
+            line-height: 1.05;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .bt-result-grid .bt-alpha-card {
+            background: rgba(59,130,246,0.20);
+        }
+        .bt-result-grid .bt-alpha-card .label,
+        .bt-result-grid .bt-alpha-card .value {
+            color: var(--blue) !important;
+        }
         .bt-error {
             display: none; padding: 12px 16px; border-radius: 8px;
             background: rgba(239,68,68,0.12); color: #ef4444; font-size: 13px;
             border: 1px solid rgba(239,68,68,0.3);
         }
         .bt-error.shown { display: block; }
+
+        @media (max-width: 768px) {
+            .page-backtest .section-title { display: none; }
+            .page-backtest section { margin: 0; }
+            .page-backtest .bt-panel {
+                background: transparent;
+                box-shadow: none;
+                padding: 0;
+            }
+            .page-backtest .bt-form {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .page-backtest .bt-main-card,
+            .page-backtest .bt-params-card,
+            .page-backtest .bt-level-card,
+            .page-backtest .bt-preset-card,
+            .page-backtest .bt-recovery-card {
+                background: var(--surface);
+                border-radius: 12px;
+                padding: 14px;
+                box-shadow: var(--shadow);
+            }
+            .page-backtest .bt-preset-card { order: 1; }
+            .page-backtest .bt-main-card { order: 2; }
+            .page-backtest .bt-params-card { order: 3; }
+            .page-backtest .bt-recovery-card { order: 6; }
+            .page-backtest .bt-levels-grid { order: 4; }
+            .page-backtest .bt-run-actions { order: 5; }
+            .page-backtest .bt-core-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 10px;
+            }
+            .page-backtest .bt-capital-field { grid-column: 1 / -1; }
+            .page-backtest .bt-field { gap: 5px; min-width: 0; }
+            .page-backtest .bt-field label {
+                font-size: 9px;
+                font-weight: 800;
+                line-height: 1;
+                letter-spacing: .55px;
+                color: var(--text-muted);
+            }
+            .page-backtest .bt-field input[type="text"],
+            .page-backtest .bt-field input[type="date"],
+            .page-backtest .bt-field input[type="month"],
+            .page-backtest .bt-field input[type="number"],
+            .page-backtest .bt-field select {
+                width: 100%;
+                min-height: 44px;
+                border: 1px solid rgba(148,163,184,0.26);
+                border-radius: 9px;
+                background: var(--bg);
+                padding: 0 12px;
+                color: var(--white);
+                font-size: 16px;
+                font-weight: 800;
+                line-height: 44px;
+                letter-spacing: 0;
+            }
+            .page-backtest .bt-field select {
+                appearance: none;
+                -webkit-appearance: none;
+                padding-right: 30px;
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+                background-repeat: no-repeat;
+                background-position: right 12px center;
+            }
+            .page-backtest .bt-capital-field input { text-align: right; }
+            .page-backtest .bt-section-h {
+                margin: 0 0 8px;
+                color: var(--white);
+                font-size: 12px;
+                font-weight: 800;
+                line-height: 1.1;
+                letter-spacing: .35px;
+            }
+            .page-backtest .bt-params-card {
+                display: grid;
+                gap: 10px;
+            }
+            .page-backtest .bt-slider-row {
+                grid-template-columns: 1fr auto;
+                gap: 6px 10px;
+            }
+            .page-backtest .bt-slider-row label {
+                font-size: 13px;
+                line-height: 1.2;
+                color: var(--dim);
+            }
+            .page-backtest .bt-slider-row .bt-slider-val {
+                font-size: 14px;
+                line-height: 1.2;
+                font-weight: 800;
+                color: var(--white);
+            }
+            .page-backtest #bt-stop-loss-v { color: var(--red); }
+            .page-backtest .bt-slider-row input[type="range"] {
+                grid-column: 1 / -1;
+                height: 4px;
+                margin: 0;
+                accent-color: var(--blue);
+            }
+            .page-backtest .bt-slider-row input[type="range"]::-webkit-slider-thumb {
+                width: 18px;
+                height: 18px;
+            }
+            .page-backtest .bt-levels-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .page-backtest .bt-level-card {
+                gap: 7px;
+                min-width: 0;
+            }
+            .page-backtest .bt-buy-title,
+            .page-backtest .bt-sell-title {
+                margin-bottom: 6px;
+                font-size: 10px;
+                letter-spacing: .2px;
+            }
+            .page-backtest .bt-stage-row {
+                grid-template-columns: minmax(24px, 1fr) auto auto;
+                gap: 0;
+                min-height: 25px;
+                font-size: 13px;
+            }
+            .page-backtest .bt-stage-name {
+                color: var(--dim);
+                font-weight: 500;
+                line-height: 1;
+            }
+            .page-backtest .bt-stage-full,
+            .page-backtest .bt-stage-control-label { display: none; }
+            .page-backtest .bt-stage-short { display: inline; }
+            .page-backtest .bt-stage-control {
+                display: flex;
+                align-items: center;
+                justify-content: flex-end;
+                gap: 0;
+                color: var(--white);
+                font-size: 14px;
+                font-weight: 800;
+                line-height: 1;
+            }
+            .page-backtest .bt-stage-control + .bt-stage-control::before {
+                content: "·";
+                margin: 0 6px;
+                color: var(--white);
+                font-weight: 800;
+            }
+            .page-backtest .bt-stage-control input[type="number"] {
+                width: 28px;
+                min-width: 0;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                padding: 0;
+                color: var(--white);
+                font-size: 14px;
+                font-weight: 800;
+                line-height: 1;
+                text-align: right;
+                appearance: textfield;
+                -moz-appearance: textfield;
+            }
+            .page-backtest .bt-stage-control input[type="number"]::-webkit-outer-spin-button,
+            .page-backtest .bt-stage-control input[type="number"]::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+            .page-backtest .bt-stage-percent {
+                display: inline;
+                margin-left: 1px;
+                color: var(--white);
+            }
+            .page-backtest .bt-run-btn {
+                width: 100%;
+                min-height: 47px;
+                border-radius: 11px;
+                padding: 0 18px;
+                font-size: 14px;
+                font-weight: 800;
+            }
+            .page-backtest .bt-run-btn svg {
+                width: 13px;
+                height: 13px;
+            }
+            .page-backtest .bt-toggle-row {
+                grid-template-columns: 1fr;
+                gap: 10px;
+            }
+            .page-backtest .bt-check {
+                min-height: 22px;
+                font-size: 13px;
+            }
+            .page-backtest .bt-error { margin-top: 10px !important; }
+            .page-backtest .bt-results-summary {
+                background: transparent;
+                box-shadow: none;
+                padding: 0;
+            }
+            .page-backtest .bt-result-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+                gap: 8px;
+            }
+            .page-backtest .bt-result-grid .card {
+                min-height: 52px;
+                padding: 10px;
+                border-radius: 9px;
+            }
+            .page-backtest .bt-result-grid .card .label {
+                font-size: 8px;
+                line-height: 1;
+            }
+            .page-backtest .bt-result-grid .card .value.small {
+                margin-top: 7px;
+                font-size: 17px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            .page-backtest .bt-main-card,
+            .page-backtest .bt-params-card,
+            .page-backtest .bt-level-card,
+            .page-backtest .bt-preset-card,
+            .page-backtest .bt-recovery-card {
+                padding: 12px;
+            }
+            .page-backtest .bt-field input[type="text"],
+            .page-backtest .bt-field input[type="date"],
+            .page-backtest .bt-field input[type="month"],
+            .page-backtest .bt-field input[type="number"],
+            .page-backtest .bt-field select {
+                font-size: 15px;
+            }
+            .page-backtest .bt-stage-control input[type="number"],
+            .page-backtest .bt-stage-control {
+                font-size: 13px;
+            }
+            .page-backtest .bt-result-grid .card {
+                padding: 9px;
+            }
+            .page-backtest .bt-result-grid .card .value.small {
+                font-size: 16px;
+            }
+        }
     </style>
 {% endblock %}
 
@@ -63,9 +353,10 @@
         </div>
 
         <section>
-            <div class="panel">
+            <div class="panel bt-panel">
                 <form id="bt-form" class="bt-form" onsubmit="return false;">
-                    <div class="bt-row">
+                    <div class="bt-preset-card">
+                    <div class="bt-row bt-preset-row">
                         <div class="bt-field">
                             <label for="bt-strategy-preset">Load Saved Strategy</label>
                             <select id="bt-strategy-preset">
@@ -73,8 +364,10 @@
                             </select>
                         </div>
                     </div>
+                    </div>
 
-                    <div class="bt-row">
+                    <div class="bt-main-card">
+                    <div class="bt-row bt-core-grid">
                         <div class="bt-field">
                             <label for="bt-symbol">Symbol</label>
                             <input type="text" id="bt-symbol" value="GOOG" placeholder="e.g. 005930 or AAPL">
@@ -89,19 +382,21 @@
                             </select>
                         </div>
                         <div class="bt-field">
-                            <label for="bt-start">Start Date</label>
+                            <label for="bt-start">Start</label>
                             <input type="date" id="bt-start">
                         </div>
                         <div class="bt-field">
-                            <label for="bt-end">End Date</label>
+                            <label for="bt-end">End</label>
                             <input type="date" id="bt-end">
                         </div>
-                        <div class="bt-field">
+                        <div class="bt-field bt-capital-field">
                             <label for="bt-capital">Initial Capital</label>
                             <input type="text" inputmode="numeric" id="bt-capital" class="bt-num" value="10,000,000">
                         </div>
                     </div>
+                    </div>
 
+                    <div class="bt-params-card">
                     <div class="bt-section-h">Parameters</div>
                     <div class="bt-slider-row">
                         <label>RSI Period</label>
@@ -118,6 +413,9 @@
                         <input type="range" id="bt-cooldown" min="1" max="30" value="1">
                         <span class="bt-slider-val" id="bt-cooldown-v">1d</span>
                     </div>
+                    </div>
+
+                    <div class="bt-recovery-card">
                     <div class="bt-toggle-row">
                         <label class="bt-check">
                             <input type="checkbox" id="bt-reset-recovery">
@@ -128,19 +426,53 @@
                             <input type="number" id="bt-recovery-rsi" class="bt-num" value="50" min="0" max="100" step="1" disabled>
                         </div>
                     </div>
+                    </div>
 
-                    <div class="bt-section-h">Buy Levels (RSI ≤, % of remaining room)</div>
-                    <div class="bt-stage-row"><span>Stage 1</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-1" value="30" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-1" value="50" min="0" max="100" step="1"></div>
-                    <div class="bt-stage-row"><span>Stage 2</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-2" value="25" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-2" value="30" min="0" max="100" step="1"></div>
-                    <div class="bt-stage-row"><span>Stage 3</span><span>RSI ≤</span><input type="number" id="bt-buy-rsi-3" value="20" min="0" max="100"><span>Portion %</span><input type="number" id="bt-buy-p-3" value="20" min="0" max="100" step="1"></div>
+                    <div class="bt-levels-grid">
+                        <div class="bt-level-card bt-buy-card">
+                            <div class="bt-section-h bt-buy-title">Buy · RSI ≤</div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 1</span><span class="bt-stage-short">S1</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-1" value="30" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-1" value="50" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 2</span><span class="bt-stage-short">S2</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-2" value="25" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 3</span><span class="bt-stage-short">S3</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-3" value="20" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-3" value="20" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                        </div>
 
-                    <div class="bt-section-h">Sell Levels (RSI ≥, % of position)</div>
-                    <div class="bt-stage-row"><span>Stage 1</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-1" value="65" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-1" value="30" min="0" max="100" step="1"></div>
-                    <div class="bt-stage-row"><span>Stage 2</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-2" value="70" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-2" value="30" min="0" max="100" step="1"></div>
-                    <div class="bt-stage-row"><span>Stage 3</span><span>RSI ≥</span><input type="number" id="bt-sell-rsi-3" value="75" min="0" max="100"><span>Portion %</span><input type="number" id="bt-sell-p-3" value="40" min="0" max="100" step="1"></div>
+                        <div class="bt-level-card bt-sell-card">
+                            <div class="bt-section-h bt-sell-title">Sell · RSI ≥</div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 1</span><span class="bt-stage-short">S1</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-1" value="65" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-1" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 2</span><span class="bt-stage-short">S2</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-2" value="70" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                            <div class="bt-stage-row">
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 3</span><span class="bt-stage-short">S3</span></span>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-3" value="75" min="0" max="100"></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-3" value="40" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                            </div>
+                        </div>
+                    </div>
 
-                    <div>
-                        <button type="button" id="bt-run" class="bt-run-btn">▶ Run Backtest</button>
+                    <div class="bt-run-actions">
+                        <button type="button" id="bt-run" class="bt-run-btn">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+                            <span class="bt-run-label">Run Backtest</span>
+                        </button>
                     </div>
                 </form>
 
@@ -149,42 +481,31 @@
         </section>
 
         <section id="bt-results" class="bt-results">
-            <div class="panel">
-                <div class="cards-row">
-                    <div class="card">
-                        <div class="label">Total Return</div>
+            <div class="panel bt-results-summary">
+                <div class="bt-result-grid">
+                    <div class="card bt-total-card">
+                        <div class="label">TOTAL RETURN</div>
                         <div class="value small" id="bt-total"></div>
-                        <div class="delta dim" id="bt-total-amt"></div>
                     </div>
-                    <div class="card">
-                        <div class="label">Buy &amp; Hold</div>
+                    <div class="card bt-bh-card">
+                        <div class="label">BUY &amp; HOLD</div>
                         <div class="value small" id="bt-bh"></div>
-                        <div class="delta dim" id="bt-bh-amt"></div>
                     </div>
-                    <div class="card">
-                        <div class="label">Alpha</div>
+                    <div class="card bt-alpha-card">
+                        <div class="label">ALPHA</div>
                         <div class="value small" id="bt-alpha"></div>
-                        <div class="delta dim" id="bt-alpha-amt"></div>
                     </div>
-                    <div class="card">
-                        <div class="label">Trades</div>
-                        <div class="value small" id="bt-trades"></div>
-                    </div>
-                    <div class="card">
-                        <div class="label">Buys</div>
+                    <div class="card bt-buys-card">
+                        <div class="label">BUYS</div>
                         <div class="value small" id="bt-buys"></div>
                     </div>
-                    <div class="card">
-                        <div class="label">Sells</div>
+                    <div class="card bt-sells-card">
+                        <div class="label">SELLS</div>
                         <div class="value small" id="bt-sells"></div>
                     </div>
-                    <div class="card">
-                        <div class="label">Win Rate</div>
+                    <div class="card bt-winrate-card">
+                        <div class="label">WIN RATE</div>
                         <div class="value small" id="bt-winrate"></div>
-                    </div>
-                    <div class="card">
-                        <div class="label">Data Source</div>
-                        <div class="value small"><span id="bt-source"></span></div>
                     </div>
                 </div>
             </div>
@@ -211,9 +532,28 @@
             // Default dates: today and 2 years ago
             const today = new Date();
             const twoYrsAgo = new Date(); twoYrsAgo.setFullYear(today.getFullYear() - 2);
-            const fmt = d => d.toISOString().slice(0, 10);
-            document.getElementById('bt-start').value = fmt(twoYrsAgo);
-            document.getElementById('bt-end').value = fmt(today);
+            const fmtDate = d => d.toISOString().slice(0, 10);
+            const fmtMonth = d => d.toISOString().slice(0, 7);
+            const compactDates = window.matchMedia('(max-width: 768px)').matches;
+            const startDateInput = document.getElementById('bt-start');
+            const endDateInput = document.getElementById('bt-end');
+            if (compactDates) {
+                startDateInput.type = 'month';
+                endDateInput.type = 'month';
+                startDateInput.value = fmtMonth(twoYrsAgo);
+                endDateInput.value = fmtMonth(today);
+            } else {
+                startDateInput.value = fmtDate(twoYrsAgo);
+                endDateInput.value = fmtDate(today);
+            }
+            const asApiDate = (input, endOfMonth) => {
+                const value = input.value;
+                if (!/^\d{4}-\d{2}$/.test(value)) return value;
+                if (!endOfMonth) return value + '-01';
+                const [year, month] = value.split('-').map(Number);
+                const day = new Date(year, month, 0).getDate();
+                return value + '-' + String(day).padStart(2, '0');
+            };
 
             // Slider live values
             const wireSlider = (id, label) => {
@@ -306,6 +646,25 @@
             let priceSeries = null, rsiSeries = null;
             let oversoldLine = null, overboughtLine = null;
 
+            function chartWidth(container) {
+                return Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1);
+            }
+
+            function resizeCharts() {
+                if (!priceChart || !rsiChart) return;
+                const isMobile = window.innerWidth <= 768;
+                const priceContainer = document.getElementById('bt-price-chart');
+                const rsiContainer = document.getElementById('bt-rsi-chart');
+                priceChart.applyOptions({
+                    width: chartWidth(priceContainer),
+                    height: isMobile ? 250 : 400,
+                });
+                rsiChart.applyOptions({
+                    width: chartWidth(rsiContainer),
+                    height: isMobile ? 150 : 200,
+                });
+            }
+
             function ensureCharts() {
                 const isMobile = window.innerWidth <= 768;
                 if (priceChart) return;
@@ -315,7 +674,7 @@
                     layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
-                    width: priceContainer.clientWidth,
+                    width: chartWidth(priceContainer),
                     height: isMobile ? 250 : 400,
                     timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
                 });
@@ -326,7 +685,7 @@
                     layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
-                    width: rsiContainer.clientWidth,
+                    width: chartWidth(rsiContainer),
                     height: isMobile ? 150 : 200,
                     timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
                 });
@@ -355,10 +714,7 @@
                     syncing = false;
                 });
 
-                window.addEventListener('resize', () => {
-                    priceChart.applyOptions({ width: priceContainer.clientWidth });
-                    rsiChart.applyOptions({ width: rsiContainer.clientWidth });
-                });
+                window.addEventListener('resize', resizeCharts);
             }
 
             function buildRequest() {
@@ -366,8 +722,8 @@
                 return {
                     symbol: document.getElementById('bt-symbol').value.trim(),
                     market: document.getElementById('bt-market').value,
-                    start_date: document.getElementById('bt-start').value,
-                    end_date: document.getElementById('bt-end').value,
+                    start_date: asApiDate(document.getElementById('bt-start'), false),
+                    end_date: asApiDate(document.getElementById('bt-end'), true),
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
@@ -413,97 +769,88 @@
 
             function pnlClass(n) { return n >= 0 ? 'positive' : 'negative'; }
 
-            function fmtMoney(n, market, signed) {
-                if (n == null || !Number.isFinite(n)) return '';
-                const sym = market === 'krx' ? '₩' : '$';
-                const rounded = market === 'krx' ? Math.round(n) : Math.round(n * 100) / 100;
-                const sign = signed ? (n > 0 ? '+' : (n < 0 ? '-' : '')) : '';
-                return sign + sym + Math.abs(rounded).toLocaleString();
-            }
-
-            function renderResults(result, requestedInitial) {
-                const market = result.market;
-                const initial = Number(requestedInitial) || 0;
-                const finalCap = Number(result.final_capital);
-                const bhFinal = initial > 0 ? initial * (1 + result.buy_hold_return_pct / 100) : NaN;
-
+            function renderResults(result) {
                 const tot = document.getElementById('bt-total');
                 tot.textContent = fmtPct(result.total_return_pct);
                 tot.className = 'value small ' + pnlClass(result.total_return_pct);
-                document.getElementById('bt-total-amt').textContent = fmtMoney(finalCap, market);
 
                 const bh = document.getElementById('bt-bh');
                 bh.textContent = fmtPct(result.buy_hold_return_pct);
                 bh.className = 'value small ' + pnlClass(result.buy_hold_return_pct);
-                document.getElementById('bt-bh-amt').textContent = fmtMoney(bhFinal, market);
 
                 const alpha = document.getElementById('bt-alpha');
                 alpha.textContent = fmtPct(result.alpha_pct) + 'p';
-                alpha.className = 'value small ' + pnlClass(result.alpha_pct);
-                document.getElementById('bt-alpha-amt').textContent = fmtMoney(finalCap - bhFinal, market, true);
+                alpha.className = 'value small';
 
-                document.getElementById('bt-trades').textContent = result.num_trades;
                 document.getElementById('bt-buys').textContent = result.num_buys;
                 document.getElementById('bt-sells').textContent = result.num_sells;
                 document.getElementById('bt-winrate').textContent = result.win_rate_pct.toFixed(1) + '%';
 
-                const src = document.getElementById('bt-source');
-                if (result.data_source === 'kis_db') {
-                    src.innerHTML = '<span class="bt-source-pill bt-source-kis">KIS</span>';
-                } else {
-                    src.innerHTML = '<span class="bt-source-pill bt-source-yfinance">yfinance</span>';
-                }
+                const resultsEl = document.getElementById('bt-results');
+                resultsEl.classList.add('shown');
 
-                ensureCharts();
+                requestAnimationFrame(() => {
+                    ensureCharts();
+                    resizeCharts();
 
-                // Price line
-                const priceData = result.dates.map((d, i) => ({ time: d, value: result.prices[i] }));
-                priceSeries.setData(priceData);
+                    // Price line
+                    const priceData = result.dates.map((d, i) => ({ time: d, value: result.prices[i] }));
+                    priceSeries.setData(priceData);
 
-                // Markers — must be sorted ASC by time
-                const markers = [
-                    ...result.buy_trades.map(t => ({
-                        time: t.date, position: 'belowBar', color: colors.buyMarker,
-                        shape: 'arrowUp', text: 'BUY' + t.stage,
-                    })),
-                    ...result.sell_trades.map(t => ({
-                        time: t.date,
-                        position: 'aboveBar',
-                        color: t.reason === 'stop_loss' ? colors.stopMarker : colors.sellMarker,
-                        shape: 'arrowDown',
-                        text: t.reason === 'stop_loss' ? 'STOP'
-                              : t.reason === 'end_of_period' ? 'CLOSE'
-                              : 'SELL' + t.stage,
-                    })),
-                ].sort((a, b) => a.time.localeCompare(b.time));
-                priceSeries.setMarkers(markers);
+                    // Markers — must be sorted ASC by time
+                    const markers = [
+                        ...result.buy_trades.map(t => ({
+                            time: t.date, position: 'belowBar', color: colors.buyMarker,
+                            shape: 'arrowUp', text: 'BUY' + t.stage,
+                        })),
+                        ...result.sell_trades.map(t => ({
+                            time: t.date,
+                            position: 'aboveBar',
+                            color: t.reason === 'stop_loss' ? colors.stopMarker : colors.sellMarker,
+                            shape: 'arrowDown',
+                            text: t.reason === 'stop_loss' ? 'STOP'
+                                  : t.reason === 'end_of_period' ? 'CLOSE'
+                                  : 'SELL' + t.stage,
+                        })),
+                    ].sort((a, b) => a.time.localeCompare(b.time));
+                    priceSeries.setMarkers(markers);
 
-                // RSI line + 30/70 reference
-                const rsiData = result.dates.map((d, i) => ({ time: d, value: result.rsi_values[i] }));
-                rsiSeries.setData(rsiData);
-                if (rsiData.length >= 2) {
-                    oversoldLine.setData([
-                        { time: rsiData[0].time, value: 35 },
-                        { time: rsiData[rsiData.length - 1].time, value: 35 },
-                    ]);
-                    overboughtLine.setData([
-                        { time: rsiData[0].time, value: 65 },
-                        { time: rsiData[rsiData.length - 1].time, value: 65 },
-                    ]);
-                }
+                    // RSI line + 30/70 reference
+                    const rsiData = result.dates.map((d, i) => ({ time: d, value: result.rsi_values[i] }));
+                    rsiSeries.setData(rsiData);
+                    if (rsiData.length >= 2) {
+                        oversoldLine.setData([
+                            { time: rsiData[0].time, value: 35 },
+                            { time: rsiData[rsiData.length - 1].time, value: 35 },
+                        ]);
+                        overboughtLine.setData([
+                            { time: rsiData[0].time, value: 65 },
+                            { time: rsiData[rsiData.length - 1].time, value: 65 },
+                        ]);
+                    } else {
+                        oversoldLine.setData([]);
+                        overboughtLine.setData([]);
+                    }
 
-                priceChart.timeScale().fitContent();
-                rsiChart.timeScale().fitContent();
+                    priceChart.timeScale().fitContent();
+                    rsiChart.timeScale().fitContent();
 
-                document.getElementById('bt-results').classList.add('shown');
+                    requestAnimationFrame(() => {
+                        resizeCharts();
+                        priceChart.timeScale().fitContent();
+                        rsiChart.timeScale().fitContent();
+                    });
+                });
             }
 
             async function runBacktest() {
                 clearError();
                 const btn = document.getElementById('bt-run');
-                const originalText = btn.textContent;
+                const label = btn.querySelector('.bt-run-label');
+                const originalText = label ? label.textContent : btn.textContent;
                 btn.disabled = true;
-                btn.textContent = '분석 중...';
+                if (label) label.textContent = '분석 중...';
+                else btn.textContent = '분석 중...';
 
                 try {
                     const reqBody = buildRequest();
@@ -532,12 +879,13 @@
                         document.getElementById('bt-results').classList.remove('shown');
                         return;
                     }
-                    renderResults(data, reqBody.initial_capital);
+                    renderResults(data);
                 } catch (e) {
                     showError('네트워크 오류: ' + e.message);
                 } finally {
                     btn.disabled = false;
-                    btn.textContent = originalText;
+                    if (label) label.textContent = originalText;
+                    else btn.textContent = originalText;
                 }
             }
 

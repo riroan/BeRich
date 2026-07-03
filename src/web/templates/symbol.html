@@ -166,8 +166,42 @@
         };
 
         // Create price chart
-        const isMobile = window.innerWidth <= 768;
         const priceChartContainer = document.getElementById('price-chart');
+        const rsiChartContainer = document.getElementById('rsi-chart');
+
+        function isMobileViewport() {
+            return window.innerWidth <= 768;
+        }
+
+        function chartWidth(container) {
+            return Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1);
+        }
+
+        function chartHeights() {
+            return isMobileViewport()
+                ? { price: 250, rsi: 150 }
+                : { price: 400, rsi: 200 };
+        }
+
+        function resizeCharts() {
+            const mobile = isMobileViewport();
+            const heights = chartHeights();
+            priceChart.applyOptions({
+                layout: { fontSize: mobile ? 10 : 12 },
+                rightPriceScale: { minimumWidth: mobile ? 50 : 80 },
+                width: chartWidth(priceChartContainer),
+                height: heights.price,
+            });
+            rsiChart.applyOptions({
+                layout: { fontSize: mobile ? 10 : 12 },
+                rightPriceScale: { minimumWidth: mobile ? 50 : 80 },
+                width: chartWidth(rsiChartContainer),
+                height: heights.rsi,
+            });
+        }
+
+        const isMobile = isMobileViewport();
+        const heights = chartHeights();
         const priceChart = LightweightCharts.createChart(priceChartContainer, {
             layout: {
                 background: { color: colors.bg },
@@ -182,8 +216,8 @@
                 borderColor: colors.grid,
                 minimumWidth: isMobile ? 50 : 80,
             },
-            width: priceChartContainer.clientWidth,
-            height: isMobile ? 250 : 400,
+            width: chartWidth(priceChartContainer),
+            height: heights.price,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
@@ -197,7 +231,6 @@
         });
 
         // Create RSI chart
-        const rsiChartContainer = document.getElementById('rsi-chart');
         const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
             layout: {
                 background: { color: colors.bg },
@@ -212,8 +245,8 @@
                 borderColor: colors.grid,
                 minimumWidth: isMobile ? 50 : 80,
             },
-            width: rsiChartContainer.clientWidth,
-            height: isMobile ? 150 : 200,
+            width: chartWidth(rsiChartContainer),
+            height: heights.rsi,
             timeScale: {
                 timeVisible: true,
                 secondsVisible: false,
@@ -257,6 +290,23 @@
         let isLoading = false;
         let reachedEnd = false;
 
+        function fitLoadedContent() {
+            if (priceData.length > 0) priceChart.timeScale().fitContent();
+            if (rsiData.length > 0) rsiChart.timeScale().fitContent();
+        }
+
+        function stabilizeCharts(fitContent = false) {
+            requestAnimationFrame(() => {
+                resizeCharts();
+                if (fitContent) fitLoadedContent();
+
+                requestAnimationFrame(() => {
+                    resizeCharts();
+                    if (fitContent) fitLoadedContent();
+                });
+            });
+        }
+
         function applyRsiReferenceLines() {
             const times = rsiData.map(r => r.time);
             if (times.length >= 2) {
@@ -288,6 +338,7 @@
         async function loadInitial() {
             try {
                 const data = await fetchPage();
+                resizeCharts();
 
                 if (data.prices && data.prices.length > 0) {
                     oldestCursor = data.prices[0].time;
@@ -333,6 +384,7 @@
                     applyRsiReferenceLines();
                     rsiChart.timeScale().fitContent();
                 }
+                stabilizeCharts(true);
             } catch (error) {
                 console.error('Error loading chart data:', error);
             }
@@ -353,6 +405,7 @@
                     time: parseTime(p.time),
                     value: p.close,
                 }));
+                resizeCharts();
                 priceData = mergeSorted(priceData, newPricePoints);
                 priceSeries.setData(priceData);
 
@@ -365,6 +418,7 @@
                     rsiSeries.setData(rsiData);
                     applyRsiReferenceLines();
                 }
+                stabilizeCharts(false);
             } catch (error) {
                 console.error('Error loading more history:', error);
             } finally {
@@ -383,6 +437,7 @@
                     time: parseTime(p.time),
                     value: p.close,
                 }));
+                resizeCharts();
                 priceData = mergeSorted(priceData, newPricePoints);
                 priceSeries.setData(priceData);
 
@@ -417,16 +472,14 @@
                         el.className = 'value small ' + (change >= 0 ? 'positive' : 'negative');
                     }
                 }
+                stabilizeCharts(false);
             } catch (error) {
                 console.error('Error refreshing latest:', error);
             }
         }
 
         // Resize charts on window resize
-        window.addEventListener('resize', () => {
-            priceChart.applyOptions({ width: priceChartContainer.clientWidth });
-            rsiChart.applyOptions({ width: rsiChartContainer.clientWidth });
-        });
+        window.addEventListener('resize', () => stabilizeCharts(false));
 
         // Trigger lazy-load when user scrolls within 10 bars of the left edge
         const LOAD_MORE_THRESHOLD = 10;
