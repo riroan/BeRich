@@ -169,19 +169,20 @@
         </div>
         {% endif %}
 
-        <section class="chart-section">
-            <div class="panel">
-                <h2>Price Chart</h2>
-                <div id="price-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} price chart with trade markers" tabindex="0"></div>
-                <p class="sr-only">Interactive price chart for {{ symbol }}. Trade history is also available in the table below.</p>
-            </div>
-        </section>
-
-        <section class="chart-section">
-            <div class="panel">
-                <h2>RSI Chart</h2>
-                <div id="rsi-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} RSI chart" tabindex="0"></div>
-                <p class="sr-only">Interactive RSI chart for {{ symbol }} with oversold and overbought reference lines.</p>
+        <section class="chart-section symbol-combined-chart-section">
+            <div class="panel symbol-combined-chart-panel">
+                <h2>Chart</h2>
+                <div class="symbol-chart-stack">
+                    <div class="symbol-chart-block symbol-price-chart">
+                        <div class="symbol-chart-label">Price</div>
+                        <div id="price-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} price chart with trade markers" tabindex="0"></div>
+                    </div>
+                    <div class="symbol-chart-block symbol-rsi-chart">
+                        <div class="symbol-chart-label">RSI</div>
+                        <div id="rsi-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} RSI chart" tabindex="0"></div>
+                    </div>
+                </div>
+                <p class="sr-only">Interactive price and RSI charts for {{ symbol }}. Trade history is also available in the table below.</p>
             </div>
         </section>
 
@@ -278,8 +279,8 @@
 
         function chartHeights() {
             return isMobileViewport()
-                ? { price: 250, rsi: 150 }
-                : { price: 400, rsi: 200 };
+                ? { price: 248, rsi: 104 }
+                : { price: 400, rsi: 170 };
         }
 
         function resizeCharts() {
@@ -318,6 +319,7 @@
             width: chartWidth(priceChartContainer),
             height: heights.price,
             timeScale: {
+                visible: false,
                 timeVisible: true,
                 secondsVisible: false,
                 borderColor: colors.grid,

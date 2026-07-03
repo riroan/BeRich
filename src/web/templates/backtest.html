@@ -97,6 +97,39 @@
             border: 1px solid rgba(239,68,68,0.3);
         }
         .bt-error.shown { display: block; }
+        .bt-combined-chart-section { margin-top: 16px; }
+        .bt-combined-chart-panel { overflow: hidden; }
+        .bt-chart-stack {
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+        }
+        .bt-chart-block {
+            position: relative;
+            min-width: 0;
+            background: var(--bg);
+        }
+        .bt-rsi-chart {
+            border-top: 1px solid var(--border);
+        }
+        .bt-chart-label {
+            position: absolute;
+            top: 8px;
+            left: 10px;
+            z-index: 2;
+            color: var(--dim);
+            font-size: 10px;
+            font-weight: 800;
+            line-height: 1;
+            text-transform: uppercase;
+            letter-spacing: .45px;
+            pointer-events: none;
+        }
+        .bt-price-chart .chart-container-small { min-height: 400px; }
+        .bt-rsi-chart .chart-container-small { min-height: 170px; }
 
         @media (max-width: 768px) {
             .page-backtest .section-title { display: none; }
@@ -316,6 +349,38 @@
                 margin-top: 7px;
                 font-size: 17px;
             }
+            .page-backtest .bt-combined-chart-section {
+                margin-top: 10px;
+            }
+            .page-backtest .bt-combined-chart-panel {
+                border-radius: 12px;
+                padding: 14px 10px 10px;
+                box-shadow: none;
+            }
+            .page-backtest .bt-combined-chart-panel h2 {
+                margin-bottom: 10px;
+                padding: 0 2px;
+                color: var(--white);
+                font-size: 13px;
+                font-weight: 800;
+                line-height: 1.2;
+                text-transform: uppercase;
+                letter-spacing: .25px;
+            }
+            .page-backtest .bt-chart-stack {
+                border-radius: 10px;
+            }
+            .page-backtest .bt-chart-label {
+                top: 7px;
+                left: 9px;
+                font-size: 9px;
+            }
+            .page-backtest .bt-price-chart .chart-container-small {
+                min-height: 248px;
+            }
+            .page-backtest .bt-rsi-chart .chart-container-small {
+                min-height: 104px;
+            }
         }
 
         @media (max-width: 360px) {
@@ -510,19 +575,20 @@
                 </div>
             </div>
 
-            <div class="chart-section" style="margin-top: 16px;">
-                <div class="panel">
-                    <h2>Price Chart</h2>
-                    <div id="bt-price-chart" class="chart-container-small" role="img" aria-label="Backtest price chart with trades" tabindex="0"></div>
-                    <p class="sr-only">Backtest price chart. Run a backtest to populate price movement and trade markers.</p>
-                </div>
-            </div>
-
-            <div class="chart-section" style="margin-top: 16px;">
-                <div class="panel">
-                    <h2>RSI Chart</h2>
-                    <div id="bt-rsi-chart" class="chart-container-small" role="img" aria-label="Backtest RSI chart" tabindex="0"></div>
-                    <p class="sr-only">Backtest RSI chart. Run a backtest to populate RSI values and reference levels.</p>
+            <div class="chart-section bt-combined-chart-section">
+                <div class="panel bt-combined-chart-panel">
+                    <h2>Chart</h2>
+                    <div class="bt-chart-stack">
+                        <div class="bt-chart-block bt-price-chart">
+                            <div class="bt-chart-label">Price</div>
+                            <div id="bt-price-chart" class="chart-container-small" role="img" aria-label="Backtest price chart with trades" tabindex="0"></div>
+                        </div>
+                        <div class="bt-chart-block bt-rsi-chart">
+                            <div class="bt-chart-label">RSI</div>
+                            <div id="bt-rsi-chart" class="chart-container-small" role="img" aria-label="Backtest RSI chart" tabindex="0"></div>
+                        </div>
+                    </div>
+                    <p class="sr-only">Backtest price and RSI charts. Run a backtest to populate price movement, trade markers, RSI values, and reference levels.</p>
                 </div>
             </div>
         </section>
@@ -650,23 +716,30 @@
                 return Math.floor(container.clientWidth || container.getBoundingClientRect().width || 1);
             }
 
+            function chartHeights() {
+                return window.innerWidth <= 768
+                    ? { price: 248, rsi: 104 }
+                    : { price: 400, rsi: 170 };
+            }
+
             function resizeCharts() {
                 if (!priceChart || !rsiChart) return;
-                const isMobile = window.innerWidth <= 768;
+                const heights = chartHeights();
                 const priceContainer = document.getElementById('bt-price-chart');
                 const rsiContainer = document.getElementById('bt-rsi-chart');
                 priceChart.applyOptions({
                     width: chartWidth(priceContainer),
-                    height: isMobile ? 250 : 400,
+                    height: heights.price,
                 });
                 rsiChart.applyOptions({
                     width: chartWidth(rsiContainer),
-                    height: isMobile ? 150 : 200,
+                    height: heights.rsi,
                 });
             }
 
             function ensureCharts() {
                 const isMobile = window.innerWidth <= 768;
+                const heights = chartHeights();
                 if (priceChart) return;
 
                 const priceContainer = document.getElementById('bt-price-chart');
@@ -675,8 +748,8 @@
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
                     width: chartWidth(priceContainer),
-                    height: isMobile ? 250 : 400,
-                    timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
+                    height: heights.price,
+                    timeScale: { visible: false, timeVisible: false, secondsVisible: false, borderColor: colors.grid },
                 });
                 priceSeries = priceChart.addLineSeries({ color: colors.up, lineWidth: 2 });
 
@@ -686,8 +759,8 @@
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
                     width: chartWidth(rsiContainer),
-                    height: isMobile ? 150 : 200,
-                    timeScale: { timeVisible: false, secondsVisible: false, borderColor: colors.grid },
+                    height: heights.rsi,
+                    timeScale: { timeVisible: true, secondsVisible: false, borderColor: colors.grid },
                 });
                 rsiSeries = rsiChart.addLineSeries({ color: colors.rsi, lineWidth: 1.5 });
                 oversoldLine = rsiChart.addLineSeries({ color: colors.oversold, lineWidth: 1, lineStyle: 2 });

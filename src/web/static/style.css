@@ -1570,6 +1570,44 @@ select option { background: var(--surface); color: var(--text); }
 .symbol-trades-list-m {
     display: none;
 }
+.symbol-combined-chart-panel {
+    overflow: hidden;
+}
+.symbol-chart-stack {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.symbol-chart-block {
+    position: relative;
+    min-width: 0;
+    background: var(--bg);
+}
+.symbol-rsi-chart {
+    border-top: 1px solid var(--border);
+}
+.symbol-chart-label {
+    position: absolute;
+    top: 8px;
+    left: 10px;
+    z-index: 2;
+    color: var(--dim);
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: .45px;
+    pointer-events: none;
+}
+.symbol-price-chart .chart-container-small {
+    min-height: 400px;
+}
+.symbol-rsi-chart .chart-container-small {
+    min-height: 170px;
+}
 
 /* ===================== Sticky P&L Header ===================== */
 .sticky-pnl {
@@ -2421,6 +2459,35 @@ select option { background: var(--surface); color: var(--text); }
     }
     .symbol-detail-page .trades-section .table-wrap {
         display: none;
+    }
+    .symbol-combined-chart-panel {
+        border-radius: 12px;
+        padding: 14px 10px 10px;
+        box-shadow: none;
+    }
+    .symbol-combined-chart-panel h2 {
+        margin-bottom: 10px;
+        padding: 0 2px;
+        color: var(--white);
+        font-size: 13px;
+        font-weight: 800;
+        line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: .25px;
+    }
+    .symbol-chart-stack {
+        border-radius: 10px;
+    }
+    .symbol-chart-label {
+        top: 7px;
+        left: 9px;
+        font-size: 9px;
+    }
+    .symbol-price-chart .chart-container-small {
+        min-height: 248px;
+    }
+    .symbol-rsi-chart .chart-container-small {
+        min-height: 104px;
     }
     .symbol-trades-list-m {
         display: flex;
