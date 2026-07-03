@@ -487,21 +487,12 @@ body {
 .market-amex { background: rgba(245,158,11,0.15); color: var(--amber); }
 .market-krx { background: rgba(139,92,246,0.15); color: #8b5cf6; }
 .market-krx { background: rgba(139,92,246,0.15); color: #8b5cf6; }
-.sym-weight, .sym-controls {
+.sym-controls {
     display: flex; align-items: center; gap: 10px; margin-left: auto;
 }
-.sym-controls input[type="text"],
-.sym-controls input[type="number"],
-.sym-weight input[type="text"],
-.sym-weight input[type="number"] {
-    width: 60px; text-align: right; padding: 6px 8px; font-size: 13px;
-}
-.sym-controls .pct, .sym-weight .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
 
-/* Symbols 5a — these appear only on mobile (cards, steppers, FAB, bottom sheet) */
+/* Symbols 5a — these appear only on mobile (cards, FAB, bottom sheet) */
 .sym-off-badge,
-.sym-weight-label,
-.step-btn,
 .sym-fab,
 .sheet-grabber,
 .sheet-close,
@@ -2259,41 +2250,16 @@ select option { background: var(--surface); color: var(--text); }
     .sym-toggle { margin-left: auto; width: 44px; height: 24px; }
     .sym-toggle .slider { top: 0; right: 0; bottom: 0; left: 0; }
 
-    /* Controls become the second row: Max Weight + stepper + delete */
+    /* Keep destructive action aligned with the row controls */
     .sym-controls {
-        width: 100%;
+        width: auto;
         margin-left: 0;
         gap: 8px;
-        padding-top: 11px;
-        border-top: 1px solid var(--border);
     }
-    .sym-weight-label {
-        display: inline-block;
-        margin-right: auto;
-        font-size: 9px; font-weight: 600; letter-spacing: .4px;
-        text-transform: uppercase; color: var(--text-muted);
-    }
-    .step-btn {
-        display: inline-flex; align-items: center; justify-content: center;
-        width: 30px; height: 30px; border-radius: 8px; border: none;
-        background: var(--bg); color: var(--text);
-        font-size: 16px; font-weight: 600; line-height: 1;
-        cursor: pointer; font-family: inherit; flex-shrink: 0;
-    }
-    .step-btn:active { background: var(--card); }
-    .sym-controls input[type="number"] {
-        width: 46px; min-height: 0; text-align: center;
-        background: transparent; border: none; padding: 0;
-        font-size: 15px; font-weight: 700; color: var(--white);
-        -moz-appearance: textfield;
-    }
-    .sym-controls input[type="number"]::-webkit-outer-spin-button,
-    .sym-controls input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
-    .sym-controls .pct { margin-left: -4px; color: var(--text-muted); }
     .sym-controls .btn-danger {
         width: 30px; height: 30px; min-width: 30px; min-height: 30px;
         padding: 0; display: flex; align-items: center; justify-content: center;
-        margin-left: 2px; flex-shrink: 0;
+        flex-shrink: 0;
     }
 
     /* FAB (opens the add-symbol bottom sheet) */
