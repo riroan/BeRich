@@ -1945,23 +1945,23 @@ select option { background: var(--surface); color: var(--text); }
     .trades-cards-m {
         display: flex;
         flex-direction: column;
-        gap: 0;
-        overflow: hidden;
-        background: var(--surface);
-        border: 1px solid var(--border);
-        border-radius: 14px;
-        box-shadow: var(--shadow);
-    }
-    .trade-card-m {
-        display: block;
+        gap: 8px;
+        overflow: visible;
         background: transparent;
         border: 0;
         border-radius: 0;
-        padding: 12px 13px;
+        box-shadow: none;
+    }
+    .trade-card-m {
+        display: block;
+        background: var(--surface);
+        border: 0;
+        border-radius: 12px;
+        padding: 11px 13px 10px;
         text-decoration: none;
         color: inherit;
+        box-shadow: var(--shadow);
     }
-    .trade-card-m + .trade-card-m { border-top: 1px solid var(--border); }
     .trade-card-m[hidden] { display: none; }
     .trade-card-m:active { background: var(--card); }
     .trade-card-m:focus-visible {
@@ -1971,12 +1971,17 @@ select option { background: var(--surface); color: var(--text); }
     .tcm-head {
         display: flex;
         align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
+        flex-wrap: nowrap;
+        gap: 7px;
         min-width: 0;
     }
     .tcm-head .sym-badge {
-        flex-shrink: 0;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: 34%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
         font-size: 15px;
         font-weight: 700;
     }
@@ -1991,13 +1996,13 @@ select option { background: var(--surface); color: var(--text); }
         padding: 2px 8px;
     }
     .tcm-time {
-        flex: 0 0 100%;
-        margin-left: 0;
-        max-width: none;
+        flex: 0 0 auto;
+        margin-left: auto;
+        max-width: 116px;
         min-width: 0;
         overflow: visible;
         text-overflow: clip;
-        font-size: 11px;
+        font-size: 10.5px;
         line-height: 1.2;
         color: var(--text-muted);
         font-variant-numeric: tabular-nums;
@@ -2006,37 +2011,32 @@ select option { background: var(--surface); color: var(--text); }
     .tcm-body {
         display: grid;
         grid-template-columns: minmax(0, 1fr) auto;
-        align-items: center;
+        align-items: end;
         gap: 12px;
-        margin-top: 11px;
-        padding-top: 10px;
+        margin-top: 10px;
+        padding-top: 9px;
+        border-top: 1px solid var(--border);
     }
     .tcm-metrics {
         display: grid;
-        grid-template-columns: minmax(74px, 1fr) minmax(44px, .62fr);
-        gap: 0;
+        grid-template-columns: max-content max-content;
+        column-gap: 25px;
         min-width: 0;
     }
     .tcm-metric {
         min-width: 0;
-        padding-right: 12px;
-    }
-    .tcm-metric + .tcm-metric {
-        border-left: 1px solid var(--border);
-        padding-left: 12px;
     }
     .tcm-label { font-size: 9px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
     .tcm-val { font-size: 13px; font-weight: 600; color: var(--white); font-variant-numeric: tabular-nums; margin-top: 1px; }
-    .tcm-qty { color: var(--text-muted); font-weight: 500; }
+    .tcm-qty { color: var(--text-muted); font-weight: 500; margin-left: 2px; }
     .tcm-pnl {
         flex-shrink: 0;
         min-width: 84px;
-        padding-left: 12px;
-        border-left: 1px solid var(--border);
         text-align: right;
     }
     .tcm-pnl-amt { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .tcm-pnl-pct { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; }
+    .tcm-pnl:not(.positive):not(.negative) .tcm-pnl-amt { color: var(--text-muted); }
     .tcm-pnl.positive .tcm-pnl-amt, .tcm-pnl.positive .tcm-pnl-pct { color: var(--emerald); }
     .tcm-pnl.negative .tcm-pnl-amt, .tcm-pnl.negative .tcm-pnl-pct { color: var(--red); }
     .trades-empty-m {
@@ -2120,27 +2120,44 @@ select option { background: var(--surface); color: var(--text); }
         gap: 12px;
     }
     /* RSI Monitor: compact 3-col heatmap (all symbols, no per-row scroll) */
-    .rsi-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .rsi-grid {
+        grid-template-columns: repeat(3, 1fr);
+        column-gap: 5px;
+        row-gap: 6px;
+    }
     .rsi-item {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: flex-end;
         gap: 0;
-        padding: 9px 10px;
+        padding: 7px 9px;
+        text-align: right;
     }
-    .rsi-item .rsi-left { width: 100%; min-width: 0; }
+    .rsi-item .rsi-left {
+        width: 100%;
+        min-width: 0;
+        align-items: flex-end;
+    }
     .rsi-item .rsi-symbol {
         font-size: 12px;
         max-width: 100%;
+        text-align: right;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+        line-height: 1.1;
     }
-    .rsi-item .rsi-price { font-size: 10px; margin-top: 1px; }
+    .rsi-item .rsi-price {
+        font-size: 10px;
+        line-height: 1.05;
+        margin-top: 0;
+        text-align: right;
+    }
     .rsi-item .rsi-value {
-        font-size: 16px;
-        text-align: left;
+        font-size: 15px;
+        line-height: 1.05;
+        text-align: right;
         min-width: 0;
-        margin-top: 4px;
+        margin-top: 2px;
     }
     /* Heatmap tint by RSI zone (matches value text semantics) */
     .rsi-item:has(.rsi-danger) { background: rgba(239,68,68,.10); }
@@ -3053,15 +3070,18 @@ select option { background: var(--surface); color: var(--text); }
     .tcm-time {
         font-size: 10px;
     }
+    .tcm-metrics {
+        column-gap: 18px;
+    }
     .tcm-metric {
-        padding-right: 10px;
+        padding-right: 0;
     }
     .tcm-metric + .tcm-metric {
-        padding-left: 10px;
+        padding-left: 0;
     }
     .tcm-pnl {
         min-width: 72px;
-        padding-left: 10px;
+        padding-left: 0;
     }
 
     /* Symbol detail */

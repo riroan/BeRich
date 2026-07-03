@@ -100,18 +100,20 @@
             <div class="trades-cards-m">
                 {% for log in trade_logs %}
                 {% set tagcls = 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') %}
+                {% set trade_raw = log.timestamp|replace('T', ' ') %}
+                {% set trade_time_mobile = trade_raw[0:16] if trade_raw|length >= 16 and trade_raw[4:5] == '-' else trade_raw %}
                 <a class="trade-card-m" href="/symbol/{{ log.symbol }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}" aria-label="{{ log.symbol }} trade">
                     <div class="tcm-head">
                         <span class="sym-badge">{{ log.symbol }}</span>
                         <span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span>
                         <span class="signal-tag {{ tagcls }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
-                        <span class="tcm-time" title="{{ log.timestamp }}">{{ log.timestamp }}</span>
+                        <span class="tcm-time" title="{{ log.timestamp }}">{{ trade_time_mobile }}</span>
                     </div>
                     <div class="tcm-body">
                         <div class="tcm-metrics">
                             <div class="tcm-metric">
                                 <div class="tcm-label">Price</div>
-                                <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %} <span class="tcm-qty">{{ log.quantity }}</span></div>
+                                <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}<span class="tcm-qty">&times;{{ log.quantity }}</span></div>
                             </div>
                             <div class="tcm-metric">
                                 <div class="tcm-label">RSI</div>
