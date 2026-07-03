@@ -622,6 +622,7 @@ body {
     background: var(--bg);
     border: 1px solid var(--card);
     border-radius: 8px;
+    min-height: 44px;
     padding: 5px 28px 5px 10px;
     color: var(--text);
     font-size: 12px;
@@ -640,7 +641,7 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;              /* matches the dropdown's 40px height → square */
+    width: 44px;              /* matches the dropdown's 44px min-height → square */
     padding: 0;
     background: var(--bg);
     border: 1px solid var(--card);
@@ -974,7 +975,7 @@ input[type="text"], input[type="number"], input[type="password"], select {
     background: var(--bg);
     border: 1px solid var(--card);
     border-radius: 8px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 10px 14px;
     color: var(--white);
     font-size: 14px;
@@ -999,7 +1000,7 @@ select option { background: var(--surface); color: var(--text); }
     color: white;
     border: none;
     border-radius: 20px;
-    min-height: 40px;
+    min-height: 44px;
     padding: 10px 24px;
     font-size: 14px;
     font-weight: 600;
@@ -1067,7 +1068,7 @@ select option { background: var(--surface); color: var(--text); }
     background: var(--surface);
     color: var(--dim);
     border: none;
-    min-height: 36px;
+    min-height: 44px;
     padding: 10px 20px;
     border-radius: 8px;
     font-size: 13px;
@@ -1398,7 +1399,7 @@ select option { background: var(--surface); color: var(--text); }
     margin-bottom: 14px;
 }
 .report-tab {
-    min-height: 36px;
+    min-height: 44px;
     padding: 7px 14px;
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -2603,7 +2604,7 @@ select option { background: var(--surface); color: var(--text); }
     .strategy-tabs::-webkit-scrollbar { display: none; }
     .strategy-tabs button, .strategy-tabs a {
         white-space: nowrap;
-        min-height: 40px;
+        min-height: 44px;
         padding: 0 14px;
         font-size: 12px;
         flex-shrink: 0;
@@ -2618,11 +2619,11 @@ select option { background: var(--surface); color: var(--text); }
         padding-bottom: 4px;
     }
     .filter-bar::-webkit-scrollbar { display: none; }
-    .filter-pill { white-space: nowrap; min-height: 40px; font-size: 12px; padding: 0 14px; }
+    .filter-pill { white-space: nowrap; min-height: 44px; font-size: 12px; padding: 0 14px; }
 
     /* Pagination */
     .pagination { gap: 2px; }
-    .page-btn { min-width: 40px; min-height: 40px; padding: 0 10px; font-size: 12px; }
+    .page-btn { min-width: 44px; min-height: 44px; padding: 0 10px; font-size: 12px; }
 
     /* Portfolio (4a): summary hero → allocation → holdings cards (DOM order) */
     .portfolio-holdings { display: none; }
@@ -2914,7 +2915,7 @@ select option { background: var(--surface); color: var(--text); }
         margin-bottom: 12px;
     }
     .report-tab {
-        min-height: 34px;
+        min-height: 44px;
         padding: 6px 10px;
         font-size: 13px;
     }
@@ -3228,4 +3229,32 @@ select option { background: var(--surface); color: var(--text); }
         scroll-behavior: auto !important;
         transition-duration: 0.01ms !important;
     }
+}
+
+/* ===================== Press feedback (tappable cards/rows) ===================== */
+/* hover fires only with a pointer; :active gives touch users tactile feedback too */
+.rsi-item,
+.holding-card,
+.signal-item[href],
+.analytics-symbol-card,
+.position-row,
+.bottom-nav-item {
+    transition: background .18s ease, color .2s ease, transform .12s ease;
+}
+.rsi-item:active,
+.holding-card:active,
+.analytics-symbol-card:active {
+    background: var(--card);
+    transform: scale(0.985);
+}
+.signal-item[href]:active {
+    background: rgba(59,130,246,0.14);
+    border-radius: 8px;
+}
+.position-row:active,
+.mobile-cards tbody tr:active {
+    background: var(--card);
+}
+.bottom-nav-item:active {
+    background: rgba(255,255,255,0.05);
 }
