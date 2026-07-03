@@ -316,7 +316,7 @@ body {
     color: var(--dim);
 }
 .mobile-hero .hero-balance {
-    font-size: 27px;
+    font-size: 26px;
     font-weight: 700;
     color: var(--white);
     font-variant-numeric: tabular-nums;
@@ -341,7 +341,7 @@ body {
     color: var(--dim);
 }
 .mobile-hero .hero-stat-value {
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     color: var(--white);
     font-variant-numeric: tabular-nums;
@@ -1168,7 +1168,7 @@ select option { background: var(--surface); color: var(--text); }
 .trade-summary-strip { display: none; }
 .trade-summary-strip .tss-item { flex: 1; text-align: center; }
 .trade-summary-strip .tss-item + .tss-item { border-left: 1px solid var(--border); }
-.trade-summary-strip .tss-num { font-size: 20px; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; }
+.trade-summary-strip .tss-num { font-size: 19px; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; }
 .trade-summary-strip .tss-num.positive { color: var(--emerald); }
 .trade-summary-strip .tss-num.negative { color: var(--red); }
 .trade-summary-strip .tss-num.warning { color: var(--amber); }
@@ -2085,7 +2085,7 @@ select option { background: var(--surface); color: var(--text); }
         padding: 12px;
     }
     .card .value, .stat-card .value, .metric-card .value {
-        font-size: 16px;
+        font-size: 15px;
     }
     .card .label { font-size: 10px; }
     .card .delta { font-size: 11px; }
@@ -2125,7 +2125,7 @@ select option { background: var(--surface); color: var(--text); }
     }
     .rsi-item .rsi-price { font-size: 10px; margin-top: 1px; }
     .rsi-item .rsi-value {
-        font-size: 18px;
+        font-size: 16px;
         text-align: left;
         min-width: 0;
         margin-top: 4px;
@@ -2372,7 +2372,7 @@ select option { background: var(--surface); color: var(--text); }
     .symbol-hero-price {
         min-width: 0;
         color: var(--white);
-        font-size: 29px;
+        font-size: 27px;
         font-weight: 800;
         line-height: 1.08;
         font-variant-numeric: tabular-nums;
@@ -2401,7 +2401,7 @@ select option { background: var(--surface); color: var(--text); }
     .symbol-hero-metric-value {
         margin-top: 4px;
         color: var(--white);
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 800;
         line-height: 1.1;
         font-variant-numeric: tabular-nums;
@@ -2427,7 +2427,7 @@ select option { background: var(--surface); color: var(--text); }
     .symbol-stat-value {
         margin-top: 5px;
         color: var(--white);
-        font-size: 21px;
+        font-size: 19px;
         font-weight: 800;
         line-height: 1;
         font-variant-numeric: tabular-nums;
@@ -2691,7 +2691,7 @@ select option { background: var(--surface); color: var(--text); }
     }
     .perf-hero-value {
         min-width: 0;
-        font-size: 33px;
+        font-size: 30px;
         font-weight: 800;
         white-space: nowrap;
     }
@@ -2710,7 +2710,7 @@ select option { background: var(--surface); color: var(--text); }
         padding-left: 10px;
     }
     .perf-hero-stat strong {
-        font-size: 17px;
+        font-size: 16px;
     }
     .perf-stat-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2723,7 +2723,7 @@ select option { background: var(--surface); color: var(--text); }
         box-shadow: none;
     }
     .perf-stat-card .value {
-        font-size: 23px;
+        font-size: 21px;
     }
     .perf-stat-card .delta {
         font-size: 11px;
@@ -2821,7 +2821,7 @@ select option { background: var(--surface); color: var(--text); }
     }
     .page-performance .monthly-card-return {
         margin-top: 4px;
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 800;
     }
 
@@ -2865,7 +2865,7 @@ select option { background: var(--surface); color: var(--text); }
     }
     .analytics-kpi-value {
         margin-top: 4px;
-        font-size: 22px;
+        font-size: 20px;
     }
     .analytics-card {
         border-radius: 14px;
@@ -3005,7 +3005,7 @@ select option { background: var(--surface); color: var(--text); }
     .mobile-hero .hero-stat-sub { font-size: 10px; }
 
     /* RSI grid items */
-    .rsi-item .rsi-value { font-size: 16px; }
+    .rsi-item .rsi-value { font-size: 15px; }
 
     /* Charts: compact */
     .chart-container-small { min-height: 160px; }
@@ -3021,7 +3021,7 @@ select option { background: var(--surface); color: var(--text); }
         padding: 11px 4px;
     }
     .trade-summary-strip .tss-num {
-        font-size: 18px;
+        font-size: 17px;
     }
     .trade-summary-strip .tss-label {
         font-size: 8.5px;
@@ -3056,10 +3056,10 @@ select option { background: var(--surface); color: var(--text); }
     .section-title { font-size: 16px !important; }
     .symbol-mobile-name { font-size: 21px; }
     .symbol-hero-card { padding: 15px; }
-    .symbol-hero-price { font-size: 28px; }
+    .symbol-hero-price { font-size: 26px; }
     .symbol-hero-change { font-size: 12px; }
     .symbol-stat-card { padding: 11px 13px; }
-    .symbol-stat-value { font-size: 20px; }
+    .symbol-stat-value { font-size: 18px; }
     .symbol-trade-card-m { padding: 10px 12px; }
 
     .page-performance .container {
@@ -3076,19 +3076,19 @@ select option { background: var(--surface); color: var(--text); }
         padding: 16px;
     }
     .page-performance .perf-hero-value {
-        font-size: 31px;
+        font-size: 29px;
     }
     .page-performance .perf-hero-delta {
         font-size: 12px;
     }
     .page-performance .perf-hero-stat strong {
-        font-size: 16px;
+        font-size: 15px;
     }
     .page-performance .perf-stat-card {
         padding: 14px;
     }
     .page-performance .perf-stat-card .value {
-        font-size: 22px;
+        font-size: 20px;
     }
     .page-performance .perf-win-card .section-title,
     .page-performance .perf-chart-header .section-title,
@@ -3103,7 +3103,7 @@ select option { background: var(--surface); color: var(--text); }
         padding: 13px 14px;
     }
     .analytics-kpi-value {
-        font-size: 21px;
+        font-size: 19px;
     }
     .analytics-card {
         padding: 14px 15px;

@@ -79,7 +79,7 @@
         }
         .bt-result-grid .card .value.small {
             margin-top: 8px;
-            font-size: 19px;
+            font-size: 18px;
             line-height: 1.05;
             font-weight: 800;
             white-space: nowrap;
@@ -87,9 +87,11 @@
         .bt-result-grid .bt-alpha-card {
             background: rgba(59,130,246,0.20);
         }
-        .bt-result-grid .bt-alpha-card .label,
-        .bt-result-grid .bt-alpha-card .value {
-            color: var(--blue) !important;
+        .bt-result-grid .bt-alpha-card .label {
+            color: var(--text-muted) !important;
+        }
+        .bt-result-grid .bt-alpha-card .value.alpha-neutral {
+            color: var(--white) !important;
         }
         .bt-error {
             display: none; padding: 12px 16px; border-radius: 8px;
@@ -334,20 +336,52 @@
             }
             .page-backtest .bt-result-grid {
                 grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-                gap: 8px;
+                gap: 0;
+                overflow: hidden;
+                background: var(--surface);
+                border-radius: 12px;
+                box-shadow: var(--shadow);
             }
             .page-backtest .bt-result-grid .card {
-                min-height: 52px;
-                padding: 10px;
-                border-radius: 9px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                min-height: 57px;
+                padding: 11px 8px 10px;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+                text-align: center;
+            }
+            .page-backtest .bt-result-grid .card:nth-child(n + 4) {
+                border-top: 1px solid var(--border);
+            }
+            .page-backtest .bt-result-grid .card:nth-child(3n + 2),
+            .page-backtest .bt-result-grid .card:nth-child(3n + 3) {
+                border-left: 1px solid var(--border);
             }
             .page-backtest .bt-result-grid .card .label {
                 font-size: 8px;
                 line-height: 1;
+                letter-spacing: .25px;
             }
             .page-backtest .bt-result-grid .card .value.small {
-                margin-top: 7px;
-                font-size: 17px;
+                margin-top: 6px;
+                font-size: 16px;
+                line-height: 1;
+            }
+            .page-backtest .bt-result-grid .bt-alpha-card,
+            .page-backtest .bt-result-grid .bt-alpha-card .label {
+                background: transparent;
+            }
+            .page-backtest .bt-result-grid .bt-bh-card .value.small,
+            .page-backtest .bt-result-grid .bt-buys-card .value.small,
+            .page-backtest .bt-result-grid .bt-sells-card .value.small {
+                color: var(--white) !important;
+            }
+            .page-backtest .bt-result-grid .bt-winrate-card .value.small {
+                color: var(--emerald) !important;
             }
             .page-backtest .bt-combined-chart-section {
                 margin-top: 10px;
@@ -406,7 +440,7 @@
                 padding: 9px;
             }
             .page-backtest .bt-result-grid .card .value.small {
-                font-size: 16px;
+                font-size: 15px;
             }
         }
     </style>
@@ -549,7 +583,7 @@
             <div class="panel bt-results-summary">
                 <div class="bt-result-grid">
                     <div class="card bt-total-card">
-                        <div class="label">TOTAL RETURN</div>
+                        <div class="label">RETURN</div>
                         <div class="value small" id="bt-total"></div>
                     </div>
                     <div class="card bt-bh-card">
@@ -853,7 +887,11 @@
 
                 const alpha = document.getElementById('bt-alpha');
                 alpha.textContent = fmtPct(result.alpha_pct) + 'p';
-                alpha.className = 'value small';
+                alpha.className = 'value small ' + (
+                    result.alpha_pct > 0 ? 'positive'
+                    : result.alpha_pct < 0 ? 'negative'
+                    : 'alpha-neutral'
+                );
 
                 document.getElementById('bt-buys').textContent = result.num_buys;
                 document.getElementById('bt-sells').textContent = result.num_sells;
