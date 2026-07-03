@@ -2228,7 +2228,7 @@ select option { background: var(--surface); color: var(--text); }
         padding: 0 4px !important;
         margin-bottom: 8px !important;
     }
-    .strategy-name { display: inline; overflow: visible; white-space: normal; }
+    .strategy-name { display: inline; overflow: visible; white-space: normal; font-size: 13px; }
     .strategy-name + .count { float: none; margin-top: 0; }
 
     /* Symbol card */
