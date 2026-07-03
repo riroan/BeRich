@@ -2019,16 +2019,18 @@ select option { background: var(--surface); color: var(--text); }
     }
     .tcm-metrics {
         display: grid;
-        grid-template-columns: max-content max-content;
-        column-gap: 25px;
+        grid-template-columns: max-content max-content max-content;
+        column-gap: 18px;
+        justify-content: start;
         min-width: 0;
+        text-align: center;
     }
     .tcm-metric {
         min-width: 0;
+        text-align: center;
     }
     .tcm-label { font-size: 9px; font-weight: 600; text-transform: uppercase; color: var(--text-muted); }
     .tcm-val { font-size: 13px; font-weight: 600; color: var(--white); font-variant-numeric: tabular-nums; margin-top: 1px; }
-    .tcm-qty { color: var(--text-muted); font-weight: 500; margin-left: 2px; }
     .tcm-pnl {
         flex-shrink: 0;
         min-width: 84px;
@@ -3071,7 +3073,7 @@ select option { background: var(--surface); color: var(--text); }
         font-size: 10px;
     }
     .tcm-metrics {
-        column-gap: 18px;
+        column-gap: 14px;
     }
     .tcm-metric {
         padding-right: 0;

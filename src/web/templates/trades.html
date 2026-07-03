@@ -113,7 +113,11 @@
                         <div class="tcm-metrics">
                             <div class="tcm-metric">
                                 <div class="tcm-label">Price</div>
-                                <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}<span class="tcm-qty">&times;{{ log.quantity }}</span></div>
+                                <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</div>
+                            </div>
+                            <div class="tcm-metric">
+                                <div class="tcm-label">QTY</div>
+                                <div class="tcm-val">{{ log.quantity }}</div>
                             </div>
                             <div class="tcm-metric">
                                 <div class="tcm-label">RSI</div>
