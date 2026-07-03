@@ -4,29 +4,128 @@
 
 {% block head_extra %}
     <style>
+        .settings-page { display: flex; flex-direction: column; gap: 16px; }
+        .settings-mobile-header { display: none; }
+        .settings-toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            min-width: 0;
+        }
+        .settings-toolbar .strategy-tabs {
+            flex: 1;
+            min-width: 0;
+            align-items: center;
+            margin-bottom: 0;
+        }
+        .settings-toolbar .strategy-tabs button {
+            max-width: 230px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .settings-toolbar .strategy-tabs button.disabled { opacity: 0.5; }
+        .settings-create-btn { flex-shrink: 0; white-space: nowrap; }
+        .settings-create-plus { display: none; }
+        .settings-select-wrap { display: none; }
         .settings-form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-group label { font-size: 12px; color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: .5px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .form-group label { font-size: 12px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
         .form-group .hint { font-size: 11px; color: var(--dim); }
         .levels-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
         .level-table { width: 100%; }
         .level-table th { font-size: 11px; color: var(--dim); text-transform: uppercase; padding: 8px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
         .level-table td { padding: 10px 0; border-bottom: 1px solid rgba(51,65,85,0.3); }
-        .level-badge { background: var(--card); color: var(--white); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 6px; }
-        input.level-input { width: 60px; padding: 6px 8px; font-size: 13px; }
-        .strategy-tabs { display: flex; align-items: center; margin-bottom: 0; }
+        .level-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            min-height: 24px;
+            background: var(--card);
+            color: var(--white);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 3px 10px;
+            border-radius: 6px;
+        }
+        input.level-input { width: 60px; padding: 6px 8px; font-size: 13px; text-align: right; }
         .strategy-content { display: none; }
-        .strategy-content.active { display: flex; flex-direction: column; gap: 20px; }
+        .strategy-content.active { display: flex; flex-direction: column; gap: 16px; }
         .strategy-select { display: none; }
         .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
-        .save-status { font-size: 13px; }
+        .save-status { font-size: 13px; min-height: 18px; }
         .save-status.success { color: var(--emerald); }
         .save-status.error { color: var(--red); }
-        .strategy-meta { display: flex; gap: 16px; align-items: center; font-size: 12px; color: var(--dim); margin-bottom: 8px; }
-        .strategy-meta span { display: flex; align-items: center; gap: 4px; }
+        .strategy-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            background: var(--surface);
+            border-radius: var(--radius);
+            padding: 18px 20px;
+            box-shadow: var(--shadow);
+        }
+        .strategy-meta-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 16px;
+            min-width: 0;
+        }
+        .strategy-meta-title { min-width: 0; }
+        .strategy-meta-label {
+            display: block;
+            color: var(--dim);
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: .45px;
+        }
+        .strategy-meta-title h2 {
+            margin-top: 5px;
+            color: var(--white);
+            font-size: 20px;
+            font-weight: 800;
+            line-height: 1.15;
+            overflow-wrap: anywhere;
+        }
+        .strategy-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+        .strategy-meta-item {
+            min-width: 0;
+            border-radius: 10px;
+            background: var(--bg);
+            padding: 10px 12px;
+        }
+        .strategy-meta-item span {
+            display: block;
+            color: var(--dim);
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: .45px;
+        }
+        .strategy-meta-item strong {
+            display: block;
+            margin-top: 4px;
+            color: var(--white);
+            font-size: 13px;
+            font-weight: 800;
+            line-height: 1.2;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
         .toggle-switch { position: relative; width: 40px; height: 22px; cursor: pointer; }
         .toggle-switch input { opacity: 0; width: 0; height: 0; }
-        .toggle-slider { position: absolute; inset: 0; background: var(--bg); border-radius: 11px; transition: .2s; }
+        .toggle-slider { position: absolute; inset: 0; background: var(--bg); border-radius: 999px; transition: .2s; }
         .toggle-slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px; background: var(--dim); border-radius: 50%; transition: .2s; }
         .toggle-switch input:checked + .toggle-slider { background: var(--emerald); }
         .toggle-switch input:checked + .toggle-slider:before { transform: translateX(18px); background: white; }
@@ -42,6 +141,7 @@
         .modal-form-grid { display: grid; grid-template-columns: 1fr; gap: 14px; }
         .modal-form-grid .form-group { gap: 6px; }
         .modal-form-grid input, .modal-form-grid select { width: 100%; box-sizing: border-box; }
+        .modal-form-actions { margin-top: 0; }
 
         /* Read-only mode */
         .strategy-content .read-val {
@@ -56,68 +156,387 @@
         .strategy-content:not(.editing) .settings-form-grid input { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
+        .settings-delete-btn {
+            background: rgba(239,68,68,0.15);
+            color: var(--red);
+        }
+        .settings-delete-btn:hover {
+            background: rgba(239,68,68,0.26);
+        }
 
         @media (max-width: 768px) {
-            /* Header row: tabs + new button */
+            .page-settings .container {
+                max-width: none;
+                padding: 0 calc(8px + env(safe-area-inset-right)) 14px calc(8px + env(safe-area-inset-left));
+                padding-bottom: calc(88px + env(safe-area-inset-bottom));
+                gap: 0;
+            }
+            .settings-page { gap: 10px; }
+            .settings-mobile-header {
+                display: flex;
+                align-items: center;
+                min-height: 32px;
+                padding: 0 4px 2px;
+            }
+            .settings-mobile-header h1 {
+                color: var(--white);
+                font-size: 22px;
+                font-weight: 800;
+                line-height: 1;
+                letter-spacing: 0;
+            }
+            .settings-toolbar {
+                display: flex;
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+                border-radius: 14px;
+                background: var(--surface);
+                padding: 12px;
+                box-shadow: none;
+            }
+            .settings-toolbar .strategy-tabs { display: none; }
+            .settings-select-wrap {
+                display: flex;
+                flex-direction: column;
+                gap: 6px;
+            }
+            .settings-select-wrap label {
+                color: var(--dim);
+                font-size: 10px;
+                font-weight: 800;
+                line-height: 1.2;
+                text-transform: uppercase;
+                letter-spacing: .45px;
+            }
+            .strategy-select {
+                display: block;
+                width: 100%;
+                min-height: 46px;
+                box-sizing: border-box;
+                background-color: var(--bg);
+                color: var(--white);
+                border: 1px solid var(--border);
+                border-radius: 10px;
+                padding: 0 34px 0 12px;
+                font-size: 13px;
+                font-weight: 700;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            #btn-create {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                position: fixed;
+                right: 16px;
+                bottom: calc(74px + env(safe-area-inset-bottom));
+                width: 56px;
+                height: 56px;
+                min-width: 56px;
+                min-height: 56px;
+                border-radius: 50%;
+                padding: 0;
+                font-size: 30px;
+                font-weight: 300;
+                line-height: 1;
+                box-shadow: 0 8px 24px rgba(59,130,246,.4);
+                z-index: 80;
+            }
+            .settings-create-label {
+                display: none;
+            }
+            .settings-create-plus {
+                display: block;
+            }
+            .strategy-content.active { gap: 10px; }
+            .strategy-meta {
+                gap: 13px;
+                border-radius: 14px;
+                padding: 14px 15px;
+                box-shadow: none;
+            }
+            .strategy-meta-top {
+                align-items: flex-start;
+                gap: 12px;
+            }
+            .strategy-meta-title h2 {
+                font-size: 18px;
+            }
+            .strategy-meta-grid {
+                gap: 0;
+                padding-top: 12px;
+                border-top: 1px solid var(--border);
+            }
+            .strategy-meta-item {
+                border-radius: 0;
+                background: transparent;
+                padding: 0 10px;
+            }
+            .strategy-meta-item + .strategy-meta-item {
+                border-left: 1px solid var(--border);
+            }
+            .strategy-meta-item:first-child {
+                padding-left: 0;
+            }
+            .strategy-meta-item:last-child {
+                padding-right: 0;
+            }
+            .strategy-meta-item strong {
+                font-size: 13px;
+            }
+            .toggle-switch {
+                width: 48px;
+                height: 28px;
+                min-width: 48px;
+                min-height: 28px;
+            }
+            .toggle-slider:before {
+                height: 20px;
+                width: 20px;
+                left: 4px;
+                bottom: 4px;
+            }
+            .toggle-switch input:checked + .toggle-slider:before {
+                transform: translateX(20px);
+            }
+            .strategy-content form {
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .strategy-content .card {
+                border-radius: 14px;
+                padding: 14px 15px;
+                box-shadow: none;
+            }
+            .strategy-content .card .section-title {
+                margin-bottom: 8px;
+                font-size: 13px !important;
+                font-weight: 800;
+                line-height: 1.2;
+                text-transform: uppercase;
+                letter-spacing: .25px;
+            }
             .settings-form-grid { grid-template-columns: 1fr !important; gap: 0; }
             .settings-form-grid .form-group {
                 flex-direction: row; align-items: center; justify-content: space-between;
-                padding: 12px 0; border-bottom: 1px solid rgba(51,65,85,0.3); gap: 8px;
+                min-height: 50px;
+                padding: 11px 0; border-bottom: 1px solid var(--border); gap: 12px;
             }
             .settings-form-grid .form-group:last-child { border-bottom: none; }
-            .settings-form-grid .form-group .read-val { font-size: 15px; text-align: right; }
-            .settings-form-grid .form-group .hint { display: none; }
-            /* levels-row: 1 column, min-width:0 prevents grid cell from expanding beyond viewport */
-            .levels-row { grid-template-columns: 1fr !important; }
-            .levels-row > .card { min-width: 0; width: 100%; box-sizing: border-box; }
-            .form-actions { flex-wrap: wrap; gap: 8px; }
-            .form-actions .btn { flex: 1 1 auto; text-align: center; min-width: 80px; }
-
-            /* Mobile: hide tabs, show dropdown — button pushed right via justify-content */
-            .strategy-tabs { display: none; }
-            #btn-create { flex: 1; width: 100%; text-align: center; }
-            .strategy-select {
-                display: block; width: 100%; box-sizing: border-box;
-                background: var(--surface); color: var(--white);
-                border: 1px solid rgba(51,65,85,0.5); border-radius: 8px;
-                padding: 8px 10px; font-size: 13px;
+            .settings-form-grid .form-group .read-val {
+                min-width: 82px;
+                padding: 0;
+                font-size: 15px;
+                line-height: 1;
+                text-align: right;
             }
-
-            /* strategy-meta: wrap instead of overflow */
-            .strategy-meta { flex-wrap: wrap; gap: 8px; }
-
-
-            /* level tables: override global min-width:420px, fit within card */
-            .level-table { table-layout: fixed; width: 100%; min-width: 0 !important; }
-            .level-table th, .level-table td { padding: 8px 4px; font-size: 12px; }
-            input.level-input { width: 48px; max-width: 100%; box-sizing: border-box; }
-            input.level-input { width: 48px; padding: 5px 4px; font-size: 12px; }
+            .settings-form-grid .form-group .hint { display: none; }
+            .strategy-content.editing .settings-form-grid .form-group {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+                padding: 12px 0;
+            }
+            .strategy-content.editing .settings-form-grid input {
+                width: 100%;
+                min-height: 44px;
+                font-size: 16px;
+            }
+            .strategy-content.editing .settings-form-grid .hint {
+                display: block;
+                margin-top: -2px;
+                font-size: 11px;
+            }
+            .levels-row {
+                grid-template-columns: 1fr !important;
+                gap: 10px;
+                margin-top: 0;
+            }
+            .levels-row > .card { min-width: 0; width: 100%; box-sizing: border-box; }
+            .level-table {
+                display: block;
+                table-layout: fixed;
+                width: 100%;
+                min-width: 0 !important;
+            }
+            .level-table thead { display: none; }
+            .level-table tbody { display: block; }
+            .level-table tr {
+                display: grid;
+                grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr);
+                align-items: center;
+                min-height: 48px;
+                border-bottom: 1px solid var(--border);
+            }
+            .level-table tr:last-child { border-bottom: none; }
+            .level-table td {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 0;
+                border-bottom: none;
+                padding: 9px 0;
+                font-size: 13px;
+            }
+            .level-table td:nth-child(2),
+            .level-table td:nth-child(3) {
+                gap: 8px;
+                padding-left: 10px;
+                border-left: 1px solid var(--border);
+            }
+            .level-table td:nth-child(2) {
+                justify-content: space-between;
+            }
+            .level-table td:nth-child(3) {
+                justify-content: flex-end;
+                gap: 2px;
+            }
+            .level-table td:nth-child(2)::before {
+                color: var(--dim);
+                font-size: 10px;
+                font-weight: 800;
+                line-height: 1;
+                text-transform: uppercase;
+                letter-spacing: .3px;
+            }
+            .level-table td:nth-child(2)::before { content: "RSI"; }
+            .level-table .read-val {
+                padding: 0;
+                color: var(--white);
+                font-size: 15px;
+                font-weight: 800;
+                line-height: 1;
+            }
+            .level-table .dim {
+                margin-left: 2px;
+                color: var(--dim);
+                font-size: 12px;
+            }
+            input.level-input {
+                width: 64px !important;
+                max-width: 100%;
+                min-height: 38px;
+                box-sizing: border-box;
+                padding: 6px 8px;
+                font-size: 16px;
+            }
+            .form-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+                align-items: stretch;
+                margin-top: 0;
+            }
+            .levels-row + .form-actions {
+                margin-top: -2px;
+            }
+            .form-actions .save-status {
+                grid-column: 1 / -1;
+                min-height: 18px;
+                text-align: center;
+            }
+            .form-actions .save-status:empty {
+                display: none;
+            }
+            .form-actions .btn {
+                min-width: 0;
+                min-height: 44px;
+                border-radius: 10px;
+                padding: 0 12px;
+                text-align: center;
+            }
+            .modal-overlay {
+                align-items: flex-end;
+                justify-content: center;
+                padding: 0;
+                background: rgba(0,0,0,0.64);
+            }
+            .modal-box {
+                max-width: none;
+                max-height: 88vh;
+                border-radius: 20px 20px 0 0;
+                padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+                box-shadow: 0 -16px 48px rgba(0,0,0,.5);
+            }
+            .modal-form-grid input,
+            .modal-form-grid select {
+                min-height: 46px;
+                font-size: 16px;
+            }
+            .modal-form-actions {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 8px;
+            }
+            .modal-form-actions .save-status {
+                grid-column: 1 / -1;
+                text-align: center;
+            }
+            .modal-form-actions .btn {
+                min-height: 44px;
+                border-radius: 10px;
+                padding: 0 12px;
+            }
+        }
+        @media (max-width: 480px) {
+            .settings-mobile-header h1 { font-size: 22px; }
+            .strategy-meta-title h2 { font-size: 17px; }
+            .strategy-meta-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+            .strategy-meta-item {
+                padding: 0 8px;
+            }
+            .strategy-meta-item strong {
+                font-size: 12px;
+            }
+            .strategy-content .card {
+                padding: 13px 14px;
+            }
+            .level-table tr {
+                grid-template-columns: 40px minmax(0, 1fr) minmax(0, 1fr);
+            }
+            input.level-input {
+                width: 58px !important;
+            }
         }
     </style>
 {% endblock %}
 
 {% block content %}
-        <!-- Create Strategy Button -->
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; min-width: 0;">
+        <div class="settings-page">
+        <div class="settings-mobile-header">
+            <h1>Settings</h1>
+        </div>
+
+        <div class="settings-toolbar">
             <!-- Desktop: tabs -->
             <div class="strategy-tabs">
                 {% for cfg in strategy_configs %}
-                <button class="{{ 'active' if loop.first else '' }}" onclick="switchStrategy('{{ cfg.name }}', this)"
-                    style="{{ '' if cfg.enabled else 'opacity: 0.5;' }}">
+                <button class="{{ 'active' if loop.first else '' }}{{ '' if cfg.enabled else ' disabled' }}" onclick="switchStrategy('{{ cfg.name }}', this)">
                     {{ cfg.name }}
                 </button>
                 {% endfor %}
             </div>
-            <button class="btn" onclick="toggleCreateForm(true)" id="btn-create" aria-haspopup="dialog">+ New Strategy</button>
+            {% if strategy_configs %}
+            <div class="settings-select-wrap">
+                <label for="strategy-select-mobile">Strategy</label>
+                <select class="strategy-select" id="strategy-select-mobile" onchange="switchStrategyByName(this.value)">
+                    {% for cfg in strategy_configs %}
+                    <option value="{{ cfg.name }}" {{ 'selected' if loop.first else '' }}>
+                        {{ cfg.name }}{% if not cfg.enabled %} (off){% endif %}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
+            <button class="btn settings-create-btn" onclick="toggleCreateForm(true)" id="btn-create" aria-haspopup="dialog" aria-label="New strategy">
+                <span class="settings-create-label">New Strategy</span>
+                <span class="settings-create-plus" aria-hidden="true">+</span>
+            </button>
         </div>
-        <!-- Mobile: dropdown (full width below) -->
-        <select class="strategy-select" onchange="switchStrategyByName(this.value)" style="margin-bottom: 16px;">
-            {% for cfg in strategy_configs %}
-            <option value="{{ cfg.name }}" {{ 'selected' if loop.first else '' }}>
-                {{ cfg.name }}{% if not cfg.enabled %} (off){% endif %}
-            </option>
-            {% endfor %}
-        </select>
 
         <!-- Create Strategy Modal -->
         <div class="modal-overlay" id="create-modal" aria-hidden="true" onclick="if(event.target===this)toggleCreateForm(false)">
@@ -128,11 +547,11 @@
                 </div>
                 <div class="modal-form-grid">
                     <div class="form-group">
-                        <label>Name</label>
+                        <label for="new-name">Name</label>
                         <input type="text" id="new-name" placeholder="e.g. NASDAQ_RSI_MeanReversion">
                     </div>
                     <div class="form-group">
-                        <label>Strategy Class</label>
+                        <label for="new-class">Strategy Class</label>
                         <select id="new-class">
                             {% for cls in strategy_classes %}
                             <option value="{{ cls.class_path }}">{{ cls.name }}</option>
@@ -140,7 +559,7 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Market</label>
+                        <label for="new-market">Market</label>
                         <select id="new-market">
                             <option value="nasdaq">NASDAQ</option>
                             <option value="nyse">NYSE</option>
@@ -149,11 +568,11 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>Symbols (comma-separated)</label>
+                        <label for="new-symbols">Symbols (comma-separated)</label>
                         <input type="text" id="new-symbols" placeholder="AAPL, GOOG, NVDA">
                     </div>
                 </div>
-                <div class="form-actions" style="margin-top: 0;">
+                <div class="form-actions modal-form-actions">
                     <span class="save-status" id="create-status"></span>
                     <button class="btn" onclick="toggleCreateForm(false)">Cancel</button>
                     <button class="btn btn-save" onclick="createStrategy()">Create</button>
@@ -167,14 +586,27 @@
         <div class="strategy-content {{ 'active' if loop.first else '' }}" id="strategy-{{ cfg.name }}">
             {% set cfg_idx = loop.index %}
             <div class="strategy-meta">
-                <span>Class: <strong>{{ cfg.class_path.split('.')|last }}</strong></span>
-                <span>Market: <strong>{{ cfg.market|upper }}</strong></span>
-                <span>Symbols: <strong>{{ cfg.symbols|length }}</strong></span>
-                <label class="toggle-switch" title="Enabled/Disabled" aria-label="{{ cfg.name }} enabled">
-                    <input type="checkbox" {{ 'checked' if cfg.enabled else '' }}
-                        onchange="toggleStrategy('{{ cfg.name }}', this.checked)">
-                    <span class="toggle-slider"></span>
-                </label>
+                <div class="strategy-meta-top">
+                    <div class="strategy-meta-title">
+                        <span class="strategy-meta-label">Strategy</span>
+                        <h2>{{ cfg.name }}</h2>
+                    </div>
+                    <label class="toggle-switch" title="Enabled/Disabled" aria-label="{{ cfg.name }} enabled">
+                        <input type="checkbox" {{ 'checked' if cfg.enabled else '' }}
+                            onchange="toggleStrategy('{{ cfg.name }}', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div class="strategy-meta-grid">
+                    <div class="strategy-meta-item">
+                        <span>Market</span>
+                        <strong>{{ cfg.market|upper }}</strong>
+                    </div>
+                    <div class="strategy-meta-item">
+                        <span>Symbols</span>
+                        <strong>{{ cfg.symbols|length }}</strong>
+                    </div>
+                </div>
             </div>
 
             <form onsubmit="saveStrategy(event, '{{ cfg.name }}')">
@@ -220,7 +652,7 @@
                                     </td>
                                     <td>
                                         <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
-                                        <input type="number" class="level-input" data-type="buy-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" style="width:52px;" aria-label="{{ cfg.name }} buy level {{ loop.index }} portion percent">
+                                        <input type="number" class="level-input" data-type="buy-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" aria-label="{{ cfg.name }} buy level {{ loop.index }} portion percent">
                                         <span class="dim"> %</span>
                                     </td>
                                 </tr>
@@ -243,7 +675,7 @@
                                     </td>
                                     <td>
                                         <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
-                                        <input type="number" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" style="width:52px;" aria-label="{{ cfg.name }} sell level {{ loop.index }} portion percent">
+                                        <input type="number" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" aria-label="{{ cfg.name }} sell level {{ loop.index }} portion percent">
                                         <span class="dim"> %</span>
                                     </td>
                                 </tr>
@@ -257,15 +689,16 @@
                     <span class="save-status" id="status-{{ cfg.name }}"></span>
                     <button type="submit" class="btn btn-save">Save & Apply</button>
                     <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
-                    <button type="button" class="btn" style="background:rgba(239,68,68,0.15);color:var(--red);" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
+                    <button type="button" class="btn settings-delete-btn" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
                 </div>
             </form>
         </div>
         {% else %}
         <div class="card" id="empty-state">
-            <p class="empty">No strategies configured. Click "+ New Strategy" to create one.</p>
+            <p class="empty">No strategies configured. Create a new strategy to get started.</p>
         </div>
         {% endfor %}
+        </div>
 {% endblock %}
 
 {% block scripts %}
