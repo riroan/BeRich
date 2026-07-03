@@ -1,15 +1,23 @@
     <div class="header">
         <h1><a class="brand-link" href="/" aria-label="Dashboard">Be<span>Rich</span></a></h1>
         <div class="header-right" aria-live="polite">
-            <span id="ws-status" class="ws-status disconnected">OFFLINE</span>
+            <span id="ws-status" class="ws-status disconnected" role="status" aria-label="Offline connection" title="OFFLINE"></span>
             {% set is_running = bot_status.running if bot_status else false %}
             {% set is_paper = bot_status.paper_trading if bot_status else true %}
             {% set warmup_remaining = bot_status.warmup_remaining if bot_status and bot_status.warmup_remaining else 0 %}
-            <span id="bot-run-status" class="pill status {{ 'running' if is_running else 'stopped' }}">
-                {{ 'Running' if is_running else 'Stopped' }}
+            <span id="bot-run-status"
+                  class="pill status bot-status {{ 'running' if is_running else 'stopped' }}"
+                  role="status"
+                  aria-label="Bot {{ 'running' if is_running else 'stopped' }}"
+                  title="Bot {{ 'running' if is_running else 'stopped' }}">
+                <span class="bot-status-dot" aria-hidden="true"></span>
+                <span class="bot-status-label">BOT</span>
             </span>
-            <span id="bot-mode-status" class="pill mode {{ 'paper' if is_paper else 'real' }}">
-                {{ 'Paper' if is_paper else 'Real' }}
+            <span id="bot-mode-status"
+                  class="pill mode {{ 'paper' if is_paper else 'real' }}"
+                  aria-label="{{ 'Paper trading' if is_paper else 'Real trading' }}"
+                  title="{{ 'Paper' if is_paper else 'Real' }}">
+                {{ 'P' if is_paper else 'R' }}
             </span>
             <span id="bot-warmup-status" class="pill warmup"{% if not warmup_remaining %} hidden{% endif %}>WARMUP: {{ warmup_remaining }}</span>
             <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"

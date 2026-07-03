@@ -308,14 +308,20 @@ class DashboardWebSocket {
         if (data.bot_status) {
             const statusSpan = document.getElementById('bot-run-status') || document.querySelector('.status-bar .status');
             if (statusSpan) {
-                statusSpan.textContent = data.bot_status.running ? 'Running' : 'Stopped';
-                statusSpan.className = `pill status ${data.bot_status.running ? 'running' : 'stopped'}`;
+                const botStatus = data.bot_status.running ? 'running' : 'stopped';
+                statusSpan.className = `pill status bot-status ${botStatus}`;
+                statusSpan.setAttribute('aria-label', `Bot ${botStatus}`);
+                statusSpan.title = `Bot ${botStatus}`;
+                statusSpan.innerHTML = '<span class="bot-status-dot" aria-hidden="true"></span><span class="bot-status-label">BOT</span>';
             }
 
             const modeSpan = document.getElementById('bot-mode-status') || document.querySelector('.status-bar .mode');
             if (modeSpan) {
-                modeSpan.textContent = data.bot_status.paper_trading ? 'Paper' : 'Real';
+                const isPaper = data.bot_status.paper_trading;
+                modeSpan.textContent = isPaper ? 'P' : 'R';
                 modeSpan.className = `pill mode ${data.bot_status.paper_trading ? 'paper' : 'real'}`;
+                modeSpan.setAttribute('aria-label', isPaper ? 'Paper trading' : 'Real trading');
+                modeSpan.title = isPaper ? 'Paper' : 'Real';
             }
 
             const warmupSpan = document.getElementById('bot-warmup-status') || document.querySelector('.status-bar .warmup');
@@ -376,6 +382,7 @@ class DashboardWebSocket {
             indicator = document.createElement('span');
             indicator.id = 'ws-status';
             indicator.className = 'ws-status';
+            indicator.setAttribute('role', 'status');
             indicator.setAttribute('aria-live', 'polite');
             const statusBar = document.querySelector('.status-bar');
             const headerRight = document.querySelector('.header-right');
@@ -387,11 +394,15 @@ class DashboardWebSocket {
         }
 
         if (connected) {
-            indicator.textContent = 'LIVE';
+            indicator.textContent = '';
             indicator.className = 'ws-status connected';
+            indicator.setAttribute('aria-label', 'Live connection');
+            indicator.title = 'LIVE';
         } else {
-            indicator.textContent = 'OFFLINE';
+            indicator.textContent = '';
             indicator.className = 'ws-status disconnected';
+            indicator.setAttribute('aria-label', 'Offline connection');
+            indicator.title = 'OFFLINE';
         }
 
         const stickyWs = document.getElementById('sticky-ws-value');

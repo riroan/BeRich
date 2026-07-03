@@ -7,15 +7,92 @@
 {% endblock %}
 
 {% block content %}
+        {% set market_label = position.market if position else (symbol_market|string|upper if symbol_market else '') %}
+        {% set detail_price = position.current_price if position else current_price %}
+        {% set is_krx = (market_label|lower) == 'krx' %}
+        {% set last_trade_raw = symbol_trades[0].timestamp|replace('T', ' ') if symbol_trades else '-' %}
+        {% set last_trade_mobile = last_trade_raw[5:16] if last_trade_raw|length >= 16 and last_trade_raw[4:5] == '-' else last_trade_raw %}
+        <div class="symbol-detail-page">
         <div class="section-title symbol-title">
             <span>{{ symbol }}</span>
-            {% if position %}
-            <span class="market-badge market-{{ position.market|lower }}">{{ position.market }}</span>
+            {% if market_label %}
+            <span class="market-badge market-{{ market_label|lower }}">{{ market_label }}</span>
             {% endif %}
         </div>
 
+        <section class="symbol-mobile-summary" aria-label="{{ symbol }} summary">
+            <div class="symbol-mobile-heading">
+                <span class="symbol-mobile-name">{{ symbol }}</span>
+                {% if market_label %}
+                <span class="market-badge market-{{ market_label|lower }}">{{ market_label }}</span>
+                {% endif %}
+            </div>
+
+            <div class="symbol-hero-card">
+                <div class="symbol-label">Current Price</div>
+                <div class="symbol-hero-price-row">
+                    <span class="symbol-hero-price">
+                        {% if detail_price is not none %}
+                            {% if is_krx %}{{ "{:,.0f}".format(detail_price) }}{% else %}${{ "{:,.2f}".format(detail_price) }}{% endif %}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </span>
+                    <span class="symbol-hero-change js-today-change">-</span>
+                </div>
+                <div class="symbol-hero-metrics">
+                    <div class="symbol-hero-metric">
+                        <div class="symbol-label">P&amp;L</div>
+                        {% if position %}
+                        <div class="symbol-hero-metric-value {{ 'positive' if position.pnl >= 0 else 'negative' }}">{{ "{:+.1f}%".format(position.pnl_pct) }}</div>
+                        <div class="symbol-hero-metric-sub {{ 'positive' if position.pnl >= 0 else 'negative' }}">
+                            {% if is_krx %}
+                                {{ "{:+,.0f}".format(position.pnl) }}
+                            {% else %}
+                                {{ '+' if position.pnl >= 0 else '-' }}${{ "{:,.2f}".format(position.pnl|abs) }}
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="symbol-hero-metric-value dim">-</div>
+                        <div class="symbol-hero-metric-sub dim">-</div>
+                        {% endif %}
+                    </div>
+                    <div class="symbol-hero-metric">
+                        <div class="symbol-label">Quantity</div>
+                        <div class="symbol-hero-metric-value">{{ "{:,.0f}".format(position.quantity) if position else "0" }}</div>
+                        <div class="symbol-hero-metric-sub dim">
+                            {% if position %}
+                                Avg {% if is_krx %}{{ "{:,.0f}".format(position.avg_price) }}{% else %}${{ "{:,.2f}".format(position.avg_price) }}{% endif %}
+                            {% else %}
+                                Avg -
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="symbol-mobile-stat-grid">
+                <div class="symbol-stat-card">
+                    <div class="symbol-label">RSI</div>
+                    <div class="symbol-stat-value {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+                </div>
+                <div class="symbol-stat-card">
+                    <div class="symbol-label">Buy Stage</div>
+                    <div class="symbol-stat-value">{{ position.buy_stage ~ '/' ~ position.max_buy_stages if position else '-' }}</div>
+                </div>
+                <div class="symbol-stat-card">
+                    <div class="symbol-label">Stop Loss Dist</div>
+                    <div class="symbol-stat-value {% if position %}{{ 'negative' if position.stop_loss_distance <= 2 else ('warning' if position.stop_loss_distance <= 5 else '') }}{% endif %}">{{ "{:.1f}%".format(position.stop_loss_distance) if position else '-' }}</div>
+                </div>
+                <div class="symbol-stat-card">
+                    <div class="symbol-label">Last Trade</div>
+                    <div class="symbol-stat-value">{{ last_trade_mobile }}</div>
+                </div>
+            </div>
+        </section>
+
         {% if position %}
-        <div class="cards-row" >
+        <div class="cards-row symbol-desktop-summary" >
             <div class="card">
                 <div class="label">Current Price</div>
                 <div class="value small">{% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.current_price) }}{% else %}${{ "{:,.2f}".format(position.current_price) }}{% endif %}</div>
@@ -35,7 +112,7 @@
                 <div class="delta dim">Avg {% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.avg_price) }}{% else %}${{ "{:,.2f}".format(position.avg_price) }}{% endif %}</div>
             </div>
         </div>
-        <div class="cards-row" >
+        <div class="cards-row symbol-desktop-summary" >
             <div class="card">
                 <div class="label">Buy Stage</div>
                 <div class="value small">{{ position.buy_stage }}/{{ position.max_buy_stages }}</div>
@@ -46,15 +123,15 @@
             </div>
             <div class="card">
                 <div class="label">Today Change</div>
-                <div class="value" id="today-change">-</div>
+                <div class="value js-today-change">-</div>
             </div>
             <div class="card">
                 <div class="label">Last Trade</div>
-                <div class="value small dim" >{% if symbol_trades %}{{ symbol_trades[0].timestamp }}{% else %}-{% endif %}</div>
+                <div class="value small dim" >{{ last_trade_raw }}</div>
             </div>
         </div>
         {% else %}
-        <div class="cards-row" >
+        <div class="cards-row symbol-desktop-summary" >
             <div class="card">
                 <div class="label">Current Price</div>
                 <div class="value small">{% if current_price %}{% if symbol_market == 'krx' %}{{ "{:,.0f}".format(current_price) }}{% else %}${{ "{:,.2f}".format(current_price) }}{% endif %}{% else %}-{% endif %}</div>
@@ -72,7 +149,7 @@
                 <div class="value small dim">0</div>
             </div>
         </div>
-        <div class="cards-row" >
+        <div class="cards-row symbol-desktop-summary" >
             <div class="card">
                 <div class="label">Buy Stage</div>
                 <div class="value small dim">-</div>
@@ -83,11 +160,11 @@
             </div>
             <div class="card">
                 <div class="label">Today Change</div>
-                <div class="value" id="today-change">-</div>
+                <div class="value js-today-change">-</div>
             </div>
             <div class="card">
                 <div class="label">Last Trade</div>
-                <div class="value small dim" >{% if symbol_trades %}{{ symbol_trades[0].timestamp }}{% else %}-{% endif %}</div>
+                <div class="value small dim" >{{ last_trade_raw }}</div>
             </div>
         </div>
         {% endif %}
@@ -113,6 +190,27 @@
         <section class="trades-section">
             <div class="panel">
                 <h2>Trade History</h2>
+                <div class="symbol-trades-list-m">
+                    {% for log in symbol_trades %}
+                    {% set action_label = 'BUY' if log.action == 'buy' else ('SELL' if log.action == 'sell' else ('PARTIAL' if log.action == 'partial_sell' else ('STOP' if log.action == 'stop_loss' else log.action|upper))) %}
+                    {% set action_class = 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') %}
+                    {% set trade_raw = log.timestamp|replace('T', ' ') %}
+                    {% set trade_mobile_time = trade_raw[5:16] if trade_raw|length >= 16 and trade_raw[4:5] == '-' else trade_raw %}
+                    <div class="symbol-trade-card-m">
+                        <div class="symbol-trade-left">
+                            <span class="signal-tag {{ action_class }}">{{ action_label }}</span>
+                            <div class="symbol-trade-fill">
+                                <span class="symbol-trade-price">{% if is_krx %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</span>
+                                <span class="symbol-trade-qty">&times;{{ log.quantity }}</span>
+                            </div>
+                        </div>
+                        <div class="symbol-trade-right">
+                            <span class="symbol-trade-time" title="{{ log.timestamp }}">{{ trade_mobile_time }}</span>
+                            <span class="symbol-trade-rsi">RSI {{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
                 <div class="table-wrap">
                 <table class="trades-table center-table mobile-cards">
                     <thead>
@@ -144,6 +242,7 @@
             </div>
         </section>
         {% endif %}
+        </div>
 {% endblock %}
 
 {% block scripts %}
@@ -328,6 +427,14 @@
                 .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
         }
 
+        function updateTodayChange(change) {
+            document.querySelectorAll('.js-today-change').forEach((el) => {
+                el.textContent = (change >= 0 ? '+' : '') + change + '%';
+                el.classList.remove('positive', 'negative');
+                el.classList.add(change >= 0 ? 'positive' : 'negative');
+            });
+        }
+
         async function fetchPage(before = null) {
             let url = `/api/symbol/${symbol}/history?limit=${PAGE_SIZE}`;
             if (before) url += `&before=${encodeURIComponent(before)}`;
@@ -366,11 +473,7 @@
                         const today = priceData[priceData.length - 1].value;
                         const yesterday = priceData[priceData.length - 2].value;
                         const change = ((today - yesterday) / yesterday * 100).toFixed(2);
-                        const el = document.getElementById('today-change');
-                        if (el) {
-                            el.textContent = (change >= 0 ? '+' : '') + change + '%';
-                            el.className = 'value small ' + (change >= 0 ? 'positive' : 'negative');
-                        }
+                        updateTodayChange(change);
                     }
                 }
 
@@ -466,11 +569,7 @@
                     const today = priceData[priceData.length - 1].value;
                     const yesterday = priceData[priceData.length - 2].value;
                     const change = ((today - yesterday) / yesterday * 100).toFixed(2);
-                    const el = document.getElementById('today-change');
-                    if (el) {
-                        el.textContent = (change >= 0 ? '+' : '') + change + '%';
-                        el.className = 'value small ' + (change >= 0 ? 'positive' : 'negative');
-                    }
+                    updateTodayChange(change);
                 }
                 stabilizeCharts(false);
             } catch (error) {
