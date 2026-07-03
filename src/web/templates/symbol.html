@@ -74,7 +74,7 @@
             <div class="symbol-mobile-stat-grid">
                 <div class="symbol-stat-card">
                     <div class="symbol-label">RSI</div>
-                    <div class="symbol-stat-value {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+                    <div class="symbol-stat-value {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
                 </div>
                 <div class="symbol-stat-card">
                     <div class="symbol-label">Buy Stage</div>
@@ -104,7 +104,7 @@
             </div>
             <div class="card">
                 <div class="label">RSI</div>
-                <div class="value small {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+                <div class="value small {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
             </div>
             <div class="card">
                 <div class="label">Quantity</div>
@@ -142,7 +142,7 @@
             </div>
             <div class="card">
                 <div class="label">RSI</div>
-                <div class="value small {% if rsi %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi else '-' }}</div>
+                <div class="value small {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
             </div>
             <div class="card">
                 <div class="label">Quantity</div>
@@ -207,7 +207,7 @@
                         </div>
                         <div class="symbol-trade-right">
                             <span class="symbol-trade-time" title="{{ log.timestamp }}">{{ trade_mobile_time }}</span>
-                            <span class="symbol-trade-rsi">RSI {{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</span>
+                            <span class="symbol-trade-rsi">RSI {{ "{:.1f}".format(log.rsi) if log.rsi is not none else '-' }}</span>
                         </div>
                     </div>
                     {% endfor %}
@@ -231,7 +231,7 @@
                             <td class="action {{ log.action }}" data-label="Action">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</td>
                             <td class="number" data-label="Price">{{ "{:,.2f}".format(log.price) }}</td>
                             <td class="number" data-label="Qty">{{ log.quantity }}</td>
-                            <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi else '-' }}</td>
+                            <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi is not none else '-' }}</td>
                             <td class="number {{ 'positive' if log.pnl_pct is not none and log.pnl_pct >= 0 else ('negative' if log.pnl_pct is not none else '') }}" data-label="P&L">
                                 {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '-' }}
                             </td>
@@ -358,6 +358,7 @@
         const rsiSeries = rsiChart.addLineSeries({
             color: colors.rsi,
             lineWidth: 2,
+            priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
         });
 
         // Add RSI reference lines
@@ -365,12 +366,14 @@
             color: colors.oversold,
             lineWidth: 1,
             lineStyle: 2,
+            priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
         });
 
         const overboughtLine = rsiChart.addLineSeries({
             color: colors.overbought,
             lineWidth: 1,
             lineStyle: 2,
+            priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
         });
 
         // Parse time string to timestamp (server sends KST time)

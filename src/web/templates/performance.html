@@ -28,13 +28,13 @@
                 <div class="perf-hero-row">
                     <div class="perf-hero-value {{ return_class }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
                     <div class="perf-hero-delta {{ pnl_class }}">
-                        {{ "+" if performance.total_pnl >= 0 else "-" }} ${{ "{:,.0f}".format((performance.total_pnl if performance.total_pnl >= 0 else -performance.total_pnl)) }}
+                        {{ "+" if performance.total_pnl >= 0 else "-" }} ${{ "{:,.2f}".format((performance.total_pnl if performance.total_pnl >= 0 else -performance.total_pnl)) }}
                     </div>
                 </div>
                 <div class="perf-hero-stats">
                     <div class="perf-hero-stat">
                         <span class="perf-label">Balance</span>
-                        <strong>${{ "{:,.0f}".format(balance_usd) }}</strong>
+                        <strong>${{ "{:,.2f}".format(balance_usd) }}</strong>
                     </div>
                     <div class="perf-hero-stat">
                         <span class="perf-label">CAGR</span>

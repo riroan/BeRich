@@ -10,12 +10,12 @@
             <div class="hero-stats">
                 <div class="hero-stat">
                     <div class="hero-stat-label">Invested</div>
-                    <div class="hero-stat-value">${{ "{:,.0f}".format(total_value - cash_total) }}</div>
+                    <div class="hero-stat-value">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
                     <div class="hero-stat-sub">{{ "{:.1f}".format(100 - cash_weight) }}%</div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Cash</div>
-                    <div class="hero-stat-value">${{ "{:,.0f}".format(cash_total) }}</div>
+                    <div class="hero-stat-value">${{ "{:,.2f}".format(cash_total) }}</div>
                     <div class="hero-stat-sub">{{ "{:.1f}".format(cash_weight) }}%</div>
                 </div>
                 <div class="hero-stat">
@@ -82,8 +82,8 @@
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Market">{{ pos.market }}</td>
                             <td data-label="Qty">{{ pos.quantity }}</td>
-                            <td data-label="Avg Price">${{ "{:,.2f}".format(pos.avg_price) }}</td>
-                            <td data-label="Current">${{ "{:,.2f}".format(pos.current_price) }}</td>
+                            <td data-label="Avg Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.avg_price) }}{% else %}${{ "{:,.2f}".format(pos.avg_price) }}{% endif %}</td>
+                            <td data-label="Current">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="Value">${{ "{:,.2f}".format(pos.value) }}</td>
                             <td data-label="Weight" class="{{ 'over-limit' if pos.over_limit else '' }}">
                                 {{ "{:.1f}".format(pos.weight) }}%
@@ -139,7 +139,7 @@
                         <div class="holding-sub">{{ pos.quantity }} QTY · {% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.avg_price) }}{% else %}${{ "{:,.2f}".format(pos.avg_price) }}{% endif %}</div>
                     </div>
                     <div class="holding-value">
-                        <div class="holding-val-amt">${{ "{:,.0f}".format(pos.value) }}</div>
+                        <div class="holding-val-amt">${{ "{:,.2f}".format(pos.value) }}</div>
                         <div class="holding-val-pct">{{ "{:.1f}".format(pos.weight) }}%</div>
                     </div>
                     <div class="holding-pnl {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</div>
@@ -234,7 +234,7 @@
                 ctx.fillText('INVESTED', cx, cy - 20);
                 ctx.fillStyle = '#f8fafc';
                 ctx.font = 'bold 18px Inter, sans-serif';
-                ctx.fillText('$' + investedValue.toLocaleString('en-US', { maximumFractionDigits: 0 }), cx, cy + 2);
+                ctx.fillText('$' + investedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cx, cy + 2);
                 ctx.fillStyle = '#64748b';
                 ctx.font = '11px Inter, sans-serif';
                 ctx.fillText(investedPct.toFixed(1) + '%', cx, cy + 20);

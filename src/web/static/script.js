@@ -143,7 +143,7 @@ class DashboardWebSocket {
 
         const heroCash = document.getElementById('hero-cash');
         if (heroCash && data.cash_usd !== undefined) {
-            heroCash.textContent = this.formatUSD(data.cash_usd, false, 0);
+            heroCash.textContent = this.formatUSD(data.cash_usd);
         }
 
         const heroPnl = document.getElementById('hero-pnl');
@@ -183,7 +183,7 @@ class DashboardWebSocket {
                         ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
                     </td>
                     <td data-label="RSI" class="${this.getRSIClass(pos.rsi)}">
-                        ${pos.rsi ? pos.rsi.toFixed(1) : '-'}
+                        ${pos.rsi != null ? Number(pos.rsi).toFixed(1) : '-'}
                     </td>
                     <td data-label="Stage">${this.renderStageCell(pos)}</td>
                 </tr>
@@ -286,7 +286,7 @@ class DashboardWebSocket {
                         <div class="rsi-symbol">${escapedSymbol}</div>
                         <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
                     </div>
-                    <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi.toFixed(1)}</span>
+                    <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi != null ? Number(rsi).toFixed(1) : '-'}</span>
                 </a>
             `;
         }).join('');
@@ -476,10 +476,11 @@ class DashboardWebSocket {
 
     formatPnl(pnl, market) {
         if (pnl === null || pnl === undefined) return '-';
-        const sign = pnl >= 0 ? '+' : '';
         if (market === 'KRX') {
+            const sign = pnl >= 0 ? '+' : '';
             return sign + Math.round(pnl).toLocaleString('ko-KR');
         }
+        const sign = pnl > 0 ? '+' : (pnl < 0 ? '-' : '');
         return sign + '$' + Math.abs(pnl).toLocaleString('en-US', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
@@ -487,9 +488,10 @@ class DashboardWebSocket {
     }
 
     getRSIClass(rsi) {
-        if (!rsi) return 'rsi-neutral';
-        if (rsi <= 24 || rsi >= 76) return 'rsi-danger';
-        if (rsi <= 35 || rsi >= 65) return 'rsi-warning';
+        const value = Number(rsi);
+        if (rsi === null || rsi === undefined || Number.isNaN(value)) return 'rsi-neutral';
+        if (value <= 24 || value >= 76) return 'rsi-danger';
+        if (value <= 35 || value >= 65) return 'rsi-warning';
         return 'rsi-neutral';
     }
 

@@ -796,9 +796,10 @@
                     height: heights.rsi,
                     timeScale: { timeVisible: true, secondsVisible: false, borderColor: colors.grid },
                 });
-                rsiSeries = rsiChart.addLineSeries({ color: colors.rsi, lineWidth: 1.5 });
-                oversoldLine = rsiChart.addLineSeries({ color: colors.oversold, lineWidth: 1, lineStyle: 2 });
-                overboughtLine = rsiChart.addLineSeries({ color: colors.overbought, lineWidth: 1, lineStyle: 2 });
+                const rsiPriceFormat = { type: 'price', precision: 1, minMove: 0.1 };
+                rsiSeries = rsiChart.addLineSeries({ color: colors.rsi, lineWidth: 1.5, priceFormat: rsiPriceFormat });
+                oversoldLine = rsiChart.addLineSeries({ color: colors.oversold, lineWidth: 1, lineStyle: 2, priceFormat: rsiPriceFormat });
+                overboughtLine = rsiChart.addLineSeries({ color: colors.overbought, lineWidth: 1, lineStyle: 2, priceFormat: rsiPriceFormat });
 
                 // Crosshair sync (same pattern as symbol.html)
                 let syncing = false;

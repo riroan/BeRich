@@ -15,7 +15,7 @@
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Cash</div>
-                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.0f}".format(cash_usd) }}</div>
+                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(cash_usd) }}</div>
                     <div class="hero-stat-sub">{{ "{:.0f}%".format(cash_ratio_usd) }}</div>
                 </div>
                 <div class="hero-stat">
@@ -85,12 +85,12 @@
                     <tbody>
                         {% for pos in positions %}
                         <tr class="position-row" data-href="/symbol/{{ pos.symbol }}"
-                            data-symbol="{{ pos.symbol }}" data-pnl="{{ pos.pnl_pct }}" data-rsi="{{ pos.rsi if pos.rsi else '' }}" data-price="{{ pos.current_price }}"
+                            data-symbol="{{ pos.symbol }}" data-pnl="{{ pos.pnl_pct }}" data-rsi="{{ pos.rsi if pos.rsi is not none else '' }}" data-price="{{ pos.current_price }}"
                             tabindex="0" role="link" aria-label="Open {{ pos.symbol }} chart">
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
-                            <td data-label="RSI" class="{% if pos.rsi %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi else '-' }}</td>
+                            <td data-label="RSI" class="{% if pos.rsi is not none %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi is not none else '-' }}</td>
                             <td data-label="Stage">
                                 <div class="stage-stack">
                                     <div class="stage-line">
@@ -182,7 +182,7 @@
                     <span class="sym-badge">{{ log.symbol }}</span>
                     <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
                     <span class="trade-qty">x{{ log.quantity }}</span>
-                    <span class="trade-price">${{ "{:,.2f}".format(log.price) }}</span>
+                    <span class="trade-price">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</span>
                 </div>
                 {% else %}
                 <div class="empty-state">No recent activity</div>

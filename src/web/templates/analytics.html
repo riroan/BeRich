@@ -5,11 +5,11 @@
 {% macro money0(value, signed=false) -%}
     {%- set amount = value|float -%}
     {%- if signed and amount >= 0 -%}
-        +${{ "{:,.0f}".format(amount) }}
+        +${{ "{:,.2f}".format(amount) }}
     {%- elif amount < 0 -%}
-        -${{ "{:,.0f}".format(-amount) }}
+        -${{ "{:,.2f}".format(-amount) }}
     {%- else -%}
-        ${{ "{:,.0f}".format(amount) }}
+        ${{ "{:,.2f}".format(amount) }}
     {%- endif -%}
 {%- endmacro %}
 
@@ -293,7 +293,8 @@
     function formatMoney(value, signed = false) {
         const amount = Number(value || 0);
         const formatted = Math.abs(amount).toLocaleString(undefined, {
-            maximumFractionDigits: 0,
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
         });
         if (signed && amount >= 0) return `+$${formatted}`;
         if (amount < 0) return `-$${formatted}`;
