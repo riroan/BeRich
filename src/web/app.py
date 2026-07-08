@@ -179,6 +179,7 @@ class BacktestRequest(BaseModel):
     start_date: str  # "YYYY-MM-DD"
     end_date: str    # "YYYY-MM-DD"
     rsi_period: int = Field(14, ge=5, le=30)
+    rsi_method: str = Field("wilder", pattern="^(wilder|cutler)$")
     stop_loss: float = Field(-10.0, ge=-100.0, le=-1.0)
     cooldown_days: int = Field(1, ge=1, le=30)
     reset_requires_recovery: bool = False
@@ -1497,6 +1498,7 @@ def create_app() -> FastAPI:
                 end_date=body.end_date,
                 params={
                     "rsi_period": body.rsi_period,
+                    "rsi_method": body.rsi_method,
                     "stop_loss": body.stop_loss,
                     "cooldown_days": body.cooldown_days,
                     "reset_requires_recovery": body.reset_requires_recovery,

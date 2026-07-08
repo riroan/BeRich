@@ -153,7 +153,8 @@
         }
         .strategy-content.editing .read-val { display: none; }
         .strategy-content:not(.editing) input.level-input,
-        .strategy-content:not(.editing) .settings-form-grid input { display: none; }
+        .strategy-content:not(.editing) .settings-form-grid input,
+        .strategy-content:not(.editing) .settings-form-grid select { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
         .settings-delete-btn {
@@ -339,7 +340,8 @@
                 gap: 8px;
                 padding: 12px 0;
             }
-            .strategy-content.editing .settings-form-grid input {
+            .strategy-content.editing .settings-form-grid input,
+            .strategy-content.editing .settings-form-grid select {
                 width: 100%;
                 min-height: 44px;
                 font-size: 16px;
@@ -631,6 +633,16 @@
                             <input type="number" id="cfg-{{ cfg_idx }}-cooldown-days" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}" min="0" max="365" step="1" inputmode="numeric">
                             <span class="hint">Wait period after trade</span>
                         </div>
+                        {% set rsi_method = params.get('rsi_method', 'wilder') %}
+                        <div class="form-group">
+                            <label for="cfg-{{ cfg_idx }}-rsi-method">RSI Method</label>
+                            <span class="read-val">{{ rsi_method|capitalize }}</span>
+                            <select id="cfg-{{ cfg_idx }}-rsi-method" name="rsi_method">
+                                <option value="wilder" {% if rsi_method != 'cutler' %}selected{% endif %}>Wilder</option>
+                                <option value="cutler" {% if rsi_method == 'cutler' %}selected{% endif %}>Cutler</option>
+                            </select>
+                            <span class="hint">RSI smoothing formula</span>
+                        </div>
                     </div>
                 </div>
 
@@ -768,6 +780,7 @@
 
             const defaultParams = {
                 rsi_period: 14,
+                rsi_method: 'wilder',
                 stop_loss: -10,
                 cooldown_days: 3,
                 avg_down_levels: [[35, 0.3], [30, 0.35], [25, 0.35]],
@@ -847,6 +860,7 @@
 
             const params = {
                 rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
+                rsi_method: form.querySelector('[name="rsi_method"]').value,
                 stop_loss: parseFloat(form.querySelector('[name="stop_loss"]').value),
                 cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
             };
@@ -893,6 +907,8 @@
                     if (input && input.tagName === 'INPUT') {
                         const suffix = el.textContent.includes('%') ? '%' : '';
                         el.textContent = input.value + suffix;
+                    } else if (input && input.tagName === 'SELECT') {
+                        el.textContent = input.options[input.selectedIndex].text;
                     }
                 });
 

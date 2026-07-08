@@ -405,8 +405,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._last_sell_time[symbol]
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
-        """Calculate RSI indicator using Wilder's smoothing method"""
-        return calculate_rsi(prices, period)
+        """Calculate RSI using the method configured in strategy params"""
+        return calculate_rsi(
+            prices, period, self.params.get("rsi_method", "wilder"),
+        )
 
     def get_current_rsi(self, symbol: str) -> float | None:
         """Get current RSI value for a symbol (based on daily data)"""

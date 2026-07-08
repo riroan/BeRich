@@ -23,6 +23,11 @@
         .bt-slider-row label { font-size: 12px; color: var(--dim); }
         .bt-slider-row .bt-slider-val { font-size: 13px; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
         .bt-slider-row input[type="range"] { width: 100%; accent-color: var(--blue); }
+        .bt-slider-row select {
+            grid-column: 2 / -1;
+            background: var(--bg); border: 1px solid var(--card); border-radius: 8px;
+            padding: 8px 12px; color: var(--text); font-size: 13px;
+        }
         .bt-toggle-row { display: grid; grid-template-columns: 1fr minmax(120px, 180px); gap: 12px; align-items: end; }
         .bt-check {
             min-height: 35px; display: flex; align-items: center; gap: 8px;
@@ -525,6 +530,13 @@
                         <span class="bt-slider-val" id="bt-rsi-period-v">14</span>
                     </div>
                     <div class="bt-slider-row">
+                        <label for="bt-rsi-method">RSI Method</label>
+                        <select id="bt-rsi-method">
+                            <option value="wilder" selected>Wilder (매매 봇과 동일)</option>
+                            <option value="cutler">Cutler (단순평균)</option>
+                        </select>
+                    </div>
+                    <div class="bt-slider-row">
                         <label>Stop Loss</label>
                         <input type="range" id="bt-stop-loss" min="-100" max="-1" value="-10">
                         <span class="bt-slider-val" id="bt-stop-loss-v">-10%</span>
@@ -731,6 +743,7 @@
             const applyStrategyPreset = (cfg) => {
                 const p = (cfg && cfg.params) || {};
                 setSlider('bt-rsi-period', p.rsi_period);
+                document.getElementById('bt-rsi-method').value = p.rsi_method || 'wilder';
                 setSlider('bt-stop-loss', p.stop_loss);
                 setSlider('bt-cooldown', p.cooldown_days);
                 setLevels('buy', p.avg_down_levels);
@@ -855,6 +868,7 @@
                     start_date: asApiDate(document.getElementById('bt-start'), false),
                     end_date: asApiDate(document.getElementById('bt-end'), true),
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
+                    rsi_method: document.getElementById('bt-rsi-method').value,
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
                     reset_requires_recovery: document.getElementById('bt-reset-recovery').checked,

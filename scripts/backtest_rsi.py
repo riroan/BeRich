@@ -66,6 +66,7 @@ def _run_simulation(
     Pure function — no I/O, no prints unless verbose=True.
     """
     rsi_period = params.get("rsi_period", 14)
+    rsi_method = params.get("rsi_method", "wilder")
     stop_loss_pct = params.get("stop_loss", -10)
     cooldown_days = params.get("cooldown_days", 1)
     reset_requires_recovery = params.get("reset_requires_recovery", False)
@@ -74,7 +75,7 @@ def _run_simulation(
     sell_levels = params.get("sell_levels", [[65, 0.3], [70, 0.3], [75, 0.4]])
 
     df = df.copy()
-    df["RSI"] = calculate_rsi(df["Close"], rsi_period)
+    df["RSI"] = calculate_rsi(df["Close"], rsi_period, rsi_method)
     df = df.dropna()
 
     if df.empty:

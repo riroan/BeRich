@@ -12,15 +12,30 @@ is measured (wall clock vs bar dates), fills, sizing, and state tracking.
 import pandas as pd
 
 
-def calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate RSI using Wilder's smoothing method"""
+def calculate_rsi(
+    prices: pd.Series,
+    period: int = 14,
+    method: str = "wilder",
+) -> pd.Series:
+    """Calculate RSI.
+
+    method: "wilder" (exponential smoothing, the industry standard) or
+    "cutler" (simple moving average of gains/losses — jumpier, fires
+    thresholds more often). Unknown values fall back to "wilder" so a
+    typo in strategy params can never silently change live trading.
+    """
     delta = prices.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
 
-    # Wilder's smoothing (EMA with alpha = 1/period)
-    avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-    avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+    if method == "cutler":
+        # Cutler's RSI: simple moving average over the period window
+        avg_gain = gain.rolling(window=period).mean()
+        avg_loss = loss.rolling(window=period).mean()
+    else:
+        # Wilder's smoothing (EMA with alpha = 1/period)
+        avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
 
     rs = avg_gain / avg_loss.replace(0, 1e-10)  # Avoid division by zero
     rsi = 100 - (100 / (1 + rs))

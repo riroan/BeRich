@@ -44,6 +44,51 @@ class TestSingleSourceOfTruth:
         )
 
 
+class TestRSIMethodSelection:
+    def _prices(self) -> pd.Series:
+        rng = np.random.default_rng(7)
+        return pd.Series(100 + rng.normal(0, 2, 60).cumsum())
+
+    def test_cutler_matches_sma_reference(self):
+        prices = self._prices()
+        delta = prices.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        expected = 100 - (100 / (1 + gain / loss.replace(0, 1e-10)))
+        pd.testing.assert_series_equal(
+            calculate_rsi(prices, 14, "cutler"), expected, check_names=False,
+        )
+
+    def test_default_is_wilder_and_differs_from_cutler(self):
+        prices = self._prices()
+        pd.testing.assert_series_equal(
+            calculate_rsi(prices, 14),
+            calculate_rsi(prices, 14, "wilder"),
+        )
+        assert not calculate_rsi(prices, 14).equals(
+            calculate_rsi(prices, 14, "cutler")
+        )
+
+    def test_unknown_method_falls_back_to_wilder(self):
+        prices = self._prices()
+        pd.testing.assert_series_equal(
+            calculate_rsi(prices, 14, "bogus"),
+            calculate_rsi(prices, 14, "wilder"),
+        )
+
+    def test_strategy_param_selects_cutler(self):
+        strategy = RSIMeanReversionStrategy(
+            symbols=["X"], market=Market.NASDAQ,
+            params={"rsi_method": "cutler"},
+        )
+        prices = self._prices()
+        pd.testing.assert_series_equal(
+            strategy._calculate_rsi(prices, period=14),
+            calculate_rsi(prices, 14, "cutler"),
+            check_names=False,
+        )
+
+
 class TestResolveBuyStage:
     def test_stage1_fires_at_threshold(self):
         idx, thr = resolve_buy_stage(34.0, 0, BUY_LEVELS, False)
