@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import select
@@ -26,7 +27,21 @@ class Storage:
         elif database_url.startswith("mysql://"):
             database_url = database_url.replace("mysql://", "mysql+aiomysql://")
 
-        self.engine = create_async_engine(database_url, echo=False)
+        engine_kwargs: dict[str, Any] = {"echo": False}
+        if database_url.startswith("mysql+aiomysql://"):
+            # MySQL closes idle connections (wait_timeout) and Dockerized DB
+            # restarts can leave stale sockets in SQLAlchemy's pool.  Validate
+            # pooled connections before use and recycle them periodically so
+            # scheduled account/equity snapshot writes do not fail with
+            # "Lost connection to MySQL server during query".
+            engine_kwargs.update(
+                pool_size=5,
+                max_overflow=10,
+                pool_recycle=3600,
+                pool_pre_ping=True,
+            )
+
+        self.engine = create_async_engine(database_url, **engine_kwargs)
         self.async_session = sessionmaker(
             self.engine, class_=AsyncSession, expire_on_commit=False
         )

@@ -51,6 +51,24 @@ class TestStorageInitialization:
         assert "aiosqlite" in str(store.engine.url)
         await store.close()
 
+    async def test_mysql_url_conversion(self):
+        """mysql:// URLs should be converted to mysql+aiomysql://"""
+        store = Storage("mysql://user:pass@localhost:3306/berich")
+        assert "aiomysql" in str(store.engine.url)
+        await store.close()
+
+    async def test_mysql_engine_uses_stale_connection_guards(self):
+        """MySQL engine should recycle and pre-ping pooled connections."""
+        store = Storage("mysql+aiomysql://user:pass@localhost:3306/berich")
+        pool = store.engine.sync_engine.pool
+
+        assert pool.size() == 5
+        assert pool._max_overflow == 10
+        assert pool._recycle == 3600
+        assert pool._pre_ping is True
+
+        await store.close()
+
 
 
 class TestSaveOrder:
