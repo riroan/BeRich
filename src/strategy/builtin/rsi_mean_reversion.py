@@ -17,6 +17,11 @@ import logging
 
 from src.core.types import Signal, SignalType
 from src.strategy.base import BaseStrategy
+from src.strategy.rsi_rules import (
+    calculate_rsi,
+    resolve_buy_stage,
+    resolve_sell_stage,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -251,26 +256,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # threshold is hit. Cooldown repeats the current stage, except after
         # the final stage where it restarts the ladder at stage 1.
         if current_position > 0:
-            sell_stage_idx = None
-            next_sell_threshold = (
-                sell_levels[current_sell_stage][0]
-                if current_sell_stage < len(sell_levels)
-                else None
+            sell_stage_idx, next_sell_threshold = resolve_sell_stage(
+                current_rsi, current_sell_stage, sell_levels, sell_repeat_ready,
             )
-
-            if (
-                current_sell_stage < len(sell_levels)
-                and current_rsi >= sell_levels[current_sell_stage][0]
-            ):
-                sell_stage_idx = current_sell_stage
-            elif current_sell_stage > 0 and sell_repeat_ready:
-                repeat_idx = (
-                    0 if current_sell_stage >= len(sell_levels)
-                    else current_sell_stage - 1
-                )
-                next_sell_threshold = sell_levels[repeat_idx][0]
-                if current_rsi >= next_sell_threshold:
-                    sell_stage_idx = repeat_idx
 
             avg_price = self._entry_prices.get(symbol, current_price)
             pnl_pct = float(
@@ -325,26 +313,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # Buy signals: progress to the next stage immediately when its
         # threshold is hit. Cooldown repeats the current stage, except after
         # the final stage where it restarts the ladder at stage 1.
-        buy_stage_idx = None
-        next_buy_threshold = (
-            avg_down_levels[current_buy_stage][0]
-            if current_buy_stage < len(avg_down_levels)
-            else None
+        buy_stage_idx, next_buy_threshold = resolve_buy_stage(
+            current_rsi, current_buy_stage, avg_down_levels, buy_repeat_ready,
         )
-
-        if (
-            current_buy_stage < len(avg_down_levels)
-            and current_rsi <= avg_down_levels[current_buy_stage][0]
-        ):
-            buy_stage_idx = current_buy_stage
-        elif current_buy_stage > 0 and buy_repeat_ready:
-            repeat_idx = (
-                0 if current_buy_stage >= len(avg_down_levels)
-                else current_buy_stage - 1
-            )
-            next_buy_threshold = avg_down_levels[repeat_idx][0]
-            if current_rsi <= next_buy_threshold:
-                buy_stage_idx = repeat_idx
 
         # Log buy condition check
         logger.info(
@@ -435,17 +406,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI indicator using Wilder's smoothing method"""
-        delta = prices.diff()
-        gain = delta.where(delta > 0, 0)
-        loss = -delta.where(delta < 0, 0)
-
-        # Wilder's smoothing (EMA with alpha = 1/period)
-        avg_gain = gain.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-        avg_loss = loss.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
-
-        rs = avg_gain / avg_loss.replace(0, 1e-10)  # Avoid division by zero
-        rsi = 100 - (100 / (1 + rs))
-        return rsi
+        return calculate_rsi(prices, period)
 
     def get_current_rsi(self, symbol: str) -> float | None:
         """Get current RSI value for a symbol (based on daily data)"""

@@ -19,6 +19,11 @@ import yfinance as yf
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.core.types import Market
+from src.strategy.rsi_rules import (
+    calculate_rsi,
+    resolve_buy_stage,
+    resolve_sell_stage,
+)
 from scripts._backtest_seed import BACKTEST_STRATEGIES
 
 if TYPE_CHECKING:
@@ -38,16 +43,6 @@ class Trade:
     sell_price: float = None
     sell_reason: str = None
     pnl_pct: float = None
-
-
-def calculate_rsi(prices: pd.Series, period: int = 14) -> pd.Series:
-    """Calculate RSI indicator"""
-    delta = prices.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
-    rs = gain / loss.replace(0, 1e-10)
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
 
 
 def get_yfinance_symbol(symbol: str, market: str) -> str:
@@ -130,18 +125,13 @@ def _run_simulation(
                 continue
 
         if position_shares > 0:
-            sell_stage_idx = None
-            if sell_stage < len(sell_levels):
-                next_threshold = sell_levels[sell_stage][0]
-                if rsi >= next_threshold:
-                    sell_stage_idx = sell_stage
-
-            if sell_stage_idx is None and sell_stage > 0 and last_sell_date is not None:
-                days_since_sell = (date - last_sell_date).days
-                repeat_idx = 0 if sell_stage >= len(sell_levels) else sell_stage - 1
-                repeat_threshold = sell_levels[repeat_idx][0]
-                if days_since_sell >= cooldown_days and rsi >= repeat_threshold:
-                    sell_stage_idx = repeat_idx
+            sell_repeat_ready = (
+                last_sell_date is not None
+                and (date - last_sell_date).days >= cooldown_days
+            )
+            sell_stage_idx, _ = resolve_sell_stage(
+                rsi, sell_stage, sell_levels, sell_repeat_ready,
+            )
 
             if sell_stage_idx is not None:
                 rsi_threshold, portion = sell_levels[sell_stage_idx]
@@ -172,22 +162,14 @@ def _run_simulation(
                         position_cost = 0.0
                         last_sell_date = None
 
-        buy_stage_idx = None
-        if buy_stage < len(avg_down_levels):
-            next_threshold = avg_down_levels[buy_stage][0]
-            if rsi <= next_threshold:
-                buy_stage_idx = buy_stage
-
-        if buy_stage_idx is None and buy_stage > 0 and last_buy_date is not None:
-            days_since_buy = (date - last_buy_date).days
-            repeat_idx = 0 if buy_stage >= len(avg_down_levels) else buy_stage - 1
-            repeat_threshold = avg_down_levels[repeat_idx][0]
-            if (
-                days_since_buy >= cooldown_days
-                and (not reset_requires_recovery or rsi_recovered)
-                and rsi <= repeat_threshold
-            ):
-                buy_stage_idx = repeat_idx
+        buy_repeat_ready = (
+            last_buy_date is not None
+            and (date - last_buy_date).days >= cooldown_days
+            and (not reset_requires_recovery or rsi_recovered)
+        )
+        buy_stage_idx, _ = resolve_buy_stage(
+            rsi, buy_stage, avg_down_levels, buy_repeat_ready,
+        )
 
         if buy_stage_idx is not None:
             rsi_threshold, portion = avg_down_levels[buy_stage_idx]
