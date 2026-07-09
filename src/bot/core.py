@@ -8,7 +8,8 @@ import logging
 
 from src.core.events import EventBus
 from src.core.types import Market
-from src.broker.kis.client import KISBroker
+from src.broker.base import Broker
+from src.broker.factory import create_broker
 from src.data.storage import Storage
 from src.strategy.engine import StrategyEngine
 from src.execution.order_manager import OrderManager
@@ -36,7 +37,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self.event_bus = EventBus()
 
         self.storage: Storage | None = None
-        self.broker: KISBroker | None = None
+        self.broker: Broker | None = None
         self.strategy_engine: StrategyEngine | None = None
         self.order_manager: OrderManager | None = None
         self.risk_manager: RiskManager | None = None
@@ -178,42 +179,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
     async def _initialize_broker(self) -> None:
         """Initialize broker connection"""
-        kis_config = self.config.get_kis_config()
-        real_broker = KISBroker(
-            event_bus=self.event_bus,
-            app_key=kis_config["app_key"],
-            app_secret=kis_config["app_secret"],
-            account_no=kis_config["account_no"],
-            paper_trading=kis_config["paper_trading"],
-            hts_id=kis_config.get("hts_id", ""),
-            slippage_buffer=float(
-                self.config.get("trading.slippage_buffer_pct", 0.01)
-            ),
-        )
-
-        # Use PaperBroker if KIS_PAPER_TRADING=true
-        if kis_config["paper_trading"]:
-            from src.broker.paper import PaperBroker
-            initial_cash_usd = Decimal(
-                str(self.config.get("trading.paper_cash_usd", 10000))
-            )
-            initial_cash_krw = Decimal(
-                str(self.config.get("trading.paper_cash_krw", 0))
-            )
-            self.broker = PaperBroker(
-                event_bus=self.event_bus,
-                real_broker=real_broker,
-                initial_cash_usd=initial_cash_usd,
-                initial_cash_krw=initial_cash_krw,
-            )
-            logger.info(
-                f"Paper trading mode | "
-                f"USD: ${initial_cash_usd:,.0f}, "
-                f"KRW: {initial_cash_krw:,.0f}"
-            )
-        else:
-            self.broker = real_broker
-
+        self.broker = create_broker(self.config, self.event_bus)
         await self.broker.connect()
 
         # Get account balances (populates dashboard.balance_usd/krw;

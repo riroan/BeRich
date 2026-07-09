@@ -12,6 +12,7 @@ class Config:
     def __init__(self, config_dir: str = "config"):
         self.config_dir = Path(config_dir)
         self._settings: dict[str, Any] = {}
+        self._strategies: list = []
         load_dotenv()
 
     def load(self) -> None:
@@ -19,6 +20,11 @@ class Config:
         settings_path = self.config_dir / "settings.yaml"
         if settings_path.exists():
             self._settings = self._load_yaml(settings_path)
+
+        strategies_path = self.config_dir / "strategies.yaml"
+        if strategies_path.exists():
+            strategies_config = self._load_yaml(strategies_path)
+            self._strategies = strategies_config.get("strategies", [])
 
     def _load_yaml(self, path: Path) -> dict:
         """Load YAML file with environment variable substitution"""
@@ -45,7 +51,7 @@ class Config:
                 value = value.get(k)
             else:
                 return default
-            if value is None:
+            if value is None or value == "":
                 return default
 
         return value
@@ -54,13 +60,28 @@ class Config:
     def settings(self) -> dict:
         return self._settings
 
+    @property
+    def strategies(self) -> list:
+        return self._strategies
+
+    def get_broker_name(self) -> str:
+        """Get selected broker implementation."""
+        return os.getenv("BROKER", "kis").strip().lower()
+
+    def get_trading_mode(self) -> str:
+        """Get trading mode: paper or live."""
+        mode = os.getenv("TRADING_MODE")
+        if mode:
+            return mode.strip().lower()
+        return "paper" if os.getenv("KIS_PAPER_TRADING", "true").lower() == "true" else "live"
+
     def get_kis_config(self) -> dict:
         """Get KIS broker configuration"""
         return {
             "app_key": os.getenv("KIS_APP_KEY", ""),
             "app_secret": os.getenv("KIS_APP_SECRET", ""),
             "account_no": os.getenv("KIS_ACCOUNT_NO", ""),
-            "paper_trading": os.getenv("KIS_PAPER_TRADING", "true").lower() == "true",
+            "paper_trading": self.get_trading_mode() == "paper",
             "hts_id": os.getenv("KIS_HTS_ID", ""),
         }
 
