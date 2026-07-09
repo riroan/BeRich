@@ -7,14 +7,20 @@ on:
       - synchronize
       - reopened
       - ready_for_review
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "리뷰할 PR 번호"
+        required: true
+        type: string
 
 concurrency:
-  group: ai-pr-review-${{ github.event.pull_request.number }}
+  group: ai-pr-review-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
   cancel-in-progress: true
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
   issues: write
 
 jobs:
@@ -22,33 +28,139 @@ jobs:
     runs-on: ubuntu-latest
 
     outputs:
-      review: ${{ steps.codex.outputs.final-message }}
+      review: ${{ steps.openai.outputs.review }}
 
     steps:
-      - uses: actions/checkout@v5
+      - name: Get PR diff
+        id: diff
+        uses: actions/github-script@v7
         with:
-          ref: refs/pull/${{ github.event.pull_request.number }}/merge
-          persist-credentials: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { owner, repo } = context.repo;
+            const pull_number = context.payload.pull_request
+              ? context.payload.pull_request.number
+              : Number(context.payload.inputs.pr_number);
 
-      - name: Run Codex
-        id: codex
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          model: gpt-5.5-mini
-          effort: medium
-          prompt: |
-            Review this pull request.
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner,
+              repo,
+              pull_number,
+              per_page: 100
+            });
 
-            Focus on:
-            - Bugs
-            - Performance
-            - Security
-            - Maintainability
-            - Readability
+            let diff = "";
 
-            Only mention actionable issues.
-            If there are no major issues, say so briefly.
+            for (const file of files) {
+              diff += `### ${file.filename}\n`;
+              if (file.patch) {
+                diff += file.patch + "\n\n";
+              }
+            }
+
+            if (diff.length > 100000) {
+              diff = diff.substring(0, 100000) + "\n\n...(truncated)";
+            }
+
+            core.setOutput("diff", diff);
+
+      - name: Review with GPT
+        id: openai
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DIFF: ${{ steps.diff.outputs.diff }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import urllib.request
+          import urllib.error
+
+          prompt = f"""
+          당신은 10년 이상의 경력을 가진 시니어 백엔드 개발자입니다.
+
+          PR의 변경된 코드만 리뷰하세요.
+
+          다음 항목을 우선적으로 확인하세요.
+          - 버그
+          - 예외 처리 누락
+          - 성능
+          - 보안
+          - 동시성 문제
+          - 메모리 누수
+          - 코드 중복
+          - 유지보수성
+          - 테스트 부족
+
+          다음 사항은 지적하지 마세요.
+          - 단순한 코드 스타일
+          - 개인 취향의 리팩터링
+          - 중요하지 않은 네이밍
+
+          반드시 한국어로 작성하세요.
+
+          문제가 없다면
+          "✅ 특별히 수정이 필요한 문제를 발견하지 못했습니다."
+          라고만 작성하세요.
+
+          문제가 있다면 아래 형식을 사용하세요.
+
+          ## 🔴 High
+          ...
+
+          ## 🟡 Medium
+          ...
+
+          ## 💡 Suggestion
+          ...
+
+          ===== PR DIFF =====
+
+          {os.environ["DIFF"]}
+          """
+
+          body = {
+              "model": "gpt-5.4-mini",
+              "input": prompt
+          }
+
+          req = urllib.request.Request(
+              "https://api.openai.com/v1/responses",
+              data=json.dumps(body).encode("utf-8"),
+              headers={
+                  "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}",
+                  "Content-Type": "application/json",
+              },
+              method="POST"
+          )
+
+          try:
+              with urllib.request.urlopen(req) as res:
+                  data = json.loads(res.read().decode("utf-8"))
+          except urllib.error.HTTPError as e:
+              print(e.read().decode("utf-8"))
+              raise
+
+          review = ""
+
+          if "output_text" in data:
+              review = data["output_text"]
+          else:
+              for item in data.get("output", []):
+                  for content in item.get("content", []):
+                      if content.get("type") == "output_text":
+                          review += content.get("text", "")
+
+          review = review.strip()
+
+          if not review:
+              review = "⚠️ AI 리뷰 결과를 파싱하지 못했습니다."
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("review<<EOF\n")
+              f.write(review)
+              f.write("\nEOF\n")
+          PY
 
   comment:
     needs: review
@@ -64,15 +176,17 @@ jobs:
         uses: peter-evans/find-comment@v3
         id: find-comment
         with:
-          issue-number: ${{ github.event.pull_request.number }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          issue-number: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           comment-author: github-actions[bot]
           body-includes: '<!-- ai-pr-review -->'
 
       - name: Create or update AI review comment
         uses: peter-evans/create-or-update-comment@v4
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           comment-id: ${{ steps.find-comment.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
+          issue-number: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
           body: |
             <!-- ai-pr-review -->
             ## 🤖 AI PR Review
