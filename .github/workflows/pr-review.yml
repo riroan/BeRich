@@ -1,0 +1,81 @@
+name: AI PR Review
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+concurrency:
+  group: ai-pr-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+
+    outputs:
+      review: ${{ steps.codex.outputs.final-message }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: false
+
+      - name: Run Codex
+        id: codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          model: gpt-5.5-mini
+          effort: medium
+          prompt: |
+            Review this pull request.
+
+            Focus on:
+            - Bugs
+            - Performance
+            - Security
+            - Maintainability
+            - Readability
+
+            Only mention actionable issues.
+            If there are no major issues, say so briefly.
+
+  comment:
+    needs: review
+    if: needs.review.outputs.review != ''
+    runs-on: ubuntu-latest
+
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Find existing AI review comment
+        uses: peter-evans/find-comment@v3
+        id: find-comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: github-actions[bot]
+          body-includes: '<!-- ai-pr-review -->'
+
+      - name: Create or update AI review comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: |
+            <!-- ai-pr-review -->
+            ## 🤖 AI PR Review
+
+            ${{ needs.review.outputs.review }}
+          edit-mode: replace
