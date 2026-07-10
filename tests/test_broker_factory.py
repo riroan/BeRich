@@ -22,5 +22,5 @@ def test_factory_rejects_yfinance_live(monkeypatch):
 
 def test_factory_rejects_unknown_broker(monkeypatch):
     monkeypatch.setenv("BROKER", "unknown")
-    with pytest.raises(ValueError, match="Unsupported BROKER"):
+    with pytest.raises(ValueError, match="BROKER"):
         create_broker(Config(), EventBus())

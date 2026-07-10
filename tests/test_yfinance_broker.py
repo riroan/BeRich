@@ -1,3 +1,4 @@
+import asyncio
 from decimal import Decimal
 from unittest.mock import AsyncMock
 
@@ -116,7 +117,9 @@ async def test_yfinance_paper_state_persists_across_restart(tmp_path, monkeypatc
     broker1 = YFinanceBroker(EventBus(), initial_cash_usd=Decimal("1000"), state_path=state_path)
     monkeypatch.setattr(broker1, "get_current_price", AsyncMock(return_value=Decimal("10")))
     await broker1.connect()
-    await broker1.submit_order(Order("AAPL", Market.NASDAQ, OrderSide.BUY, OrderType.MARKET, quantity=5))
+    await broker1.submit_order(
+        Order("AAPL", Market.NASDAQ, OrderSide.BUY, OrderType.MARKET, quantity=5)
+    )
 
     broker2 = YFinanceBroker(EventBus(), initial_cash_usd=Decimal("1000"), state_path=state_path)
     monkeypatch.setattr(broker2, "get_current_price", AsyncMock(return_value=Decimal("10")))
@@ -126,3 +129,71 @@ async def test_yfinance_paper_state_persists_across_restart(tmp_path, monkeypatc
     assert broker2._cash["usd"] == Decimal("950")
     assert positions[0].symbol == "AAPL"
     assert positions[0].quantity == 5
+
+
+@pytest.mark.asyncio
+async def test_submit_order_rejects_when_price_lookup_fails(monkeypatch, tmp_path):
+    broker = YFinanceBroker(
+        EventBus(), initial_cash_usd=Decimal("1000"), state_path=tmp_path / "state.json"
+    )
+    monkeypatch.setattr(broker, "get_current_price", AsyncMock(side_effect=ValueError("no data")))
+
+    order = Order("AAPL", Market.NASDAQ, OrderSide.BUY, OrderType.MARKET, quantity=5)
+    order_id = await broker.submit_order(order)
+
+    assert order_id.startswith("YF-PAPER-")
+    assert order.status == OrderStatus.REJECTED
+    assert broker._cash["usd"] == Decimal("1000")
+    assert broker._positions == {}
+    assert broker._fills == []
+
+
+@pytest.mark.asyncio
+async def test_submit_order_rejects_non_positive_price(monkeypatch, tmp_path):
+    broker = YFinanceBroker(
+        EventBus(), initial_cash_usd=Decimal("1000"), state_path=tmp_path / "state.json"
+    )
+    monkeypatch.setattr(broker, "get_current_price", AsyncMock(return_value=Decimal("0")))
+
+    order = Order("AAPL", Market.NASDAQ, OrderSide.BUY, OrderType.MARKET, quantity=5)
+    await broker.submit_order(order)
+
+    assert order.status == OrderStatus.REJECTED
+    assert broker._cash["usd"] == Decimal("1000")
+    assert broker._positions == {}
+
+
+@pytest.mark.asyncio
+async def test_load_state_recovers_from_corrupt_json(tmp_path, caplog):
+    state_path = tmp_path / "paper_state.json"
+    state_path.write_text("{not valid json")
+    broker = YFinanceBroker(EventBus(), initial_cash_usd=Decimal("1000"), state_path=state_path)
+
+    await broker.connect()
+
+    assert broker.is_connected is True
+    assert broker._cash["usd"] == Decimal("1000")
+    assert broker._positions == {}
+    assert "Failed to load yfinance paper state" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_submit_orders_are_serialized_by_state_lock(monkeypatch, tmp_path):
+    broker = YFinanceBroker(
+        EventBus(), initial_cash_usd=Decimal("100"), state_path=tmp_path / "state.json"
+    )
+
+    async def slow_price(*args, **kwargs):
+        await asyncio.sleep(0)
+        return Decimal("10")
+
+    monkeypatch.setattr(broker, "get_current_price", slow_price)
+    orders = [
+        Order("AAPL", Market.NASDAQ, OrderSide.BUY, OrderType.MARKET, quantity=1) for _ in range(10)
+    ]
+
+    await asyncio.gather(*(broker.submit_order(order) for order in orders))
+
+    assert all(order.status == OrderStatus.FILLED for order in orders)
+    assert broker._cash["usd"] == Decimal("0")
+    assert broker._positions["AAPL"]["quantity"] == 10

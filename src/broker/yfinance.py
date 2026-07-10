@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -44,11 +45,7 @@ def row_to_bar(symbol: str, market: Market, timestamp, row) -> Bar:
         low=Decimal(str(row["Low"])),
         close=Decimal(str(row["Close"])),
         volume=int(row.get("Volume", 0) or 0),
-        timestamp=(
-            timestamp.to_pydatetime()
-            if hasattr(timestamp, "to_pydatetime")
-            else timestamp
-        ),
+        timestamp=(timestamp.to_pydatetime() if hasattr(timestamp, "to_pydatetime") else timestamp),
         timeframe="1d",
     )
 
@@ -74,6 +71,7 @@ class YFinanceBroker:
         self._positions: dict[str, dict] = {}
         self._orders: dict[str, Order] = {}
         self._fills: list[Fill] = []
+        self._state_lock = asyncio.Lock()
         self.state_path = Path(state_path)
 
     @property
@@ -108,12 +106,16 @@ class YFinanceBroker:
 
     def reset_state(self) -> None:
         """Reset paper account state and remove persisted state file."""
+        self._reset_in_memory_state()
+        if self.state_path.exists():
+            self.state_path.unlink()
+
+    def _reset_in_memory_state(self) -> None:
+        """Restore the in-memory paper account to its initial empty state."""
         self._cash = dict(self._initial_cash)
         self._positions = {}
         self._orders = {}
         self._fills = []
-        if self.state_path.exists():
-            self.state_path.unlink()
 
     def _history(
         self,
@@ -155,107 +157,116 @@ class YFinanceBroker:
         if df.empty:
             raise ValueError(f"No yfinance historical data for {symbol} ({market.value})")
         df = df.dropna(subset=["Open", "High", "Low", "Close"])
-        return [
-            row_to_bar(symbol, market, idx, row)
-            for idx, row in df.tail(days).iterrows()
-        ]
+        return [row_to_bar(symbol, market, idx, row) for idx, row in df.tail(days).iterrows()]
 
     async def submit_order(self, order: Order) -> str:
         """Simulate immediate order execution at the current yfinance price."""
-        order_id = f"YF-PAPER-{uuid4().hex[:8].upper()}"
-        order.order_id = order_id
-        order.status = OrderStatus.SUBMITTED
-        pnl = None
+        async with self._state_lock:
+            order_id = f"YF-PAPER-{uuid4().hex[:8].upper()}"
+            order.order_id = order_id
+            order.status = OrderStatus.SUBMITTED
+            pnl = None
 
-        try:
-            fill_price = await self.get_current_price(order.symbol, order.market)
-        except Exception:
-            fill_price = order.price or Decimal("0")
-
-        cash_key = self._cash_key(order.market)
-
-        if order.side == OrderSide.BUY:
-            cost = fill_price * order.quantity
-            if cost > self._cash[cash_key]:
+            try:
+                fill_price = await self.get_current_price(order.symbol, order.market)
+                if fill_price <= Decimal("0"):
+                    raise ValueError(f"Non-positive yfinance price: {fill_price}")
+            except Exception as exc:
                 logger.warning(
-                    "[YF PAPER] Insufficient cash for %s: need %s, have %s",
+                    "[YF PAPER] Rejecting %s %s: failed to get fill price: %s",
+                    order.side.value,
                     order.symbol,
-                    f"{cost:,.2f}",
-                    f"{self._cash[cash_key]:,.2f}",
+                    exc,
                 )
                 order.status = OrderStatus.REJECTED
                 self._orders[order_id] = order
                 self._save_state()
                 return order_id
 
-            self._cash[cash_key] -= cost
-            if pos := self._positions.get(order.symbol):
-                old_qty = pos["quantity"]
-                new_qty = old_qty + order.quantity
-                pos["avg_price"] = (
-                    (pos["avg_price"] * old_qty) + (fill_price * order.quantity)
-                ) / new_qty
-                pos["quantity"] = new_qty
-            else:
-                self._positions[order.symbol] = {
-                    "quantity": order.quantity,
-                    "avg_price": fill_price,
-                    "market": order.market,
-                }
+            cash_key = self._cash_key(order.market)
 
-        elif order.side == OrderSide.SELL:
-            pos = self._positions.get(order.symbol)
-            if not pos or pos["quantity"] < order.quantity:
-                logger.warning("[YF PAPER] Insufficient position for %s", order.symbol)
-                order.status = OrderStatus.REJECTED
-                self._orders[order_id] = order
-                self._save_state()
-                return order_id
+            if order.side == OrderSide.BUY:
+                cost = fill_price * order.quantity
+                if cost > self._cash[cash_key]:
+                    logger.warning(
+                        "[YF PAPER] Insufficient cash for %s: need %s, have %s",
+                        order.symbol,
+                        f"{cost:,.2f}",
+                        f"{self._cash[cash_key]:,.2f}",
+                    )
+                    order.status = OrderStatus.REJECTED
+                    self._orders[order_id] = order
+                    self._save_state()
+                    return order_id
 
-            proceeds = fill_price * order.quantity
-            self._cash[cash_key] += proceeds
-            pnl = (fill_price - pos["avg_price"]) * order.quantity
-            pos["quantity"] -= order.quantity
-            if pos["quantity"] <= 0:
-                del self._positions[order.symbol]
+                self._cash[cash_key] -= cost
+                if pos := self._positions.get(order.symbol):
+                    old_qty = pos["quantity"]
+                    new_qty = old_qty + order.quantity
+                    pos["avg_price"] = (
+                        (pos["avg_price"] * old_qty) + (fill_price * order.quantity)
+                    ) / new_qty
+                    pos["quantity"] = new_qty
+                else:
+                    self._positions[order.symbol] = {
+                        "quantity": order.quantity,
+                        "avg_price": fill_price,
+                        "market": order.market,
+                    }
 
-        order.status = OrderStatus.FILLED
-        order.filled_quantity = order.quantity
-        order.filled_avg_price = fill_price
-        self._orders[order_id] = order
+            elif order.side == OrderSide.SELL:
+                pos = self._positions.get(order.symbol)
+                if not pos or pos["quantity"] < order.quantity:
+                    logger.warning("[YF PAPER] Insufficient position for %s", order.symbol)
+                    order.status = OrderStatus.REJECTED
+                    self._orders[order_id] = order
+                    self._save_state()
+                    return order_id
 
-        current_rsi = None
-        try:
-            from src.web.app import get_dashboard_state
+                proceeds = fill_price * order.quantity
+                self._cash[cash_key] += proceeds
+                pnl = (fill_price - pos["avg_price"]) * order.quantity
+                pos["quantity"] -= order.quantity
+                if pos["quantity"] <= 0:
+                    del self._positions[order.symbol]
 
-            current_rsi = get_dashboard_state().rsi_values.get(order.symbol)
-        except Exception:
-            pass
+            order.status = OrderStatus.FILLED
+            order.filled_quantity = order.quantity
+            order.filled_avg_price = fill_price
+            self._orders[order_id] = order
 
-        self._fills.append(
-            Fill(
-                order_id=order_id,
-                symbol=order.symbol,
-                market=order.market,
-                side=order.side,
-                quantity=order.quantity,
-                price=fill_price,
-                commission=Decimal("0"),
-                timestamp=datetime.now(),
-                pnl=pnl,
-                rsi=current_rsi,
+            current_rsi = None
+            try:
+                from src.web.app import get_dashboard_state
+
+                current_rsi = get_dashboard_state().rsi_values.get(order.symbol)
+            except Exception:
+                pass
+
+            self._fills.append(
+                Fill(
+                    order_id=order_id,
+                    symbol=order.symbol,
+                    market=order.market,
+                    side=order.side,
+                    quantity=order.quantity,
+                    price=fill_price,
+                    commission=Decimal("0"),
+                    timestamp=datetime.now(),
+                    pnl=pnl,
+                    rsi=current_rsi,
+                )
             )
-        )
-        self._save_state()
-        await self.event_bus.publish(
-            Event(
-                event_type=EventType.ORDER_FILLED,
-                data=order,
-                timestamp=datetime.now(),
-                source="YFinanceBroker",
+            self._save_state()
+            await self.event_bus.publish(
+                Event(
+                    event_type=EventType.ORDER_FILLED,
+                    data=order,
+                    timestamp=datetime.now(),
+                    source="YFinanceBroker",
+                )
             )
-        )
-        return order_id
+            return order_id
 
     async def get_positions(
         self,
@@ -317,12 +328,13 @@ class YFinanceBroker:
         order_id: str,
         market: Market = Market.KRX,
     ) -> bool:
-        order = self._orders.get(order_id)
-        if not order or order.status == OrderStatus.FILLED:
-            return False
-        order.status = OrderStatus.CANCELLED
-        self._save_state()
-        return True
+        async with self._state_lock:
+            order = self._orders.get(order_id)
+            if not order or order.status == OrderStatus.FILLED:
+                return False
+            order.status = OrderStatus.CANCELLED
+            self._save_state()
+            return True
 
     def _cash_key(self, market: Market) -> str:
         return "krw" if market == Market.KRX else "usd"
@@ -340,8 +352,7 @@ class YFinanceBroker:
                 for symbol, pos in self._positions.items()
             },
             "orders": {
-                order_id: self._order_to_dict(order)
-                for order_id, order in self._orders.items()
+                order_id: self._order_to_dict(order) for order_id, order in self._orders.items()
             },
             "fills": [self._fill_to_dict(fill) for fill in self._fills],
         }
@@ -352,27 +363,32 @@ class YFinanceBroker:
     def _load_state(self) -> None:
         if not self.state_path.exists():
             return
-        data = json.loads(self.state_path.read_text())
-        self._cash = {
-            "krw": Decimal(str(data.get("cash", {}).get("krw", self._initial_cash["krw"]))),
-            "usd": Decimal(str(data.get("cash", {}).get("usd", self._initial_cash["usd"]))),
-        }
-        self._positions = {
-            symbol: {
-                "quantity": int(pos["quantity"]),
-                "avg_price": Decimal(str(pos["avg_price"])),
-                "market": Market.from_string(pos["market"]),
+        try:
+            data = json.loads(self.state_path.read_text())
+            self._cash = {
+                "krw": Decimal(str(data.get("cash", {}).get("krw", self._initial_cash["krw"]))),
+                "usd": Decimal(str(data.get("cash", {}).get("usd", self._initial_cash["usd"]))),
             }
-            for symbol, pos in data.get("positions", {}).items()
-        }
-        self._orders = {
-            order_id: self._order_from_dict(order_data)
-            for order_id, order_data in data.get("orders", {}).items()
-        }
-        self._fills = [
-            self._fill_from_dict(fill_data)
-            for fill_data in data.get("fills", [])
-        ]
+            self._positions = {
+                symbol: {
+                    "quantity": int(pos["quantity"]),
+                    "avg_price": Decimal(str(pos["avg_price"])),
+                    "market": Market.from_string(pos["market"]),
+                }
+                for symbol, pos in data.get("positions", {}).items()
+            }
+            self._orders = {
+                order_id: self._order_from_dict(order_data)
+                for order_id, order_data in data.get("orders", {}).items()
+            }
+            self._fills = [self._fill_from_dict(fill_data) for fill_data in data.get("fills", [])]
+        except (json.JSONDecodeError, OSError, KeyError, TypeError, ValueError) as exc:
+            logger.warning(
+                "Failed to load yfinance paper state from %s; starting fresh: %s",
+                self.state_path,
+                exc,
+            )
+            self._reset_in_memory_state()
 
     def _order_to_dict(self, order: Order) -> dict:
         return {
@@ -387,9 +403,7 @@ class YFinanceBroker:
             "created_at": order.created_at.isoformat(),
             "filled_quantity": order.filled_quantity,
             "filled_avg_price": (
-                str(order.filled_avg_price)
-                if order.filled_avg_price is not None
-                else None
+                str(order.filled_avg_price) if order.filled_avg_price is not None else None
             ),
         }
 

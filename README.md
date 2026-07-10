@@ -70,9 +70,6 @@ KIS_APP_KEY=your_app_key
 KIS_APP_SECRET=your_app_secret
 KIS_ACCOUNT_NO=your_account_number
 
-# Backward-compatible KIS mode flag
-KIS_PAPER_TRADING=true
-
 # MySQL
 MYSQL_ROOT_PASSWORD=your_root_password
 MYSQL_DATABASE=quant
@@ -237,7 +234,7 @@ uv run python scripts/run_bot.py --web --web-port 9095
 - 워밍업 없이 즉시 시작
 - 대시보드에 `PAPER` 배지 표시
 
-KIS 기반 paper trading을 쓰려면 `BROKER=kis`, `KIS_PAPER_TRADING=true`와 유효한 KIS API 키가 필요합니다.
+KIS 기반 paper trading을 쓰려면 `BROKER=kis`, `TRADING_MODE=paper`와 유효한 KIS API 키가 필요합니다.
 
 ## 테스트
 

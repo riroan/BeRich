@@ -225,6 +225,10 @@ class OrderManager:
 
         Example: $10,000 total × 20% = $2,000 max. If already holding $1,000,
         remaining = $1,000, stage 0.5 → buy $500.
+
+        KRX and US markets are intentionally budgeted separately: KRX signals use
+        KRW balance/cash, while NYSE/NASDAQ/AMEX signals use USD balance/cash.
+        This avoids spending USD-buying power based on KRW cash, and vice versa.
         """
         dashboard = get_dashboard_state()
         is_krx = market == Market.KRX
