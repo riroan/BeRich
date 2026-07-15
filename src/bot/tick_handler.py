@@ -1,7 +1,7 @@
 """Tick handler for trading bot"""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 import logging
 
@@ -145,6 +145,19 @@ class TickHandlerMixin:
                 if (rsi := strategy.get_current_rsi(symbol)) is not None:
                     rsi_str = f" | RSI: {rsi:.1f}"
 
+            # Corporate-action guard: if the RSI window spans a split/merge
+            # cliff, alert and DON'T record the split-corrupted RSI (trading
+            # is already suppressed in the strategy). Keeps chart/history
+            # clean until an adjusted-price re-fetch (restart) heals the base.
+            corp_ratio = (
+                strategy.corporate_action_ratio(symbol)
+                if hasattr(strategy, "corporate_action_ratio") else None
+            )
+            if corp_ratio is not None:
+                await self._alert_corporate_action(symbol, corp_ratio)
+                rsi = None
+                rsi_str = " | RSI: suppressed (corp-action)"
+
             await self.storage.save_price_rsi(
                 symbol=symbol,
                 market=strategy.market,
@@ -182,3 +195,34 @@ class TickHandlerMixin:
                     symbol=symbol,
                     error=str(e),
                 )
+
+    async def _alert_corporate_action(
+        self: "TradingBot", symbol: str, ratio: float,
+    ) -> None:
+        """Throttled Discord alert for a suspected split/merge (once/6h).
+
+        Trading is already suppressed in the strategy; this tells a human to
+        verify KIS adjusted-price re-fetch and restart the bot so the RSI
+        base reloads on the post-split scale.
+        """
+        now = datetime.now()
+        last = self._corp_action_alerted.get(symbol)
+        if last is not None and (now - last) < timedelta(hours=6):
+            return
+        self._corp_action_alerted[symbol] = now
+        logger.warning(
+            f"[{symbol}] Suspected corporate action (split/merge), step "
+            f"ratio {ratio:.4g} — auto-trading suppressed for this symbol"
+        )
+        if self.notifier:
+            try:
+                await self.notifier.notify_error(
+                    f"{symbol}: 분할/합병 의심 (가격 단절 비율 {ratio:.4g}). "
+                    f"자동매매 억제 중.",
+                    context=(
+                        "corp-action guard — 수정주가 재조회를 위해 봇 재시작 후 "
+                        "베이스가 분할 후 스케일인지 검증 필요"
+                    ),
+                )
+            except Exception as exc:
+                logger.debug(f"corp-action alert failed: {exc}")

@@ -501,3 +501,86 @@ class TestRSIMeanReversionStrategy:
         assert "AAPL" not in strategy._entry_prices
         assert "AAPL" not in strategy._buy_stages
         assert "AAPL" not in strategy._sell_stages
+
+
+class TestCorporateActionGuard:
+    """Split/merge guard: a price cliff in the RSI window (e.g. a 20:1
+    split dropping price to 1/20) must NOT fire a bogus averaging-down buy.
+    """
+
+    LEVELS = {
+        "rsi_period": 14,
+        "stop_loss": -10,
+        "avg_down_levels": [(30, 0.5), (25, 0.3), (20, 0.2)],
+        "sell_levels": [(70, 0.3), (75, 0.4), (80, 0.5)],
+    }
+
+    def _strategy(self, **extra_params):
+        return RSIMeanReversionStrategy(
+            symbols=["AAPL"],
+            market=Market.NASDAQ,
+            params={**self.LEVELS, **extra_params},
+        )
+
+    @staticmethod
+    def _bars(prices):
+        bars = []
+        n = len(prices)
+        for i, price in enumerate(prices):
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=n - i)
+            bar.open = bar.high = bar.low = bar.close = float(price)
+            bar.volume = 1_000_000
+            bars.append(bar)
+        return bars
+
+    # Rising pre-split base (RSI high on its own) → the only oversold
+    # reading comes from the artificial split cliff.
+    PRE_SPLIT = [19000 + i * 25 for i in range(40)]  # 19000 → 19975
+
+    @pytest.mark.asyncio
+    async def test_split_cliff_suppresses_buy(self):
+        """20:1 split (live price 1/20 of the base) → NO buy signal."""
+        strategy = self._strategy()
+        strategy.initialize({"AAPL": self._bars(self.PRE_SPLIT)})
+        strategy.update_daily_close("AAPL", 1000.0)  # post-split live price
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert signal is None  # guard suppressed the bogus averaging-down buy
+
+    @pytest.mark.asyncio
+    async def test_same_cliff_would_buy_without_guard(self):
+        """Same data with the guard disabled DOES fire a buy — proving the
+        guard (not the RSI level) is what suppresses the trade."""
+        strategy = self._strategy(corp_action_guard_pct=0)
+        strategy.initialize({"AAPL": self._bars(self.PRE_SPLIT)})
+        strategy.update_daily_close("AAPL", 1000.0)
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert signal is not None
+        assert signal.signal_type == SignalType.ENTRY_LONG
+
+    def test_reverse_split_detected(self):
+        """A 2:1 reverse split (price doubles) is also a discontinuity."""
+        strategy = self._strategy()
+        closes = pd.Series([100.0] * 20 + [200.0])
+        ratio = strategy._detect_corporate_action(closes)
+        assert ratio is not None and ratio >= 2.0
+
+    def test_normal_decline_not_suppressed(self):
+        """A steep-but-legitimate decline (each step within the band) is NOT
+        flagged, so ordinary oversold buys still work."""
+        strategy = self._strategy()
+        decline = [100.0 - i * 0.5 for i in range(40)]  # ~0.5%/day steps
+        assert strategy._detect_corporate_action(pd.Series(decline)) is None
+
+    def test_corporate_action_ratio_public(self):
+        """The public accessor (used by the tick loop) reports the cliff."""
+        strategy = self._strategy()
+        strategy.initialize({"AAPL": self._bars(self.PRE_SPLIT)})
+        strategy.update_daily_close("AAPL", 1000.0)
+
+        ratio = strategy.corporate_action_ratio("AAPL")
+        assert ratio is not None and ratio < 0.1  # ~0.05 for a 20:1 split
