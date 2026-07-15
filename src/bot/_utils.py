@@ -7,11 +7,23 @@ from src.core.types import Market
 
 
 def extract_symbols(cfg_symbols: list) -> list[str]:
-    """Extract symbol strings from a strategy_configs `symbols` field.
+    """Extract the *enabled* symbol strings from a strategy_configs `symbols`
+    field.
 
-    Symbols may be stored as plain strings or as `{"symbol": "..."}` dicts.
+    Symbols may be stored as plain strings or as `{"symbol": "..."}` dicts. A
+    dict may carry `"enabled": False` (the dashboard's per-symbol toggle) —
+    those are excluded from trading. Plain strings and dicts without the flag
+    are treated as enabled.
     """
-    return [s["symbol"] if isinstance(s, dict) else s for s in cfg_symbols]
+    result = []
+    for s in cfg_symbols:
+        if isinstance(s, dict):
+            if not s.get("enabled", True):
+                continue
+            result.append(s["symbol"])
+        else:
+            result.append(s)
+    return result
 
 
 def build_strategy(cfg: dict) -> Any:
