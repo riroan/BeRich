@@ -126,6 +126,10 @@
             <section class="perf-panel perf-chart-card">
                 <div class="perf-chart-header">
                     <div class="section-title">Equity Curve</div>
+                    <div class="chart-tf-toggle" role="group" aria-label="Equity curve timeframe">
+                        <button type="button" class="chart-tf-btn equity-tf-btn active" data-tf="tick" aria-pressed="true">분봉</button>
+                        <button type="button" class="chart-tf-btn equity-tf-btn" data-tf="daily" aria-pressed="false">일봉</button>
+                    </div>
                 </div>
                 <div id="equity-chart" class="chart-container-small" role="img" aria-label="Portfolio equity curve chart" tabindex="0"></div>
                 <p class="sr-only">Interactive equity curve chart. Monthly returns are listed below.</p>
@@ -178,10 +182,62 @@
                 },
             });
 
-            // USD equity line
+            // USD equity line (분봉: fine-grained snapshots) + daily candles (일봉)
             const usdSeries = chart.addLineSeries({
                 color: colors.line,
                 lineWidth: 2,
+            });
+            const candleSeries = chart.addCandlestickSeries({
+                upColor: colors.up,
+                downColor: colors.down,
+                borderVisible: false,
+                wickUpColor: colors.up,
+                wickDownColor: colors.down,
+            });
+
+            let usdData = [];
+            let dailyCandles = [];
+            let equityTf = 'tick';
+
+            function parseKST(timeStr) {
+                const date = new Date(timeStr.replace(' ', 'T'));
+                return Math.floor(date.getTime() / 1000) + 32400;
+            }
+            function equityUsdValue(point) {
+                return point.adjusted_total_usd ?? point.total_usd ?? 0;
+            }
+
+            // Bucket the fine-grained snapshots into one OHLC candle per day
+            // (open = first, high/low = intraday extremes, close = last).
+            function toDailyCandles(points) {
+                const byDay = new Map();
+                points.forEach(p => {
+                    const v = equityUsdValue(p);
+                    if (v <= 0) return;
+                    const day = String(p.timestamp).slice(0, 10);
+                    const c = byDay.get(day);
+                    if (!c) byDay.set(day, { open: v, high: v, low: v, close: v });
+                    else { c.high = Math.max(c.high, v); c.low = Math.min(c.low, v); c.close = v; }
+                });
+                return [...byDay.entries()]
+                    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
+                    .map(([day, c]) => ({ time: day, open: c.open, high: c.high, low: c.low, close: c.close }));
+            }
+
+            function applyEquityTf() {
+                const daily = equityTf === 'daily';
+                usdSeries.setData(daily ? [] : usdData);
+                candleSeries.setData(daily ? dailyCandles : []);
+                chart.timeScale().fitContent();
+                document.querySelectorAll('.equity-tf-btn').forEach(b => {
+                    const active = b.dataset.tf === equityTf;
+                    b.classList.toggle('active', active);
+                    b.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+            }
+
+            document.querySelectorAll('.equity-tf-btn').forEach(b => {
+                b.addEventListener('click', () => { equityTf = b.dataset.tf; applyEquityTf(); });
             });
 
             // Fetch real equity data from API
@@ -195,30 +251,16 @@
                         return;
                     }
 
-                    const usdData = [];
-
-                    function parseKST(timeStr) {
-                        const date = new Date(timeStr.replace(' ', 'T'));
-                        return Math.floor(date.getTime() / 1000) + 32400;
-                    }
-
-                    function equityUsdValue(point) {
-                        return point.adjusted_total_usd ?? point.total_usd ?? 0;
-                    }
-
+                    usdData = [];
                     data.forEach(point => {
-                        const time = parseKST(point.timestamp);
                         const value = equityUsdValue(point);
                         if (value > 0) {
-                            usdData.push({ time, value });
+                            usdData.push({ time: parseKST(point.timestamp), value });
                         }
                     });
+                    dailyCandles = toDailyCandles(data);
 
-                    if (usdData.length > 0) {
-                        usdSeries.setData(usdData);
-                    }
-
-                    chart.timeScale().fitContent();
+                    applyEquityTf();
                 })
                 .catch(err => {
                     console.error('Failed to load equity data:', err);
