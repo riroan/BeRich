@@ -1573,6 +1573,50 @@ select option { background: var(--surface); color: var(--text); }
 .symbol-combined-chart-panel {
     overflow: hidden;
 }
+.symbol-chart-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.chart-tf-toggle {
+    display: inline-flex;
+    gap: 2px;
+    padding: 3px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+}
+.chart-tf-btn {
+    min-height: 32px;
+    padding: 6px 18px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--dim);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: .2px;
+    transition: background .18s ease, color .18s ease, box-shadow .18s ease;
+}
+.chart-tf-btn:hover:not(.active) {
+    color: var(--text);
+}
+.chart-tf-btn.active {
+    background: var(--blue);
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.18);
+}
+.chart-tf-btn:focus-visible {
+    outline: 2px solid var(--blue);
+    outline-offset: 2px;
+}
+@media (max-width: 768px) {
+    .chart-tf-btn { min-height: 38px; padding: 8px 20px; }
+}
 .symbol-chart-stack {
     display: flex;
     flex-direction: column;

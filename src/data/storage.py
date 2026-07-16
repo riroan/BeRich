@@ -481,6 +481,71 @@ class Storage:
                 for row in reversed(rows)
             ]
 
+    async def get_daily_ohlc_rsi(
+        self, symbol: str, limit: int = 250,
+    ) -> list[dict]:
+        """Aggregate per-tick price/RSI history into daily OHLC candles.
+
+        Each stored-local calendar day becomes one candle: open = first
+        tick of the day, high/low = intraday extremes, close = the last
+        tick, rsi = that last tick's RSI. Days without a closing RSI are
+        skipped so price and RSI stay index-aligned (same rule as
+        get_price_rsi_history). Returns the most recent ``limit`` days in
+        chronological order.
+        """
+        from sqlalchemy import text
+
+        sql = text(
+            """
+            WITH daily AS (
+                SELECT date(timestamp) AS d,
+                       MIN(timestamp)  AS mn,
+                       MAX(timestamp)  AS mx,
+                       MAX(price)      AS hi,
+                       MIN(price)      AS lo
+                FROM price_rsi
+                WHERE symbol = :symbol
+                GROUP BY date(timestamp)
+            )
+            SELECT daily.d AS bar_day,
+                   o.price AS open,
+                   daily.hi AS high,
+                   daily.lo AS low,
+                   c.price AS close,
+                   c.rsi   AS rsi
+            FROM daily
+            JOIN price_rsi o
+              ON o.symbol = :symbol AND o.timestamp = daily.mn
+            JOIN price_rsi c
+              ON c.symbol = :symbol AND c.timestamp = daily.mx
+            WHERE c.rsi IS NOT NULL
+            ORDER BY daily.d DESC
+            LIMIT :limit
+            """
+        )
+
+        async with self.async_session() as session:
+            result = await session.execute(
+                sql, {"symbol": symbol, "limit": limit},
+            )
+            rows = result.mappings().all()
+
+        out = []
+        for row in reversed(rows):  # chronological order
+            day = row["bar_day"]
+            day_str = (
+                day.isoformat() if hasattr(day, "isoformat") else str(day)[:10]
+            )
+            out.append({
+                "day": day_str,
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "rsi": float(row["rsi"]),
+            })
+        return out
+
     async def get_all_symbols_with_history(self) -> list[str]:
         """Get all symbols that have price/RSI history"""
         async with self.async_session() as session:

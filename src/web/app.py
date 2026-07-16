@@ -1430,6 +1430,49 @@ def create_app() -> FastAPI:
             "trade_points": trade_points[-limit:],
         }
 
+    @app.get("/api/symbol/{symbol}/daily")
+    async def get_symbol_daily(symbol: str, limit: int = 250):
+        """Daily OHLC candles for a symbol, aggregated from per-tick history.
+
+        Each day's last recorded tick is the close (and carries the day's
+        RSI); open/high/low come from that day's intraday ticks. Same
+        response shape as the history endpoint so the chart can swap
+        series in place. ``time`` fields are "YYYY-MM-DD" business days.
+        """
+        await _load_fills_for_web()
+        trade_points = dashboard_state.trade_points.get(symbol, [])
+
+        storage = await _get_web_storage()
+        if not storage:
+            return {
+                "symbol": symbol,
+                "prices": [],
+                "rsi": [],
+                "trade_points": [],
+            }
+        try:
+            rows = await storage.get_daily_ohlc_rsi(symbol, limit=limit)
+        finally:
+            await storage.close()
+
+        prices = [
+            {
+                "time": r["day"],
+                "open": r["open"],
+                "high": r["high"],
+                "low": r["low"],
+                "close": r["close"],
+            }
+            for r in rows
+        ]
+        rsi_points = [{"time": r["day"], "value": r["rsi"]} for r in rows]
+        return {
+            "symbol": symbol,
+            "prices": prices,
+            "rsi": rsi_points,
+            "trade_points": trade_points,
+        }
+
     @app.get("/api/symbol/{symbol}")
     async def get_symbol_info(symbol: str):
         """Get symbol info"""

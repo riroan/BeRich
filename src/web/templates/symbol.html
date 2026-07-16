@@ -171,7 +171,13 @@
 
         <section class="chart-section symbol-combined-chart-section">
             <div class="panel symbol-combined-chart-panel">
-                <h2>Chart</h2>
+                <div class="symbol-chart-header">
+                    <h2>Chart</h2>
+                    <div class="chart-tf-toggle" role="group" aria-label="Chart timeframe">
+                        <button type="button" class="chart-tf-btn active" data-tf="tick" aria-pressed="true">분봉</button>
+                        <button type="button" class="chart-tf-btn" data-tf="daily" aria-pressed="false">일봉</button>
+                    </div>
+                </div>
                 <div class="symbol-chart-stack">
                     <div class="symbol-chart-block symbol-price-chart">
                         <div class="symbol-chart-label">Price</div>
@@ -331,6 +337,16 @@
             lineWidth: 2,
         });
 
+        // Daily candlestick series (shown when the 일봉 timeframe is active).
+        // Only one of priceSeries / dailySeries holds data at a time.
+        const dailySeries = priceChart.addCandlestickSeries({
+            upColor: colors.up,
+            downColor: colors.down,
+            borderVisible: false,
+            wickUpColor: colors.up,
+            wickDownColor: colors.down,
+        });
+
         // Create RSI chart
         const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
             layout: {
@@ -390,9 +406,14 @@
         const PAGE_SIZE = 2000;
         let priceData = [];
         let rsiData = [];
+        let tickMarkers = [];      // trade markers for the tick (분봉) series
         let oldestCursor = null;   // "YYYY-MM-DD HH:MM" of oldest loaded point
         let isLoading = false;
         let reachedEnd = false;
+
+        // Active chart timeframe: 'tick' (분봉, per-tick line) or 'daily'
+        // (일봉, daily OHLC candles from /daily).
+        let timeframe = 'tick';
 
         function fitLoadedContent() {
             if (priceData.length > 0) priceChart.timeScale().fitContent();
@@ -440,6 +461,19 @@
             });
         }
 
+        // Build lightweight-charts markers from trade points. `timeOf` maps a
+        // "YYYY-MM-DD HH:MM" trade timestamp to the series' time (unix for
+        // tick, "YYYY-MM-DD" business day for daily). Sorted ascending.
+        function buildTradeMarkers(points, timeOf) {
+            return points.map(tp => ({
+                time: timeOf(tp.time),
+                position: tp.action.includes('buy') ? 'belowBar' : 'aboveBar',
+                color: tp.action.includes('buy') ? colors.buyMarker : colors.sellMarker,
+                shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
+                text: tp.action.toUpperCase(),
+            })).sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+        }
+
         async function fetchPage(before = null) {
             let url = `/api/symbol/${symbol}/history?limit=${PAGE_SIZE}`;
             if (before) url += `&before=${encodeURIComponent(before)}`;
@@ -462,14 +496,8 @@
                     priceSeries.setData(priceData);
 
                     if (data.trade_points && data.trade_points.length > 0) {
-                        const markers = data.trade_points.map(tp => ({
-                            time: parseTime(tp.time),
-                            position: tp.action.includes('buy') ? 'belowBar' : 'aboveBar',
-                            color: tp.action.includes('buy') ? colors.buyMarker : colors.sellMarker,
-                            shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
-                            text: tp.action.toUpperCase(),
-                        }));
-                        priceSeries.setMarkers(markers);
+                        tickMarkers = buildTradeMarkers(data.trade_points, parseTime);
+                        if (timeframe === 'tick') priceSeries.setMarkers(tickMarkers);
                     }
 
                     priceChart.timeScale().fitContent();
@@ -550,14 +578,8 @@
                 priceSeries.setData(priceData);
 
                 if (data.trade_points && data.trade_points.length > 0) {
-                    const markers = data.trade_points.map(tp => ({
-                        time: parseTime(tp.time),
-                        position: tp.action.includes('buy') ? 'belowBar' : 'aboveBar',
-                        color: tp.action.includes('buy') ? colors.buyMarker : colors.sellMarker,
-                        shape: tp.action.includes('buy') ? 'arrowUp' : 'arrowDown',
-                        text: tp.action.toUpperCase(),
-                    }));
-                    priceSeries.setMarkers(markers);
+                    tickMarkers = buildTradeMarkers(data.trade_points, parseTime);
+                    priceSeries.setMarkers(tickMarkers);
                 }
 
                 if (data.rsi && data.rsi.length > 0) {
@@ -588,6 +610,7 @@
         // Trigger lazy-load when user scrolls within 10 bars of the left edge
         const LOAD_MORE_THRESHOLD = 10;
         function maybeLoadMore(range) {
+            if (timeframe !== 'tick') return;   // daily is a finite set
             if (range && range.from < LOAD_MORE_THRESHOLD) {
                 loadMore();
             }
@@ -637,10 +660,91 @@
             isSyncingCrosshair = false;
         });
 
+        // Load daily OHLC candles into the price/RSI charts. Times are
+        // "YYYY-MM-DD" business days (no intraday timezone math needed).
+        async function loadDaily(fit = true) {
+            try {
+                const response = await fetch(`/api/symbol/${symbol}/daily?limit=250`);
+                const data = await response.json();
+                resizeCharts();
+
+                const candles = (data.prices || []).map(p => ({
+                    time: p.time,
+                    open: p.open,
+                    high: p.high,
+                    low: p.low,
+                    close: p.close,
+                }));
+                dailySeries.setData(candles);
+
+                if (data.trade_points && data.trade_points.length > 0) {
+                    dailySeries.setMarkers(
+                        buildTradeMarkers(data.trade_points, t => t.slice(0, 10)),
+                    );
+                }
+
+                const dailyRsi = (data.rsi || []).map(r => ({
+                    time: r.time,
+                    value: r.value,
+                }));
+                rsiSeries.setData(dailyRsi);
+                if (dailyRsi.length >= 2) {
+                    const first = dailyRsi[0].time;
+                    const last = dailyRsi[dailyRsi.length - 1].time;
+                    oversoldLine.setData([
+                        { time: first, value: 35 },
+                        { time: last, value: 35 },
+                    ]);
+                    overboughtLine.setData([
+                        { time: first, value: 65 },
+                        { time: last, value: 65 },
+                    ]);
+                }
+                stabilizeCharts(fit);
+            } catch (error) {
+                console.error('Error loading daily chart data:', error);
+            }
+        }
+
+        // Switch between the tick (분봉) and daily (일봉) timeframes. Only one
+        // price series holds data at a time; both charts swap together so the
+        // logical-index sync between price and RSI stays aligned.
+        function setTimeframe(tf) {
+            if (tf === timeframe) return;
+            timeframe = tf;
+            document.querySelectorAll('.chart-tf-btn').forEach((btn) => {
+                const active = btn.dataset.tf === tf;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+            });
+
+            if (tf === 'daily') {
+                priceSeries.setData([]);
+                priceSeries.setMarkers([]);
+                loadDaily(true);
+            } else {
+                dailySeries.setData([]);
+                dailySeries.setMarkers([]);
+                priceSeries.setData(priceData);
+                priceSeries.setMarkers(tickMarkers);
+                rsiSeries.setData(rsiData);
+                applyRsiReferenceLines();
+                stabilizeCharts(true);
+            }
+        }
+
+        document.querySelectorAll('.chart-tf-btn').forEach((btn) => {
+            btn.addEventListener('click', () => setTimeframe(btn.dataset.tf));
+        });
+
         // Load data on page load
         loadInitial();
 
-        // Refresh every 60 seconds (merge-only, preserves lazy-loaded history)
-        setInterval(refreshLatest, 60000);
+        // Refresh every 60 seconds. Tick refresh merges (preserves lazy-loaded
+        // history + user pan); daily re-fetches without re-fitting the view.
+        setInterval(() => {
+            if (timeframe === 'daily') loadDaily(false);
+            else refreshLatest();
+        }, 60000);
     </script>
 {% endblock %}
