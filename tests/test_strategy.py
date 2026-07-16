@@ -115,7 +115,11 @@ class TestRSIMeanReversionStrategy:
             timestamp=datetime.now() + timedelta(days=1), timeframe="1d",
         )
         assert strategy.confirm_daily_bar("AAPL", bar) == "appended"
-        assert len(strategy._daily_bars["AAPL"]) == base_len + 1
+        # Rolling window: base is capped at required_history, so a slide keeps
+        # it at the cap rather than growing unbounded.
+        assert len(strategy._daily_bars["AAPL"]) == min(
+            base_len + 1, strategy.required_history
+        )
         assert strategy._daily_bars["AAPL"].iloc[-1]["close"] == 110.0
         assert strategy.last_confirmed_date("AAPL") > last
 

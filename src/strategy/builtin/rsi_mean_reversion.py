@@ -55,9 +55,12 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
     @property
     def required_history(self) -> int:
-        # Daily bars needed before RSI/signals turn on. Must exceed rsi_period
-        # (default 14) for a usable RSI; 20 lets recently-listed symbols with
-        # short history (e.g. new ETFs) start tracking instead of stalling.
+        # Single knob for the RSI window: bars fetched at init, the rolling
+        # cap kept by confirm_daily_bar, AND the minimum before signals turn
+        # on. init size == rolling cap, so RSI uses the same last-N daily bars
+        # whether just restarted or long-running (restart-invariant). Must
+        # exceed rsi_period (default 14); 20 also lets short-history symbols
+        # (e.g. newly-listed ETFs like SPCX) start tracking.
         return 20
 
     def initialize(self, historical_bars: dict[str, list]) -> None:
@@ -150,7 +153,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             new_row = pd.DataFrame([row], index=[bar.timestamp])
             self._daily_bars[symbol] = pd.concat(
                 [self._daily_bars[symbol], new_row]
-            ).tail(100)
+            ).tail(self.required_history)
             self._last_confirmed_date[symbol] = d
             logger.info(
                 f"[{symbol}] RSI base slid → confirmed close {row['close']} "
