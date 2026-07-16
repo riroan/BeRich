@@ -65,9 +65,6 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         self._confirm_poll_task: asyncio.Task | None = None
         self._confirm_poll_date = None
 
-        # Suspected corporate-action (split/merge) alert throttle, per symbol
-        self._corp_action_alerted: dict[str, datetime] = {}
-
         # Config-sync loop: reconcile strategy symbols from the DB
         # regardless of market hours (the web UI runs in a separate
         # thread/loop and reaches the bot only through the shared DB).

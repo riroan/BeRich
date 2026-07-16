@@ -180,20 +180,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
         if len(df) < self.required_history:
             return None
 
-        # Corporate-action guard: a split/merge leaves a price cliff in the
-        # RSI window (e.g. a 20:1 split drops price to 1/20 → RSI collapses →
-        # bogus avg-down buy). Suppress ALL signals until an adjusted-price
-        # re-fetch (restart) heals the base. See _detect_corporate_action.
-        corp_ratio = self._detect_corporate_action(df["close"])
-        if corp_ratio is not None:
-            logger.warning(
-                f"[{symbol}] *** CORPORATE-ACTION GUARD *** | price "
-                f"discontinuity (step ratio {corp_ratio:.4g}) in RSI window "
-                f"— signals suppressed. Likely split/merge; re-fetch adjusted "
-                f"bars (restart) and verify."
-            )
-            return None
-
         # Parameters
         rsi_period = self.params.get("rsi_period", 14)
         stop_loss_pct = self.params.get("stop_loss", -10)
@@ -423,50 +409,6 @@ class RSIMeanReversionStrategy(BaseStrategy):
         return calculate_rsi(
             prices, period, self.params.get("rsi_method", "wilder"),
         )
-
-    def _detect_corporate_action(self, closes: pd.Series) -> float | None:
-        """Extreme adjacent-close ratio if the RSI window spans a likely
-        corporate action (split/merge) or bad tick, else None.
-
-        A split leaves a cliff in the close series (e.g. 20000 → 1000 on a
-        20:1 split) that collapses or spikes RSI and fires bogus signals.
-        Any single-step close-to-close move beyond the guard band — well
-        past the ±30% KRX daily limit — is treated as a data discontinuity,
-        not a tradable move. Overridable via the ``corp_action_guard_pct``
-        strategy param (percent; default 40, 0 disables the guard).
-        """
-        guard_pct = float(self.params.get("corp_action_guard_pct", 40))
-        if guard_pct <= 0:
-            return None
-        low = 1 - guard_pct / 100
-        high = 1 + guard_pct / 100
-        ratios = (
-            (closes / closes.shift(1))
-            .replace([float("inf"), float("-inf")], pd.NA)
-            .dropna()
-        )
-        if ratios.empty:
-            return None
-        lo = float(ratios.min())
-        hi = float(ratios.max())
-        if lo <= low:
-            return lo
-        if hi >= high:
-            return hi
-        return None
-
-    def corporate_action_ratio(self, symbol: str) -> float | None:
-        """Public: the corporate-action step ratio in the current RSI
-        window if the series looks discontinuous (split/merge), else None.
-
-        The live tick loop uses this to alert and to avoid recording
-        split-corrupted RSI. Suppression of trading itself happens in
-        calculate_signal via the same detector.
-        """
-        df = self.get_daily_dataframe(symbol)
-        if len(df) < 2:
-            return None
-        return self._detect_corporate_action(df["close"])
 
     def get_current_rsi(self, symbol: str) -> float | None:
         """Get current RSI value for a symbol (based on daily data)"""
