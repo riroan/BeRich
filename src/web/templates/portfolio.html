@@ -169,8 +169,12 @@
             {% for pos in portfolio %}
             {label: {{ pos.symbol | tojson }}, value: {{ pos.weight }}, color: colors[{{ loop.index0 }} % colors.length]},
             {% endfor %}
-            {label: 'Cash', value: {{ cash_weight }}, color: '#475569'},
         ];
+        // Holdings ordered by weight, largest first; Cash is kept out of the
+        // sort and pinned at the end. Colors are assigned by original index
+        // above so each symbol keeps the same color as its Holdings card.
+        data.sort((a, b) => b.value - a.value);
+        data.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
 
         // Center default: invested amount (4a)
         const investedValue = {{ total_value - cash_total }};
