@@ -55,7 +55,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
     @property
     def required_history(self) -> int:
-        return 30
+        # Daily bars needed before RSI/signals turn on. Must exceed rsi_period
+        # (default 14) for a usable RSI; 20 lets recently-listed symbols with
+        # short history (e.g. new ETFs) start tracking instead of stalling.
+        return 20
 
     def initialize(self, historical_bars: dict[str, list]) -> None:
         """Initialize with daily historical data"""

@@ -48,7 +48,7 @@ class TestRSIMeanReversionStrategy:
     def test_init(self, strategy):
         """Test strategy initialization"""
         assert strategy.name == "RSI_MeanReversion"
-        assert strategy.required_history == 30
+        assert strategy.required_history == 20
         assert "AAPL" in strategy.symbols
         assert strategy.market == Market.NASDAQ
 
