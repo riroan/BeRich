@@ -48,7 +48,7 @@
         <div class="card strategy-group">
             <div class="section-title" style="padding-bottom:12px;border-bottom:1px solid rgba(51,65,85,0.3);margin-bottom:4px;"><span class="strategy-name">{{ strategy }}</span> <span class="count">{{ symbols|selectattr('strategy_name', 'equalto', strategy)|list|length }} symbols</span></div>
             {% for s in symbols if s.strategy_name == strategy %}
-            <div class="sym-row{{ ' is-off' if not s.enabled else '' }}" data-id="{{ s.id }}">
+            <div class="sym-row{{ ' is-off' if not s.enabled else '' }}" data-id="{{ s.id }}" data-symbol="{{ s.symbol }}">
                 <span class="sym-badge">{{ s.symbol }}</span>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <span class="sym-off-badge">OFF</span>
@@ -128,14 +128,14 @@
         }
 
         async function toggleSymbol(id, symbol, el) {
-            const row = document.querySelector(`.sym-row[data-id="${id}"]`);
+            const row = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"]`);
             if (row && el) row.classList.toggle('is-off', !el.checked);
             try { await fetch(`/api/symbols/${id}/toggle?symbol=${encodeURIComponent(symbol)}`, {method: 'POST'}); }
             catch (e) { setSymbolStatus('Failed: ' + e.message, 'error'); location.reload(); }
         }
 
         async function stepWeight(id, symbol, dir) {
-            const row = document.querySelector(`.sym-row[data-id="${id}"]`);
+            const row = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"]`);
             if (!row) return;
             const input = row.querySelector('input[type="number"]');
             let v = (parseFloat(input.value) || 0) + dir * 0.5;
@@ -172,7 +172,7 @@
             try {
                 const resp = await fetch(`/api/symbols/${id}?symbol=${encodeURIComponent(symbol)}`, {method: 'DELETE'});
                 if (resp.ok) {
-                    document.querySelector(`.sym-row[data-id="${id}"]`).remove();
+                    document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"]`).remove();
                     setSymbolStatus(`${symbol} deleted.`, 'success');
                 } else {
                     setSymbolStatus(`Failed to delete ${symbol}.`, 'error');
