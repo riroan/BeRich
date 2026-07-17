@@ -2,6 +2,7 @@
 
 import asyncio
 import pytest
+from datetime import datetime, timedelta
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -9,6 +10,7 @@ from src.broker.kis.client import (
     KISBroker, _canon_odno, _marketable_limit_price, _overseas_quote_excd,
 )
 from src.broker.kis.mapper import KISMapper
+from src.core.events import EventType
 from src.core.exceptions import BrokerError, OrderError
 from src.core.types import (
     Order, OrderSide, OrderType, OrderStatus, Market,
@@ -576,3 +578,97 @@ class TestOverseasQuoteEXCD:
         ):
             await broker._get_overseas_price("AAPL", Market.NASDAQ)
         assert captured["params"]["EXCD"] == "NAS"
+
+
+class TestPollDateWindow:
+    """Regression: the poll window must start at the order's creation
+    date. With a today-only window, an order left open across a date
+    rollover was invisible to inquire-ccnl forever and stayed SUBMITTED
+    (production: XLI order stuck for 10 days)."""
+
+    def _capture_params(self, broker, captured):
+        def fake_get(url, headers=None, params=None):
+            captured["params"] = params
+            return _FakeResp({"rt_cd": "0", "output": []})
+        broker._session = MagicMock()
+        broker._session.get = MagicMock(side_effect=fake_get)
+        broker._auth.get_headers = MagicMock(return_value={})
+
+    @pytest.mark.asyncio
+    async def test_window_starts_at_order_creation_date(self):
+        broker = _make_broker(hts_id="")
+        captured = {}
+        self._capture_params(broker, captured)
+        order = _open_order("777")
+        order.created_at = datetime.now() - timedelta(days=10)
+
+        await broker._query_overseas_fill(order)
+
+        assert captured["params"]["ORD_STRT_DT"] == (
+            order.created_at.strftime("%Y%m%d")
+        )
+        assert captured["params"]["ORD_END_DT"] == (
+            datetime.now().strftime("%Y%m%d")
+        )
+
+    @pytest.mark.asyncio
+    async def test_window_is_today_for_fresh_order(self):
+        broker = _make_broker(hts_id="")
+        captured = {}
+        self._capture_params(broker, captured)
+        order = _open_order("778")  # created_at defaults to now
+
+        await broker._query_overseas_fill(order)
+
+        today = datetime.now().strftime("%Y%m%d")
+        assert captured["params"]["ORD_STRT_DT"] == today
+        assert captured["params"]["ORD_END_DT"] == today
+
+
+class TestExpiredOrderTerminalPath:
+    """Regression: an unfilled order older than 24h is dead at KIS (day
+    orders never survive a day), but nothing moved it to a terminal
+    state — it stayed SUBMITTED forever, holding the in-flight guard so
+    every new same-side signal for the symbol was suppressed (XLE
+    sell lockup)."""
+
+    @pytest.mark.asyncio
+    async def test_live_poll_cancels_expired_order(self):
+        broker = _make_broker(hts_id="")
+        broker._query_overseas_fill = AsyncMock(return_value=False)
+        order = _open_order("E1")
+        order.created_at = datetime.now() - timedelta(hours=25)
+
+        await broker._poll_overseas_order(order)
+
+        assert order.status == OrderStatus.CANCELLED
+        broker.event_bus.publish.assert_awaited_once()
+        event = broker.event_bus.publish.await_args.args[0]
+        assert event.event_type == EventType.ORDER_CANCELLED
+
+    @pytest.mark.asyncio
+    async def test_live_poll_keeps_fresh_order_open(self):
+        broker = _make_broker(hts_id="")
+        broker._query_overseas_fill = AsyncMock(return_value=False)
+        order = _open_order("E2")  # created_at = now → could still be live
+
+        await broker._poll_overseas_order(order)
+
+        assert order.status == OrderStatus.SUBMITTED
+        broker.event_bus.publish.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_reconcile_marks_expired_order_terminal(self):
+        broker = _make_broker(hts_id="")
+        broker._query_overseas_fill = AsyncMock(return_value=False)
+        order = _open_order("E3")
+        order.created_at = datetime.now() - timedelta(days=10)
+
+        changed = await broker.reconcile_open_orders([order])
+
+        assert changed == [order]
+        assert order.status == OrderStatus.CANCELLED
+        # Not re-registered for the live poller, and no event replayed
+        # (startup reconciliation persists via the caller, silently).
+        assert "E3" not in broker._orders
+        broker.event_bus.publish.assert_not_awaited()

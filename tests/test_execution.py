@@ -525,8 +525,11 @@ class TestInFlightGuard:
             mock_sto.assert_awaited_once_with(signal)
 
 
-class TestCancelStaleStopLosses:
-    """Phase 4 #7: cancel unfilled stop-loss orders at session transitions."""
+class TestCancelStaleUnfilledOrders:
+    """Phase 4 #7 (extended): cancel ALL unfilled orders at session
+    transitions, not just stop-losses. Regression for the XLE lockup:
+    a stale staged-sell limit held the in-flight guard and suppressed
+    every new sell signal."""
 
     @pytest.mark.asyncio
     async def test_cancels_unfilled_stop_loss(self, order_manager, broker):
@@ -535,36 +538,43 @@ class TestCancelStaleStopLosses:
         order.filled_quantity = 0
         order_manager._active_orders["sl1"] = order
 
-        n = await order_manager.cancel_unfilled_stop_losses()
+        n = await order_manager.cancel_stale_unfilled_orders()
 
         assert n == 1
         broker.cancel_order.assert_awaited_once_with("sl1", order.market)
         assert "sl1" not in order_manager._active_orders
 
     @pytest.mark.asyncio
-    async def test_skips_partially_filled_stop_loss(self, order_manager, broker):
+    async def test_skips_partially_filled_order(self, order_manager, broker):
         order = _make_order(symbol="AAPL", side=OrderSide.SELL, order_id="sl2")
         order.metadata = {"reason": "stop_loss"}
         order.filled_quantity = 5  # partial — leave it alone
         order_manager._active_orders["sl2"] = order
 
-        n = await order_manager.cancel_unfilled_stop_losses()
+        n = await order_manager.cancel_stale_unfilled_orders()
 
         assert n == 0
         broker.cancel_order.assert_not_called()
         assert "sl2" in order_manager._active_orders
 
     @pytest.mark.asyncio
-    async def test_skips_non_stop_loss_orders(self, order_manager, broker):
-        order = _make_order(symbol="AAPL", side=OrderSide.BUY, order_id="b1")
-        order.metadata = {"reason": "avg_down_stage_1"}
-        order.filled_quantity = 0
-        order_manager._active_orders["b1"] = order
+    async def test_cancels_unfilled_staged_sell_and_buy(
+        self, order_manager, broker,
+    ):
+        sell = _make_order(symbol="XLE", side=OrderSide.SELL, order_id="s1")
+        sell.metadata = {"reason": "staged_sell_2"}
+        sell.filled_quantity = 0
+        buy = _make_order(symbol="XLI", side=OrderSide.BUY, order_id="b1")
+        buy.metadata = {"reason": "avg_down_stage_1"}
+        buy.filled_quantity = 0
+        order_manager._active_orders["s1"] = sell
+        order_manager._active_orders["b1"] = buy
 
-        n = await order_manager.cancel_unfilled_stop_losses()
+        n = await order_manager.cancel_stale_unfilled_orders()
 
-        assert n == 0
-        broker.cancel_order.assert_not_called()
+        assert n == 2
+        assert "s1" not in order_manager._active_orders
+        assert "b1" not in order_manager._active_orders
 
 
 class TestSignalMetadataPropagation:

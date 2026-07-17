@@ -480,25 +480,25 @@ class OrderManager:
                 cancelled += 1
         return cancelled
 
-    async def cancel_unfilled_stop_losses(self) -> int:
-        """Cancel still-open, zero-fill stop-loss orders (Phase 4 #7).
+    async def cancel_stale_unfilled_orders(self) -> int:
+        """Cancel still-open, zero-fill orders (stop-loss, staged sell, buy).
 
-        Called on session transitions: a stop-loss that didn't fill in the
+        Called on session transitions: an order that didn't fill in the
         previous session has a stale limit price. Cancelling it frees the
-        in-flight guard so the strategy re-emits the stop-loss at the new
-        session's price next tick (position is still held because the
-        reset is fill-driven). A partially-filled stop-loss is left alone.
+        in-flight guard so the strategy re-emits at the new session's
+        price next tick (stage counters and position resets are all
+        fill-driven, so an unfilled order never buried a stage or
+        dropped a position). A partially-filled order is left alone.
         """
         cancelled = 0
         for order_id, order in list(self._active_orders.items()):
             if (order.filled_quantity or 0) > 0:
                 continue
-            if str(order.metadata.get("reason", "")) != "stop_loss":
-                continue
             if await self.cancel_order(order_id):
                 cancelled += 1
+                reason = str(order.metadata.get("reason", "")) or "order"
                 logger.info(
-                    f"[RESUBMIT] Cancelled stale stop-loss {order_id} "
+                    f"[RESUBMIT] Cancelled stale {reason} {order_id} "
                     f"({order.symbol}) — will re-price next tick"
                 )
         return cancelled

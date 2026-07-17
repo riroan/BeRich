@@ -1,7 +1,7 @@
 import aiohttp
 import asyncio
 from typing import AsyncIterator
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, ROUND_HALF_EVEN
 import logging
 
@@ -1042,6 +1042,18 @@ class KISBroker:
                     f"Poll failed for {order.order_id}: {e!r}",
                 )
 
+    # KIS overseas orders are day orders — none survives 24h. An order
+    # this old with no new fills is dead at the broker even if no
+    # cancel/expiry notice ever reached us (KIS sends none for expiry).
+    ORDER_EXPIRY = timedelta(hours=24)
+
+    def _is_expired(self, order: Order) -> bool:
+        """True when an open order can no longer be live at KIS."""
+        return (
+            order.created_at is not None
+            and datetime.now() - order.created_at > self.ORDER_EXPIRY
+        )
+
     async def _poll_overseas_order(self, order: Order) -> None:
         """Live poll: query one open order and emit ORDER_* on change"""
         if await self._query_overseas_fill(order):
@@ -1049,6 +1061,17 @@ class KISBroker:
                 f"[POLL] Order {order.order_id} → {order.status.value} "
                 f"(filled {order.filled_quantity}/{order.quantity} "
                 f"@ {order.filled_avg_price})",
+            )
+            await self._emit_order_event(order)
+        elif self._is_expired(order):
+            # Terminal path for orders KIS silently let die: without it
+            # the order stays SUBMITTED forever and the in-flight guard
+            # blocks every new same-side signal for the symbol.
+            order.status = OrderStatus.CANCELLED
+            logger.info(
+                f"[POLL] Order {order.order_id} ({order.symbol}) placed "
+                f"{order.created_at} never filled and is past expiry → "
+                f"cancelled",
             )
             await self._emit_order_event(order)
 
@@ -1071,6 +1094,12 @@ class KISBroker:
                 if order.market == Market.KRX:
                     continue  # domestic polling not implemented
                 if await self._query_overseas_fill(order):
+                    changed.append(order)
+                elif self._is_expired(order):
+                    # Dead at KIS (day orders never survive 24h): mark
+                    # terminal so it's persisted and never re-enters the
+                    # poller set. Fills win — the query above ran first.
+                    order.status = OrderStatus.CANCELLED
                     changed.append(order)
                 elif order.order_id:
                     self._orders[order.order_id] = order
@@ -1103,12 +1132,20 @@ class KISBroker:
             Market.AMEX: "AMEX",
         }
         today = datetime.now().strftime("%Y%m%d")
+        # Window starts at the order's creation date, not today: an order
+        # left open across a date rollover (bot restart, overnight gap)
+        # would otherwise never be matched again and stay SUBMITTED
+        # forever, holding the in-flight guard for its symbol.
+        start_dt = (
+            order.created_at.strftime("%Y%m%d")
+            if order.created_at else today
+        )
 
         params = {
             "CANO": self._auth.account_no[:8],
             "ACNT_PRDT_CD": self._auth.account_no[9:],
             "PDNO": order.symbol,
-            "ORD_STRT_DT": today,
+            "ORD_STRT_DT": start_dt,
             "ORD_END_DT": today,
             "SLL_BUY_DVSN": "00",
             "CCLD_NCCS_DVSN": "00",

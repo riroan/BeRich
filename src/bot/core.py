@@ -410,10 +410,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         - REGULAR→AFTER: kick the daily-bar confirmation poll once/day
           (RSI base slides only on KIS bar confirmation, not the clock).
         - Any change into a tradable session: cancel stale, unfilled
-          stop-loss orders so the strategy re-emits them at the new
-          session's price next tick (Phase 4 #7). Safe because the
-          position reset is fill-driven — an unfilled stop-loss never
-          dropped the position.
+          orders (stop-loss, staged sell, buy) so the strategy re-emits
+          them at the new session's price next tick (Phase 4 #7). Safe
+          because stage advances and position resets are fill-driven —
+          an unfilled order never buried a stage or dropped a position.
         """
         current = get_current_session(datetime.now())
         prev = self._last_session
@@ -436,9 +436,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         if current != Session.CLOSED and self.order_manager:
             try:
-                await self.order_manager.cancel_unfilled_stop_losses()
+                await self.order_manager.cancel_stale_unfilled_orders()
             except Exception as e:
-                logger.warning(f"Stale stop-loss cancel failed: {e}")
+                logger.warning(f"Stale order cancel failed: {e}")
 
     async def _run_daily_confirm_poll(self) -> None:
         """After the regular session closes, poll KIS daily bars and slide

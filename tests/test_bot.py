@@ -163,8 +163,8 @@ class TestTradingBot:
         bot._run_daily_confirm_poll.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_session_transition_cancels_stale_stop_losses(self, bot):
-        """Entering a new tradable session re-prices stale stop-losses (#7)."""
+    async def test_session_transition_cancels_stale_orders(self, bot):
+        """Entering a new tradable session re-prices stale orders (#7)."""
         from src.utils.scheduler import Session
 
         bot._last_session = Session.PRE
@@ -174,11 +174,11 @@ class TestTradingBot:
         with patch("src.bot.core.get_current_session", return_value=Session.REGULAR):
             await bot._handle_session_transition()
 
-        bot.order_manager.cancel_unfilled_stop_losses.assert_awaited_once()
+        bot.order_manager.cancel_stale_unfilled_orders.assert_awaited_once()
 
     @pytest.mark.asyncio
-    async def test_no_stop_loss_cancel_without_transition(self, bot):
-        """No session change → no stop-loss cancel."""
+    async def test_no_stale_order_cancel_without_transition(self, bot):
+        """No session change → no stale-order cancel."""
         from src.utils.scheduler import Session
 
         bot._last_session = Session.REGULAR
@@ -187,7 +187,7 @@ class TestTradingBot:
         with patch("src.bot.core.get_current_session", return_value=Session.REGULAR):
             await bot._handle_session_transition()
 
-        bot.order_manager.cancel_unfilled_stop_losses.assert_not_called()
+        bot.order_manager.cancel_stale_unfilled_orders.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_confirm_poll_slides_base(self, bot):
