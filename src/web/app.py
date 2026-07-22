@@ -209,6 +209,79 @@ class BacktestRequest(BaseModel):
         return self
 
 
+def _equity_usd_value(point: dict[str, Any]) -> float:
+    value = point.get("adjusted_total_usd")
+    if value is None:
+        value = point.get("total_usd", 0)
+    return value or 0
+
+
+def _parse_flow_ts(value: Any) -> datetime | None:
+    try:
+        ts = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    return ts.replace(tzinfo=None)
+
+
+def flow_adjusted_series(
+    points: list[dict[str, Any]],
+    flows: list[dict[str, Any]] | None,
+) -> tuple[list[dict[str, Any]], list[float]]:
+    """Augment equity points with deposit-neutral values and a TWR index.
+
+    Deposits/withdrawals recorded as 'adjustment' cash flows are stripped from
+    the interval returns (time-weighted return), so external money movement
+    never shows up as performance. 'initial' flows only register the starting
+    principal, which is already baked into the equity values, so they never
+    adjust returns. Each returned point gains ``deposit_adjusted_usd`` (USD
+    value minus in-window net deposits) and ``twr_index`` (chained return
+    index starting at 100). Also returns the list of interval returns.
+    """
+    series = []
+    for point in points:
+        value = _equity_usd_value(point)
+        ts = _parse_flow_ts(point.get("timestamp"))
+        if value > 0 and ts is not None:
+            series.append((ts, value, point))
+
+    events = []
+    for flow in flows or []:
+        if flow.get("flow_type") != "adjustment":
+            continue
+        ts = _parse_flow_ts(flow.get("timestamp"))
+        amount = float(flow.get("amount_usd") or 0)
+        if ts is not None and amount:
+            events.append((ts, amount))
+    events.sort(key=lambda e: e[0])
+
+    augmented: list[dict[str, Any]] = []
+    returns: list[float] = []
+    index = 100.0
+    cum_flow = 0.0
+    prev_value: float | None = None
+    ei = 0
+    for ts, value, point in series:
+        interval_flow = 0.0
+        while ei < len(events) and events[ei][0] <= ts:
+            interval_flow += events[ei][1]
+            ei += 1
+        if prev_value is not None:
+            # Flows at/before the first point are already part of its value.
+            r = (value - interval_flow - prev_value) / prev_value
+            returns.append(r)
+            index *= 1 + r
+            cum_flow += interval_flow
+        augmented.append({
+            **point,
+            "deposit_adjusted_usd": value - cum_flow,
+            "twr_index": index,
+        })
+        prev_value = value
+
+    return augmented, returns
+
+
 class DashboardState:
     """Shared state for dashboard data"""
 
@@ -271,6 +344,9 @@ class DashboardState:
 
         # Fills for performance calculation
         self.fills: list[dict[str, Any]] = []
+
+        # External cash flows (principal ledger) for deposit-neutral metrics
+        self.cash_flows: list[dict[str, Any]] = []
 
         # Storage reference (set by bot on init - NOT usable from web thread)
         self.storage = None
@@ -761,39 +837,29 @@ class DashboardState:
             error_message=error,
         )
 
-    @staticmethod
-    def _equity_usd_value(point: dict[str, Any]) -> float:
-        value = point.get("adjusted_total_usd")
-        if value is None:
-            value = point.get("total_usd", 0)
-        return value or 0
-
     def calculate_performance(self):
         """Calculate performance metrics from equity history and fills"""
         import math
 
         self.performance = PerformanceMetrics()
 
-        # Calculate from equity history
-        if len(self.equity_history) >= 2:
-            # Get initial and current values (use USD for now, or combine)
-            initial = self.equity_history[0]
-            current = self.equity_history[-1]
+        # Calculate from equity history (deposit-neutral TWR series)
+        series, returns = flow_adjusted_series(
+            self.equity_history, self.cash_flows
+        )
+        if len(series) >= 2:
+            initial = series[0]
+            current = series[-1]
+            final_index = current["twr_index"]
 
             # Total return (using USD as primary)
-            initial_value = self._equity_usd_value(initial)
-            current_value = self._equity_usd_value(current)
+            self.performance.total_return_pct = final_index - 100.0
 
-            if initial_value > 0:
-                self.performance.total_return_pct = (
-                    (current_value - initial_value) / initial_value * 100
-                )
-
-            # Calculate MDD (Maximum Drawdown)
+            # Calculate MDD (Maximum Drawdown) on the TWR index
             peak = 0
             max_drawdown = 0
-            for point in self.equity_history:
-                value = self._equity_usd_value(point)
+            for point in series:
+                value = point["twr_index"]
                 if value > peak:
                     peak = value
                 if peak > 0:
@@ -803,32 +869,19 @@ class DashboardState:
             self.performance.mdd = max_drawdown
 
             # Calculate CAGR
-            if len(self.equity_history) > 1 and initial_value > 0:
-                first_time = datetime.fromisoformat(initial.get("timestamp", ""))
-                last_time = datetime.fromisoformat(current.get("timestamp", ""))
-                days = (last_time - first_time).days
-                if days > 0:
-                    years = days / 365.0
-                    if years >= 0.01 and current_value > 0:
-                        cagr = (
-                            (pow(current_value / initial_value, 1 / years) - 1) * 100
-                        )
-                        self.performance.cagr = max(min(cagr, 9999.99), -9999.99)
+            first_time = datetime.fromisoformat(initial.get("timestamp", ""))
+            last_time = datetime.fromisoformat(current.get("timestamp", ""))
+            days = (last_time - first_time).days
+            if days > 0:
+                years = days / 365.0
+                if years >= 0.01 and final_index > 0:
+                    cagr = (
+                        (pow(final_index / 100.0, 1 / years) - 1) * 100
+                    )
+                    self.performance.cagr = max(min(cagr, 9999.99), -9999.99)
 
             # Calculate Sharpe Ratio (simplified - daily returns)
-            if len(self.equity_history) > 2:
-                returns = []
-                for i in range(1, len(self.equity_history)):
-                    prev_val = self._equity_usd_value(
-                        self.equity_history[i - 1]
-                    ) or 1
-                    curr_val = self._equity_usd_value(
-                        self.equity_history[i]
-                    ) or 1
-                    if prev_val > 0:
-                        daily_return = (curr_val - prev_val) / prev_val
-                        returns.append(daily_return)
-
+            if len(series) > 2:
                 if returns:
                     avg_return = sum(returns) / len(returns)
                     variance = sum((r - avg_return) ** 2 for r in returns) / len(returns)
@@ -1199,6 +1252,7 @@ def create_app() -> FastAPI:
             return RedirectResponse(url="/login", status_code=302)
 
         await _load_fills_for_web()
+        await _load_equity_history_for_web()
         # Recalculate performance metrics
         dashboard_state.calculate_performance()
 
@@ -1206,6 +1260,9 @@ def create_app() -> FastAPI:
             "request": request,
             "active_page": "performance",
             "performance": dashboard_state.performance.model_dump(),
+            "principal_usd": sum(
+                f["amount_usd"] for f in dashboard_state.cash_flows
+            ),
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
             "balance_usd": float(dashboard_state.balance_usd),
@@ -1501,10 +1558,80 @@ def create_app() -> FastAPI:
         storage = await _get_web_storage()
         if storage:
             try:
-                return {"data": await storage.get_equity_history()}
+                points = await storage.get_equity_history()
+                flows = await storage.get_cash_flows()
+                series, _ = flow_adjusted_series(points, flows)
+                return {"data": series}
             except Exception as e:
                 logger.warning(f"Equity history DB read failed: {e}")
-        return {"data": dashboard_state.equity_history}
+            finally:
+                await storage.close()
+        series, _ = flow_adjusted_series(
+            dashboard_state.equity_history, dashboard_state.cash_flows
+        )
+        return {"data": series}
+
+    class PrincipalUpdate(BaseModel):
+        principal_usd: float
+
+    @app.get("/api/principal")
+    async def get_principal():
+        """Current principal (sum of the recorded cash flow ledger)"""
+        flows = dashboard_state.cash_flows
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                flows = await storage.get_cash_flows()
+                dashboard_state.cash_flows = flows
+            except Exception as e:
+                logger.warning(f"Cash flow DB read failed: {e}")
+            finally:
+                await storage.close()
+        return {
+            "principal_usd": sum(f["amount_usd"] for f in flows),
+            "flows": flows,
+        }
+
+    @app.post("/api/principal")
+    async def update_principal(body: PrincipalUpdate):
+        """Set current principal; the delta is recorded as a deposit/withdrawal.
+
+        The first ever update registers the starting principal ('initial',
+        excluded from return adjustment since it is already reflected in the
+        equity history). Later updates store only the difference as an
+        'adjustment' flow, which the TWR metrics strip out.
+        """
+        if body.principal_usd < 0:
+            raise HTTPException(
+                status_code=400, detail="Principal must be >= 0",
+            )
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+        try:
+            flows = await storage.get_cash_flows()
+            current = sum(f["amount_usd"] for f in flows)
+            delta = body.principal_usd - current
+            if not flows:
+                await storage.save_cash_flow(
+                    Decimal(str(body.principal_usd)), flow_type="initial",
+                )
+            elif abs(delta) >= 0.01:
+                await storage.save_cash_flow(
+                    Decimal(str(round(delta, 2))), flow_type="adjustment",
+                )
+            flows = await storage.get_cash_flows()
+        finally:
+            await storage.close()
+
+        dashboard_state.cash_flows = flows
+        dashboard_state.calculate_performance()
+        return {
+            "success": True,
+            "principal_usd": sum(f["amount_usd"] for f in flows),
+        }
 
     # ==================== Backtest ====================
 
@@ -1756,6 +1883,20 @@ def create_app() -> FastAPI:
         finally:
             await storage.close()
 
+    async def _load_equity_history_for_web() -> None:
+        """Read persisted equity history so performance metrics use the same
+        90-day DB window as the equity curve (in-memory history is empty in
+        standalone web mode and capped at 1000 points under the bot)."""
+        storage = await _get_web_storage()
+        if not storage:
+            return
+        try:
+            dashboard_state.equity_history = await storage.get_equity_history()
+        except Exception as e:
+            logger.warning(f"Failed to load equity history for web: {e}")
+        finally:
+            await storage.close()
+
     async def _load_fills_for_web() -> None:
         """Read persisted fills into dashboard state for standalone web views."""
         storage = await _get_web_storage()
@@ -1763,6 +1904,10 @@ def create_app() -> FastAPI:
             return
 
         try:
+            try:
+                dashboard_state.cash_flows = await storage.get_cash_flows()
+            except Exception as e:
+                logger.warning(f"Failed to load cash flows for web: {e}")
             fills = await storage.get_all_fills()
         except Exception as e:
             logger.warning(f"Failed to load fills for web: {e}")

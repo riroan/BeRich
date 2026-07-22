@@ -4,6 +4,23 @@
 
 {% block head_extra %}
     <script src="/static/lightweight-charts.js"></script>
+    <style>
+        .principal-row {
+            display: flex; align-items: center; gap: 8px;
+            margin-top: 14px; padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 13px; color: var(--dim);
+        }
+        .principal-row strong { color: var(--white); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .principal-edit-btn {
+            margin-left: auto; background: none; border: none;
+            color: var(--blue); font-size: 12px; cursor: pointer; padding: 2px 4px;
+        }
+        .principal-form { display: flex; gap: 8px; margin-top: 10px; }
+        .principal-form input { flex: 1; min-width: 0; }
+        .principal-form[hidden] { display: none; }
+        .principal-error { color: var(--red); font-size: 12px; margin-top: 6px; }
+    </style>
 {% endblock %}
 
 {% block content %}
@@ -45,6 +62,17 @@
                         <strong class="{{ mdd_class }}">{{ "{:.2f}%".format(performance.mdd) }}</strong>
                     </div>
                 </div>
+                <div class="principal-row">
+                    <span>원금</span>
+                    <strong>{% if principal_usd > 0 %}${{ "{:,.2f}".format(principal_usd) }}{% else %}미설정{% endif %}</strong>
+                    <button type="button" class="principal-edit-btn" id="principal-edit-btn">수정</button>
+                </div>
+                <form class="principal-form" id="principal-form" hidden>
+                    <input type="number" id="principal-input" step="0.01" min="0"
+                           value="{{ '%.2f'|format(principal_usd) }}" aria-label="원금 (USD)">
+                    <button type="submit" class="btn-save">저장</button>
+                </form>
+                <div class="principal-error" id="principal-error" hidden></div>
             </section>
 
             <!-- Trade Statistics -->
@@ -203,8 +231,9 @@
                 const date = new Date(timeStr.replace(' ', 'T'));
                 return Math.floor(date.getTime() / 1000) + 32400;
             }
+            // Prefer the deposit-adjusted value so 입출금이 커브에 점프로 안 나타남
             function equityUsdValue(point) {
-                return point.adjusted_total_usd ?? point.total_usd ?? 0;
+                return point.deposit_adjusted_usd ?? point.adjusted_total_usd ?? point.total_usd ?? 0;
             }
 
             // Bucket the fine-grained snapshots into one OHLC candle per day
@@ -279,16 +308,17 @@
                     const data = result.data || [];
                     if (data.length < 2) return;
 
-                    // Group by month
+                    // Group by month — use the TWR index so deposits don't
+                    // count as monthly gains
                     const months = {};
-                    function equityUsdValue(point) {
-                        return point.adjusted_total_usd ?? point.total_usd ?? 0;
+                    function monthlyValue(point) {
+                        return point.twr_index ?? point.adjusted_total_usd ?? point.total_usd ?? 0;
                     }
                     data.forEach(p => {
                         const d = new Date(p.timestamp);
                         const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
                         if (!months[key]) months[key] = [];
-                        months[key].push(equityUsdValue(p));
+                        months[key].push(monthlyValue(p));
                     });
 
                     const keys = Object.keys(months).sort();
@@ -320,6 +350,35 @@
                             '</div>';
                     }).join('');
                 });
+        }
+
+        // Principal (원금) editor — 갱신할 때마다 차액이 입출금 이력으로 쌓인다
+        const principalBtn = document.getElementById('principal-edit-btn');
+        const principalForm = document.getElementById('principal-form');
+        if (principalBtn && principalForm) {
+            principalBtn.addEventListener('click', () => {
+                principalForm.hidden = !principalForm.hidden;
+                if (!principalForm.hidden) document.getElementById('principal-input').focus();
+            });
+            principalForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const errEl = document.getElementById('principal-error');
+                errEl.hidden = true;
+                const value = parseFloat(document.getElementById('principal-input').value);
+                if (!(value >= 0)) return;
+                try {
+                    const res = await fetch('/api/principal', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ principal_usd: value }),
+                    });
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    location.reload();
+                } catch (err) {
+                    errEl.textContent = '저장 실패: ' + err.message;
+                    errEl.hidden = false;
+                }
+            });
         }
     </script>
 {% endblock %}

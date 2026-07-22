@@ -95,7 +95,11 @@ class DataLoaderMixin:
         try:
             history = await self.storage.get_equity_history(days=90)
             self.dashboard.equity_history = history
-            logger.info(f"Loaded {len(history)} equity history points")
+            self.dashboard.cash_flows = await self.storage.get_cash_flows()
+            logger.info(
+                f"Loaded {len(history)} equity history points, "
+                f"{len(self.dashboard.cash_flows)} cash flows"
+            )
         except Exception as e:
             logger.warning(f"Failed to load equity history: {e}")
 

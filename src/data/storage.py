@@ -12,7 +12,7 @@ from .models import (
     Base, BarModel, OrderModel, FillModel,
     CurrentPositionModel, PriceRSIModel, EquitySnapshot,
     StrategyParams,
-    StrategyConfigModel, BotStateModel,
+    StrategyConfigModel, BotStateModel, CashFlow,
 )
 
 logger = logging.getLogger(__name__)
@@ -814,6 +814,38 @@ class Storage:
                     "settlement_adjustment_usd": float(
                         row.settlement_adjustment_usd or 0
                     ),
+                }
+                for row in rows
+            ]
+
+    async def save_cash_flow(
+        self,
+        amount_usd: Decimal,
+        flow_type: str = "adjustment",
+        timestamp: datetime | None = None,
+    ) -> None:
+        """Save a cash flow event (principal registration or deposit/withdrawal)"""
+        async with self.async_session() as session:
+            flow = CashFlow(
+                timestamp=timestamp or datetime.now(),
+                amount_usd=amount_usd,
+                flow_type=flow_type,
+            )
+            session.add(flow)
+            await session.commit()
+
+    async def get_cash_flows(self) -> list[dict]:
+        """Get all cash flow events in chronological order"""
+        async with self.async_session() as session:
+            query = select(CashFlow).order_by(CashFlow.timestamp, CashFlow.id)
+            result = await session.execute(query)
+            rows = result.scalars().all()
+
+            return [
+                {
+                    "timestamp": row.timestamp.isoformat(),
+                    "amount_usd": float(row.amount_usd),
+                    "flow_type": row.flow_type,
                 }
                 for row in rows
             ]

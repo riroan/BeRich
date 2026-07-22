@@ -152,6 +152,26 @@ class EquitySnapshot(Base):
 
 
 
+class CashFlow(Base):
+    """External cash flow ledger (principal registration + deposits/withdrawals).
+
+    flow_type 'initial' records the starting principal (already reflected in
+    equity history, so excluded from return adjustment); 'adjustment' records
+    subsequent deposits (+) / withdrawals (-) in USD terms.
+    """
+
+    __tablename__ = "cash_flows"
+
+    id = Column(Integer, primary_key=True)
+    timestamp = Column(DateTime, nullable=False)
+    amount_usd = Column(Numeric(20, 2), nullable=False)
+    flow_type = Column(String(20), nullable=False, default="adjustment")
+
+    __table_args__ = (
+        Index("idx_cash_flows_timestamp", "timestamp"),
+    )
+
+
 class StrategyParams(Base):
     """Strategy parameters (overrides YAML defaults)"""
 
