@@ -9,9 +9,10 @@ const CACHE_VERSION = "berich-v15";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const HTML_CACHE = `${CACHE_VERSION}-html`;
 
+// style.css / script.js are intentionally absent: their ?v= cache-buster is
+// derived from mtime at render time, so a pinned URL here would only precache
+// a dead entry. The fetch handler caches them on first request instead.
 const PRECACHE_URLS = [
-    "/static/style.css?v=29",
-    "/static/script.js?v=11",
     "/static/lightweight-charts.js",
     "/static/icons/icon-192.png",
     "/static/icons/icon-512.png",

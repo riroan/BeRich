@@ -935,6 +935,22 @@ dashboard_state = DashboardState()
 # Global templates (created once)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
+
+def _asset_version(name: str) -> int:
+    """Cache-buster derived from the file's mtime.
+
+    Hand-bumping ?v= in base.html was forgotten on style.css edits, so the
+    service worker (cache-first on /static/) kept serving stale CSS until a
+    manual reload. Deriving it from mtime makes that impossible to forget.
+    """
+    try:
+        return int((BASE_DIR / "static" / name).stat().st_mtime)
+    except OSError:
+        return 0
+
+
+templates.env.globals["asset_v"] = _asset_version
+
 # Session storage (in-memory)
 valid_sessions: dict[str, datetime] = {}
 
