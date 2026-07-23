@@ -1256,7 +1256,8 @@ select option { background: var(--surface); color: var(--text); }
 }
 .perf-hero-stats {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* content-sized tracks: numbers never truncate, leftover space split evenly */
+    grid-template-columns: repeat(3, minmax(min-content, auto));
     margin-top: 22px;
 }
 .perf-hero-stat {
@@ -2771,8 +2772,6 @@ select option { background: var(--surface); color: var(--text); }
     }
     .perf-hero-stats {
         margin-top: 18px;
-        /* give Balance more room; trim CAGR/MDD so Balance stops truncating */
-        grid-template-columns: 1.4fr 0.8fr 0.8fr;
     }
     .perf-hero-stat {
         padding-right: 10px;
