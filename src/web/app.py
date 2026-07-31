@@ -360,8 +360,10 @@ class DashboardState:
         # KIS API config for symbol validation
         self.kis_config: dict[str, Any] | None = None
 
-        # KIS auth token (shared from bot's broker)
-        self.kis_auth_token: str | None = None
+        # KIS auth object (shared from bot's broker). A live reference, NOT a
+        # token snapshot — KIS tokens expire in 24h and the broker refreshes
+        # its own; a copied string goes stale and never recovers.
+        self.kis_auth: Any | None = None
 
         # Live strategy instances (set by bot)
         self.strategy_instances: list[Any] | None = None
@@ -2087,9 +2089,9 @@ def create_app() -> FastAPI:
 
     async def _validate_symbol_kis(
         symbol: str, market_code: str, kis_config: dict,
-        auth_token: str,
+        auth: Any,
     ) -> dict:
-        """Validate symbol via KIS API using shared token"""
+        """Validate symbol via KIS API using the bot's shared KISAuth"""
         import aiohttp
 
         base_url = (
@@ -2098,16 +2100,8 @@ def create_app() -> FastAPI:
             else "https://openapi.koreainvestment.com:9443"
         )
 
-        headers = {
-            "content-type": "application/json; charset=utf-8",
-            "authorization": f"Bearer {auth_token}",
-            "appkey": kis_config["app_key"],
-            "appsecret": kis_config["app_secret"],
-            "custtype": "P",
-        }
-
         if market_code == "krx":
-            headers["tr_id"] = "FHKST01010100"
+            tr_id = "FHKST01010100"
             endpoint = (
                 "/uapi/domestic-stock/v1"
                 "/quotations/inquire-price"
@@ -2117,7 +2111,7 @@ def create_app() -> FastAPI:
                 "FID_INPUT_ISCD": symbol,
             }
         else:
-            headers["tr_id"] = "HHDFS00000300"
+            tr_id = "HHDFS00000300"
             endpoint = (
                 "/uapi/overseas-price/v1"
                 "/quotations/price"
@@ -2134,9 +2128,11 @@ def create_app() -> FastAPI:
             }
 
         async with aiohttp.ClientSession() as session:
+            # Refreshes if the shared token has expired (24h TTL)
+            await auth.ensure_authenticated(session)
             async with session.get(
                 f"{base_url}{endpoint}",
-                headers=headers,
+                headers=auth.get_headers(tr_id),
                 params=params,
             ) as resp:
                 data = await resp.json()
@@ -2172,12 +2168,12 @@ def create_app() -> FastAPI:
             )
 
         # Validate symbol via KIS API
-        if dashboard_state.kis_config and dashboard_state.kis_auth_token:
+        if dashboard_state.kis_config and dashboard_state.kis_auth:
             validation = await _validate_symbol_kis(
                 symbol=body.symbol.upper(),
                 market_code=body.market.lower(),
                 kis_config=dashboard_state.kis_config,
-                auth_token=dashboard_state.kis_auth_token,
+                auth=dashboard_state.kis_auth,
             )
             if not validation["valid"]:
                 raise HTTPException(

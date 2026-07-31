@@ -135,10 +135,8 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         real_broker = getattr(
             self.broker, "_real_broker", self.broker,
         )
-        if hasattr(real_broker, "_auth") and real_broker._auth._access_token:
-            self.dashboard.kis_auth_token = (
-                real_broker._auth._access_token
-            )
+        if hasattr(real_broker, "_auth"):
+            self.dashboard.kis_auth = real_broker._auth
 
         # Initialize notifier
         self._initialize_notifier()
