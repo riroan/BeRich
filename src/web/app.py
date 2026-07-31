@@ -21,6 +21,7 @@ from slowapi.middleware import SlowAPIMiddleware
 import secure
 import logging
 import json
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -2704,11 +2705,26 @@ def create_app() -> FastAPI:
         enabled: bool = True
 
     class StrategyConfigUpdate(BaseModel):
+        name: str | None = None
         class_path: str | None = None
         market: str | None = None
         symbols: list | None = None
         params: dict | None = None
         enabled: bool | None = None
+
+    def _validate_strategy_name(name: str) -> str:
+        """Strategy names become DOM ids and inline JS string literals on the
+        settings page, so anything outside this set can break that markup."""
+        name = name.strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", name):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Strategy name must be 1-100 characters of letters, "
+                    "digits, underscore or hyphen"
+                ),
+            )
+        return name
 
     @app.get("/api/strategies")
     async def get_strategies():
@@ -2741,6 +2757,8 @@ def create_app() -> FastAPI:
         """Create a new strategy configuration"""
         from src.strategy import available_strategies
 
+        new_name = _validate_strategy_name(body.name)
+
         # Validate class_path against allowlist
         allowed = available_strategies()
         if body.class_path not in allowed:
@@ -2771,7 +2789,7 @@ def create_app() -> FastAPI:
         try:
             result = (
                 await storage.create_strategy_config(
-                    name=body.name,
+                    name=new_name,
                     class_path=body.class_path,
                     market=body.market,
                     symbols=body.symbols,
@@ -2813,6 +2831,10 @@ def create_app() -> FastAPI:
         name: str, body: StrategyConfigUpdate,
     ):
         """Update a strategy configuration"""
+        renamed_to = None
+        if body.name is not None:
+            renamed_to = _validate_strategy_name(body.name)
+
         # Validate class_path if provided
         if body.class_path is not None:
             from src.strategy import available_strategies
@@ -2843,8 +2865,17 @@ def create_app() -> FastAPI:
             kwargs = {
                 k: v
                 for k, v in body.model_dump().items()
-                if v is not None
+                if v is not None and k != "name"
             }
+            # the row is looked up by its current name, so a rename has to
+            # travel under a different key than the path parameter
+            if renamed_to is not None and renamed_to != name:
+                if await storage.get_strategy_config(renamed_to):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Strategy '{renamed_to}' already exists",
+                    )
+                kwargs["new_name"] = renamed_to
             result = (
                 await storage.update_strategy_config(
                     name, **kwargs,

@@ -1086,6 +1086,8 @@ class Storage:
             if not record:
                 return None
 
+            if "new_name" in kwargs:
+                record.name = kwargs["new_name"]
             if "class_path" in kwargs:
                 record.class_path = kwargs["class_path"]
             if "market" in kwargs:

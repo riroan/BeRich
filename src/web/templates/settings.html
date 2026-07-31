@@ -157,6 +157,17 @@
         .strategy-content:not(.editing) .settings-form-grid select { display: none; }
         .strategy-content:not(.editing) .btn-save { display: none; }
         .strategy-content.editing .btn-edit { display: none; }
+        /* the name swaps between the heading and an input with the edit mode */
+        .strategy-content:not(.editing) .strategy-name-input { display: none; }
+        .strategy-content.editing .strategy-meta-title h2 { display: none; }
+        .strategy-name-input {
+            width: 100%; max-width: 340px;
+            font-size: 20px; font-weight: 700; color: var(--white);
+            padding: 4px 8px; margin-top: 2px;
+            background: var(--bg); border: 1px solid var(--border);
+            border-radius: 8px; font-family: inherit;
+        }
+        .strategy-name-input:focus { border-color: var(--blue); outline: none; }
         .settings-delete-btn {
             background: rgba(239,68,68,0.15);
             color: var(--red);
@@ -591,6 +602,9 @@
                     <div class="strategy-meta-title">
                         <span class="strategy-meta-label">Strategy</span>
                         <h2>{{ cfg.name }}</h2>
+                        <input type="text" class="strategy-name-input" value="{{ cfg.name }}"
+                            maxlength="100" pattern="[A-Za-z0-9_-]+" spellcheck="false"
+                            aria-label="{{ cfg.name }} name">
                     </div>
                     <label class="toggle-switch" title="Enabled/Disabled" aria-label="{{ cfg.name }} enabled">
                         <input type="checkbox" {{ 'checked' if cfg.enabled else '' }}
@@ -857,6 +871,14 @@
             event.preventDefault();
             const form = event.target;
             const statusEl = document.getElementById('status-' + strategyName);
+            const content = document.getElementById('strategy-' + strategyName);
+            const newName = content.querySelector('.strategy-name-input').value.trim();
+
+            if (!/^[A-Za-z0-9_-]{1,100}$/.test(newName)) {
+                statusEl.textContent = 'Name: letters, digits, _ or - only';
+                statusEl.className = 'save-status error';
+                return;
+            }
 
             const params = {
                 rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
@@ -888,7 +910,7 @@
                 const resp = await fetch('/api/strategies/' + encodeURIComponent(strategyName), {
                     method: 'PUT',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({params}),
+                    body: JSON.stringify({params, name: newName}),
                 });
                 const data = await resp.json();
 
@@ -898,9 +920,15 @@
                     return;
                 }
 
+                if (newName !== strategyName) {
+                    // tabs, panel ids and handlers are all keyed by the old name
+                    location.reload();
+                    return;
+                }
+
                 statusEl.textContent = data.bot_reloaded ? 'Saved & applied' : 'Saved (bot not running)';
                 statusEl.className = 'save-status success';
-                document.getElementById('strategy-' + strategyName).classList.remove('editing');
+                content.classList.remove('editing');
 
                 form.querySelectorAll('.read-val').forEach(el => {
                     const input = el.nextElementSibling;
