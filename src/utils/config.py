@@ -45,7 +45,7 @@ class Config:
                 value = value.get(k)
             else:
                 return default
-            if value is None:
+            if value is None or value == "":
                 return default
 
         return value
@@ -54,13 +54,27 @@ class Config:
     def settings(self) -> dict:
         return self._settings
 
+    def get_broker_name(self) -> str:
+        """Get selected broker implementation."""
+        broker = os.getenv("BROKER", "kis").strip().lower()
+        if broker not in {"kis", "yfinance"}:
+            raise ValueError("BROKER must be one of: kis, yfinance")
+        return broker
+
+    def get_trading_mode(self) -> str:
+        """Get trading mode: paper or live."""
+        mode = os.getenv("TRADING_MODE", "paper").strip().lower()
+        if mode not in {"paper", "live"}:
+            raise ValueError("TRADING_MODE must be one of: paper, live")
+        return mode
+
     def get_kis_config(self) -> dict:
         """Get KIS broker configuration"""
         return {
             "app_key": os.getenv("KIS_APP_KEY", ""),
             "app_secret": os.getenv("KIS_APP_SECRET", ""),
             "account_no": os.getenv("KIS_ACCOUNT_NO", ""),
-            "paper_trading": os.getenv("KIS_PAPER_TRADING", "true").lower() == "true",
+            "paper_trading": self.get_trading_mode() == "paper",
             "hts_id": os.getenv("KIS_HTS_ID", ""),
         }
 

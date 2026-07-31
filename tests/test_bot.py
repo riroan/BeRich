@@ -30,6 +30,8 @@ class TestTradingBot:
             "account_no": "test_account",
             "paper_trading": True,
         })
+        config.get_broker_name = MagicMock(return_value="kis")
+        config.get_trading_mode = MagicMock(return_value="paper")
         config.get_discord_config = MagicMock(return_value={
             "enabled": False,
             "webhook_url": None,
@@ -68,7 +70,7 @@ class TestTradingBot:
         bot.config = mock_config
 
         with patch("src.bot.core.Storage") as MockStorage, \
-             patch("src.bot.core.KISBroker") as MockBroker, \
+             patch("src.bot.core.create_broker") as mock_create_broker, \
              patch("src.bot.core.StrategyEngine") as MockEngine, \
              patch("src.bot.core.OrderManager") as MockOrderManager, \
              patch("src.bot.core.TradingScheduler") as MockScheduler, \
@@ -86,7 +88,7 @@ class TestTradingBot:
                 "cash": Decimal("500000"),
                 "profit_loss": Decimal("10000"),
             })
-            MockBroker.return_value = mock_broker
+            mock_create_broker.return_value = mock_broker
 
             mock_engine = MagicMock()
             MockEngine.return_value = mock_engine

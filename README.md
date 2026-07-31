@@ -59,13 +59,16 @@ US 전용 스케줄러는 KST 기준으로 KIS가 지원하는 미국 주식 세
 `.env` 파일 생성:
 
 ```env
-# KIS API
+# Broker selection: kis or yfinance
+BROKER=yfinance
+
+# Trading mode: paper or live. yfinance supports paper only.
+TRADING_MODE=paper
+
+# KIS API (BROKER=kis일 때 필요)
 KIS_APP_KEY=your_app_key
 KIS_APP_SECRET=your_app_secret
 KIS_ACCOUNT_NO=your_account_number
-
-# 모드: true=페이퍼트레이딩, false=실거래
-KIS_PAPER_TRADING=true
 
 # MySQL
 MYSQL_ROOT_PASSWORD=your_root_password
@@ -196,13 +199,42 @@ DB가 source of truth인 데이터:
 - RSI 기간, 손절 %, 쿨다운 일수
 - 매수/매도 레벨 및 비율
 
+### yfinance paper mode (KIS 없이 실행)
+
+KIS API 키 없이 미국/한국 종목을 paper trading으로 테스트하려면 `.env`에서:
+
+```env
+BROKER=yfinance
+TRADING_MODE=paper
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=change_me
+```
+
+이 모드는 yfinance에서 시세/일봉 데이터를 가져오고, 주문은 로컬 paper 계좌에서 즉시 체결 처리합니다. 실제 주문은 발생하지 않습니다. Paper cash/positions/orders/fills 상태는 기본적으로 `data/yfinance_paper_state.json`에 저장되어 재시작 후에도 유지됩니다.
+
+실행:
+
+```bash
+uv run python scripts/run_bot.py --web --web-port 9095
+```
+
+주의:
+
+- yfinance 데이터는 지연/누락될 수 있어 실거래 판단용으로 쓰면 안 됩니다.
+- 한국 종목은 yfinance suffix가 필요할 수 있습니다. 예: `005930.KS`, `091990.KQ`.
+- suffix 없는 6자리 KRX 코드는 기본적으로 `.KS`로 조회합니다.
+- yfinance broker는 live trading을 지원하지 않습니다.
+
 ### 페이퍼 트레이딩
 
-`.env`에서 `KIS_PAPER_TRADING=true`로 설정하면:
-- 실제 시세 조회 (KIS API)
-- 주문은 가상 체결 (실제 돈 사용 안 함)
+`.env`에서 `BROKER=yfinance`, `TRADING_MODE=paper`로 설정하면:
+- yfinance 시세/일봉 데이터 사용
+- 주문은 로컬 paper 계좌에서 가상 체결 (실제 돈 사용 안 함)
+- paper 상태는 `data/yfinance_paper_state.json`에 유지
 - 워밍업 없이 즉시 시작
 - 대시보드에 `PAPER` 배지 표시
+
+KIS 기반 paper trading을 쓰려면 `BROKER=kis`, `TRADING_MODE=paper`와 유효한 KIS API 키가 필요합니다.
 
 ## 테스트
 
