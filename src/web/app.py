@@ -1875,6 +1875,7 @@ def create_app() -> FastAPI:
         symbol: str
         market: str
         strategy_name: str
+        max_weight: float = 20.0
 
     async def _get_web_storage():
         """Get a storage instance for web requests (own event loop)"""
@@ -1993,14 +1994,19 @@ def create_app() -> FastAPI:
 
         # Build flat symbol list from strategy_configs
         symbols = []
-        strategy_names: list[str] = []
+        strategies: list[dict[str, str]] = []
         storage = await _get_web_storage()
         if storage:
             try:
                 configs = (
                     await storage.get_all_strategy_configs()
                 )
-                strategy_names = [cfg["name"] for cfg in configs]
+                # market comes with the name so a row can only offer the
+                # strategies its symbol can actually move to
+                strategies = [
+                    {"name": cfg["name"], "market": cfg["market"]}
+                    for cfg in configs
+                ]
                 for cfg in configs:
                     for s in cfg.get("symbols", []):
                         sym = (
@@ -2042,7 +2048,7 @@ def create_app() -> FastAPI:
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
             "markets": ["krx", "nasdaq", "nyse", "amex"],
-            "strategy_names": strategy_names,
+            "strategies": strategies,
             "pnl_usd": float(dashboard_state.pnl_usd),
         }
         return templates.TemplateResponse(
@@ -2161,6 +2167,12 @@ def create_app() -> FastAPI:
     @app.post("/api/symbols")
     async def add_symbol(body: WatchedSymbolCreate):
         """Add a symbol to a strategy config's symbols list"""
+        if body.max_weight < 1 or body.max_weight > 100:
+            raise HTTPException(
+                status_code=400,
+                detail="Weight must be between 1 and 100",
+            )
+
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
@@ -2203,7 +2215,9 @@ def create_app() -> FastAPI:
             if symbol_upper in existing:
                 return {"symbol": symbol_upper, "duplicate": True}
 
-            symbols_list.append({"symbol": symbol_upper, "max_weight": 20.0})
+            symbols_list.append({
+                "symbol": symbol_upper, "max_weight": body.max_weight,
+            })
             await storage.update_strategy_config(
                 body.strategy_name, symbols=symbols_list,
             )
@@ -2290,6 +2304,99 @@ def create_app() -> FastAPI:
                 if (s["symbol"] if isinstance(s, dict) else s) == symbol_upper
             )
             return {"symbol": symbol_upper, "enabled": toggled.get("enabled", True)}
+        finally:
+            await storage.close()
+
+    class SymbolStrategyUpdate(BaseModel):
+        strategy_name: str
+
+    @app.post("/api/symbols/{config_id}/strategy")
+    async def move_symbol_strategy(
+        config_id: int, body: SymbolStrategyUpdate, symbol: str,
+    ):
+        """Move a symbol to another strategy, keeping weight and enabled"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        try:
+            source = await storage.get_strategy_config_by_id(config_id)
+            if not source:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+
+            target = await storage.get_strategy_config(body.strategy_name)
+            if not target:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Strategy '{body.strategy_name}' not found",
+                )
+
+            symbol_upper = symbol.upper()
+            if target["id"] == source["id"]:
+                return {
+                    "symbol": symbol_upper, "strategy_name": source["name"],
+                }
+
+            # market is a property of the strategy config, so moving across
+            # markets would point the symbol at an exchange it doesn't trade on
+            if target["market"] != source["market"]:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"'{target['name']}' trades "
+                        f"{target['market'].upper()}, not "
+                        f"{source['market'].upper()}"
+                    ),
+                )
+
+            entry = next(
+                (
+                    s for s in source["symbols"]
+                    if (s["symbol"] if isinstance(s, dict) else s)
+                    == symbol_upper
+                ),
+                None,
+            )
+            if entry is None:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+
+            target_symbols = target["symbols"]
+            if any(
+                (s["symbol"] if isinstance(s, dict) else s) == symbol_upper
+                for s in target_symbols
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"{symbol_upper} is already in '{target['name']}'"
+                    ),
+                )
+
+            if not isinstance(entry, dict):
+                entry = {"symbol": symbol_upper, "max_weight": 20.0}
+
+            # ponytail: two writes, not one transaction. Add to the target
+            # first so a failure between them leaves a visible duplicate
+            # rather than silently dropping the symbol. Wrap in a storage
+            # transaction if moves ever get frequent enough to collide.
+            await storage.update_strategy_config(
+                target["name"], symbols=[*target_symbols, entry],
+            )
+            await storage.update_strategy_config(
+                source["name"],
+                symbols=[
+                    s for s in source["symbols"]
+                    if (s["symbol"] if isinstance(s, dict) else s)
+                    != symbol_upper
+                ],
+            )
+            return {"symbol": symbol_upper, "strategy_name": target["name"]}
         finally:
             await storage.close()
 

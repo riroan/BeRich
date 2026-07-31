@@ -8,11 +8,11 @@ DOM updates) always hit the first row of the group instead of the clicked one.
 from src.web.app import templates
 
 
-def _render_symbols(symbols):
+def _render_symbols(symbols, strategies=None):
     return templates.env.get_template("symbols.html").render(
         symbols=symbols,
         markets=["nasdaq"],
-        strategy_names=["rsi"],
+        strategies=strategies or [{"name": "rsi", "market": "nasdaq"}],
         active_page="symbols",
     )
 
@@ -45,3 +45,25 @@ def test_row_lookups_disambiguate_by_symbol():
     # otherwise it resolves to the first row in a multi-symbol group.
     assert '.sym-row[data-id="${id}"]`' not in html
     assert html.count('[data-id="${id}"][data-symbol="${symbol}"]') == 3
+
+
+def test_row_strategy_select_offers_only_same_market_strategies():
+    # A symbol can only move to a strategy trading its own market, since
+    # market is a property of the strategy config, not the symbol.
+    html = _render_symbols(
+        [{"id": 1, "symbol": "AAPL", "market": "nasdaq",
+          "strategy_name": "rsi", "enabled": True, "max_weight": 20.0}],
+        strategies=[
+            {"name": "rsi", "market": "nasdaq"},
+            {"name": "momentum", "market": "nasdaq"},
+            {"name": "krx_rsi", "market": "krx"},
+        ],
+    )
+
+    # Scope to the row's select — the add form deliberately lists every
+    # strategy, since there you pick the market too.
+    row_select = html.split('class="sym-strategy"')[1].split("</select>")[0]
+
+    assert '<option value="rsi" selected>rsi</option>' in row_select
+    assert "momentum" in row_select
+    assert "krx_rsi" not in row_select

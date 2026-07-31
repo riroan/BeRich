@@ -26,10 +26,14 @@
                 <div class="form-field">
                     <label for="strategy-select">Strategy</label>
                     <select id="strategy-select">
-                        {% for name in strategy_names %}
-                        <option value="{{ name }}">{{ name }}</option>
+                        {% for s in strategies %}
+                        <option value="{{ s.name }}">{{ s.name }}</option>
                         {% endfor %}
                     </select>
+                </div>
+                <div class="form-field">
+                    <label for="weight-input">Max Weight (%)</label>
+                    <input type="number" id="weight-input" value="20" min="1" max="100" step="0.1" inputmode="decimal">
                 </div>
                 <button id="add-symbol-btn" onclick="addSymbol()" class="btn">Add Symbol</button>
             </div>
@@ -57,6 +61,11 @@
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
+                    <select class="sym-strategy" aria-label="{{ s.symbol }} strategy" onchange="moveSymbol({{ s.id }}, '{{ s.symbol }}', this)">
+                        {% for opt in strategies if opt.market == s.market %}
+                        <option value="{{ opt.name }}" {{ 'selected' if opt.name == s.strategy_name else '' }}>{{ opt.name }}</option>
+                        {% endfor %}
+                    </select>
                     <button type="button" class="step-btn" tabindex="-1" onclick="stepWeight({{ s.id }}, '{{ s.symbol }}', -1)" aria-label="Decrease {{ s.symbol }} weight">&minus;</button>
                     <input type="number" value="{{ s.max_weight }}" min="0" max="100" step="0.1" inputmode="decimal" aria-label="{{ s.symbol }} max weight" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
@@ -94,9 +103,16 @@
             const symbol = input.value.trim().toUpperCase();
             const market = document.getElementById('market-select').value;
             const strategyName = document.getElementById('strategy-select').value;
+            const weightInput = document.getElementById('weight-input');
+            const maxWeight = parseFloat(weightInput.value);
             if (!symbol) {
                 setSymbolStatus('Ticker is required.', 'error');
                 input.focus();
+                return;
+            }
+            if (!(maxWeight >= 1 && maxWeight <= 100)) {
+                setSymbolStatus('Weight must be between 1 and 100.', 'error');
+                weightInput.focus();
                 return;
             }
 
@@ -108,7 +124,7 @@
                 const resp = await fetch('/api/symbols', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({symbol, market, strategy_name: strategyName}),
+                    body: JSON.stringify({symbol, market, strategy_name: strategyName, max_weight: maxWeight}),
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
@@ -165,6 +181,29 @@
                 if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
                 else setSymbolStatus(`${symbol} weight updated.`, 'success');
             } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+        }
+
+        async function moveSymbol(id, symbol, el) {
+            const strategyName = el.value;
+            el.disabled = true;
+            try {
+                const resp = await fetch(`/api/symbols/${id}/strategy?symbol=${encodeURIComponent(symbol)}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({strategy_name: strategyName}),
+                });
+                const data = await resp.json();
+                if (!resp.ok) {
+                    setSymbolStatus(data.detail || `Failed to move ${symbol}.`, 'error');
+                    el.disabled = false;
+                    return;
+                }
+                // the row belongs under a different group heading now
+                location.reload();
+            } catch (e) {
+                setSymbolStatus('Error: ' + e.message, 'error');
+                el.disabled = false;
+            }
         }
 
         async function removeSymbol(id, symbol) {
