@@ -49,7 +49,7 @@ class StrategyEngine:
                     await asyncio.sleep(1)
                     bars = await self.broker.get_historical_bars(
                         symbol=symbol,
-                        market=strategy.market,
+                        market=strategy.market_for(symbol),
                         days=strategy.required_history,
                     )
                     historical_bars[symbol] = bars
@@ -83,7 +83,7 @@ class StrategyEngine:
         bar: Bar = event.data
 
         for strategy in self._strategies:
-            if bar.symbol in strategy.symbols and bar.market == strategy.market:
+            if bar.market == strategy.market_for(bar.symbol):
                 try:
                     signal = await strategy.on_bar(bar)
                     if signal:
@@ -101,7 +101,7 @@ class StrategyEngine:
         quote: Quote = event.data
 
         for strategy in self._strategies:
-            if quote.symbol in strategy.symbols and quote.market == strategy.market:
+            if quote.market == strategy.market_for(quote.symbol):
                 try:
                     signal = await strategy.on_quote(quote)
                     if signal:
@@ -190,7 +190,7 @@ class StrategyEngine:
         # Collect all unique markets from strategies
         markets: set[Market] = set()
         for strategy in self._strategies:
-            markets.add(strategy.market)
+            markets.update(strategy.markets)
 
         # Fetch positions for each market
         all_positions: dict[str, Position] = {}

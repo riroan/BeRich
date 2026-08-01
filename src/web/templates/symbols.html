@@ -62,7 +62,7 @@
                 </label>
                 <div class="sym-controls">
                     <select class="sym-strategy" aria-label="{{ s.symbol }} strategy" onchange="moveSymbol({{ s.id }}, '{{ s.symbol }}', this)">
-                        {% for opt in strategies if opt.market == s.market %}
+                        {% for opt in strategies %}
                         <option value="{{ opt.name }}" {{ 'selected' if opt.name == s.strategy_name else '' }}>{{ opt.name }}</option>
                         {% endfor %}
                     </select>

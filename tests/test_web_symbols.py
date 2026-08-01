@@ -47,9 +47,9 @@ def test_row_lookups_disambiguate_by_symbol():
     assert html.count('[data-id="${id}"][data-symbol="${symbol}"]') == 3
 
 
-def test_row_strategy_select_offers_only_same_market_strategies():
-    # A symbol can only move to a strategy trading its own market, since
-    # market is a property of the strategy config, not the symbol.
+def test_row_strategy_select_offers_every_strategy():
+    # Market belongs to the symbol now, so a strategy can hold several
+    # markets and every strategy is a valid move target.
     html = _render_symbols(
         [{"id": 1, "symbol": "AAPL", "market": "nasdaq",
           "strategy_name": "rsi", "enabled": True, "max_weight": 20.0}],
@@ -60,10 +60,8 @@ def test_row_strategy_select_offers_only_same_market_strategies():
         ],
     )
 
-    # Scope to the row's select — the add form deliberately lists every
-    # strategy, since there you pick the market too.
     row_select = html.split('class="sym-strategy"')[1].split("</select>")[0]
 
     assert '<option value="rsi" selected>rsi</option>' in row_select
     assert "momentum" in row_select
-    assert "krx_rsi" not in row_select
+    assert "krx_rsi" in row_select

@@ -26,12 +26,34 @@ def extract_symbols(cfg_symbols: list) -> list[str]:
     return result
 
 
+def extract_symbol_markets(cfg: dict) -> dict[str, Market]:
+    """Map each enabled symbol to its market.
+
+    Market lives on the symbol entry so one strategy can hold several
+    markets. Entries written before that (plain strings, or dicts without
+    `market`) fall back to the config's market.
+    """
+    default = Market.from_string(cfg["market"]) if cfg.get("market") else None
+    markets: dict[str, Market] = {}
+    for s in cfg["symbols"]:
+        if isinstance(s, dict):
+            if not s.get("enabled", True):
+                continue
+            symbol = s["symbol"]
+            raw = s.get("market")
+            markets[symbol] = Market.from_string(raw) if raw else default
+        else:
+            markets[s] = default
+    return markets
+
+
 def build_strategy(cfg: dict) -> Any:
     """Instantiate a strategy from a strategy_configs row."""
     module_path, class_name = cfg["class_path"].rsplit(".", 1)
     strategy_class = getattr(importlib.import_module(module_path), class_name)
     return strategy_class(
         symbols=extract_symbols(cfg["symbols"]),
-        market=Market.from_string(cfg["market"]),
+        symbol_markets=extract_symbol_markets(cfg),
         params=cfg["params"],
+        config_name=cfg["name"],
     )

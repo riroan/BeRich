@@ -20,7 +20,11 @@ from src.utils.scheduler import TradingScheduler, Session, get_current_session
 from src.utils.notifier import DiscordNotifier
 from src.web.app import get_dashboard_state
 
-from src.bot._utils import build_strategy, extract_symbols
+from src.bot._utils import (
+    build_strategy,
+    extract_symbols,
+    extract_symbol_markets,
+)
 from src.bot.warmup import WarmupManager
 from src.bot.tick_handler import TickHandlerMixin
 from src.bot.dashboard_sync import DashboardSyncMixin
@@ -275,7 +279,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Build comparison key for incremental reload
         old_strategies = {
-            s.name_with_market: s
+            s.config_name or s.name: s
             for s in self.strategy_engine.get_strategies()
         }
 
@@ -306,7 +310,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                         bars = (
                             await self.broker.get_historical_bars(
                                 symbol=symbol,
-                                market=strategy.market,
+                                market=strategy.market_for(symbol),
                                 days=strategy.required_history,
                             )
                         )
@@ -331,7 +335,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Update dashboard
         self.dashboard.strategy_names = new_names
         self.dashboard.strategy_instances = new_list
-        self.restore_strategy_stage_state_from_positions()
+        self.restore_strategy_state_from_positions()
 
         logger.info(
             f"Strategies reloaded: {len(new_list)} active"
@@ -344,7 +348,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         return (
             sorted(strategy.symbols) == sorted(extract_symbols(cfg["symbols"]))
             and strategy.params == cfg["params"]
-            and strategy.market == Market.from_string(cfg["market"])
+            and strategy.symbol_markets == extract_symbol_markets(cfg)
         )
 
     async def _reconcile_open_orders(self) -> None:
@@ -430,7 +434,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                 try:
                     await asyncio.sleep(1)  # rate limit
                     bars = await self.broker.get_historical_bars(
-                        symbol=symbol, market=strategy.market, days=5,
+                        symbol=symbol, market=strategy.market_for(symbol), days=5,
                     )
                     if not bars:
                         continue
@@ -501,7 +505,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Load historical data
         await self.load_current_positions()
-        self.restore_strategy_stage_state_from_positions()
+        self.restore_strategy_state_from_positions()
         await self.load_chart_history()
         await self.load_equity_history()
         await self.load_fills()

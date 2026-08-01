@@ -328,13 +328,19 @@ class TestDashboardSyncMixin:
         assert states["AAPL"]["buy_stage"] == 1
         assert states["AAPL"]["stage_cooldown_days"] == 1
 
-    def test_restore_strategy_stage_state_from_positions(self, bot_with_dashboard):
-        """DB-backed current positions restore only strategy stage counters."""
+    def test_restore_strategy_state_from_positions(self, bot_with_dashboard):
+        """DB-backed current positions rehydrate the whole strategy.
+
+        Stage counters AND the broker mirrors. This test used to assert the
+        mirrors were left alone, which is what let a hot reload leave a
+        strategy able to buy but unable to sell.
+        """
         bot = bot_with_dashboard
 
         db_position = MagicMock()
         db_position.market = "NASDAQ"
         db_position.quantity = 1
+        db_position.avg_price = Decimal("95")
         db_position.buy_stage = 2
         db_position.sell_stage = 1
         db_position.last_buy_date = "2026-06-20T09:30:00"
@@ -342,7 +348,7 @@ class TestDashboardSyncMixin:
         bot.dashboard.positions = {"AAPL": db_position}
 
         mock_strategy = MagicMock()
-        mock_strategy.market = Market.NASDAQ
+        mock_strategy.market_for.return_value = Market.NASDAQ
         mock_strategy.symbols = ["AAPL"]
         mock_strategy._positions = {"AAPL": 2}
         mock_strategy._entry_prices = {"AAPL": Decimal("120")}
@@ -355,7 +361,7 @@ class TestDashboardSyncMixin:
         mock_engine.get_strategies.return_value = [mock_strategy]
         bot.strategy_engine = mock_engine
 
-        bot.restore_strategy_stage_state_from_positions()
+        bot.restore_strategy_state_from_positions()
 
         assert mock_strategy._buy_stages["AAPL"] == 2
         assert mock_strategy._sell_stages["AAPL"] == 1
@@ -367,8 +373,10 @@ class TestDashboardSyncMixin:
             mock_strategy._last_sell_time["AAPL"].isoformat()
             == "2026-06-21T10:45:00"
         )
-        assert mock_strategy._positions["AAPL"] == 2
-        assert mock_strategy._entry_prices["AAPL"] == Decimal("120")
+        # The DB is the mirror of broker truth, so it wins over whatever
+        # a freshly built instance happened to hold.
+        assert mock_strategy._positions["AAPL"] == 1
+        assert mock_strategy._entry_prices["AAPL"] == Decimal("95")
 
     @pytest.mark.asyncio
     async def test_update_dashboard_status(self, bot_with_dashboard):

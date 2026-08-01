@@ -12,12 +12,25 @@ class BaseStrategy(ABC):
     def __init__(
         self,
         symbols: list[str],
-        market: Market,
+        market: Market | None = None,
         params: dict[str, Any] = None,
+        symbol_markets: dict[str, Market] | None = None,
+        config_name: str | None = None,
     ):
         self.symbols = symbols
-        self.market = market
         self.params = params or {}
+        self.config_name = config_name
+        # Market belongs to the symbol, not the strategy: one strategy can
+        # hold NASDAQ and KRX names at once. `market=` stays as a shorthand
+        # that applies one market to every symbol.
+        if symbol_markets:
+            self.symbol_markets = dict(symbol_markets)
+        elif market is not None:
+            self.symbol_markets = {s: market for s in symbols}
+        else:
+            raise ValueError(
+                "BaseStrategy needs symbol_markets or a market",
+            )
 
         # Internal state
         self._bars: dict[str, pd.DataFrame] = {}
@@ -35,10 +48,24 @@ class BaseStrategy(ABC):
         """Minimum number of bars required"""
         return 100
 
+    def market_for(self, symbol: str) -> Market | None:
+        """The market this symbol trades on."""
+        return self.symbol_markets.get(symbol)
+
+    @property
+    def markets(self) -> set[Market]:
+        """Every market this strategy touches."""
+        return set(self.symbol_markets.values())
+
     @property
     def name_with_market(self) -> str:
-        """Unique name including market (matches config name)"""
-        return f"{self.market.value.upper()}_{self.name}"
+        """Identity used to match a running instance to its DB config.
+
+        The config name is the unique key; it used to be reconstructed from
+        market + name, which broke the moment a strategy could be renamed or
+        hold more than one market.
+        """
+        return self.config_name or self.name
 
     def initialize(self, historical_bars: dict[str, list[Bar]]) -> None:
         """Initialize strategy with historical data"""

@@ -2024,10 +2024,13 @@ def create_app() -> FastAPI:
                             if isinstance(s, dict)
                             else True
                         )
+                        sym_market = (
+                            s.get("market") if isinstance(s, dict) else None
+                        ) or cfg["market"]
                         symbols.append({
                             "id": cfg["id"],
                             "symbol": sym,
-                            "market": cfg["market"],
+                            "market": sym_market,
                             "strategy_name": cfg["name"],
                             "enabled": cfg["enabled"] and sym_enabled,
                             "max_weight": mw,
@@ -2084,9 +2087,12 @@ def create_app() -> FastAPI:
                         s["symbol"]
                         if isinstance(s, dict) else s
                     )
+                    sym_market = (
+                        s.get("market") if isinstance(s, dict) else None
+                    ) or cfg["market"]
                     symbols.append({
                         "symbol": sym,
-                        "market": cfg["market"],
+                        "market": sym_market,
                         "strategy_name": cfg["name"],
                         "enabled": cfg["enabled"],
                     })
@@ -2217,7 +2223,9 @@ def create_app() -> FastAPI:
                 return {"symbol": symbol_upper, "duplicate": True}
 
             symbols_list.append({
-                "symbol": symbol_upper, "max_weight": body.max_weight,
+                "symbol": symbol_upper,
+                "market": body.market.lower(),
+                "max_weight": body.max_weight,
             })
             await storage.update_strategy_config(
                 body.strategy_name, symbols=symbols_list,
@@ -2342,18 +2350,6 @@ def create_app() -> FastAPI:
                     "symbol": symbol_upper, "strategy_name": source["name"],
                 }
 
-            # market is a property of the strategy config, so moving across
-            # markets would point the symbol at an exchange it doesn't trade on
-            if target["market"] != source["market"]:
-                raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"'{target['name']}' trades "
-                        f"{target['market'].upper()}, not "
-                        f"{source['market'].upper()}"
-                    ),
-                )
-
             entry = next(
                 (
                     s for s in source["symbols"]
@@ -2381,6 +2377,11 @@ def create_app() -> FastAPI:
 
             if not isinstance(entry, dict):
                 entry = {"symbol": symbol_upper, "max_weight": 20.0}
+            # The symbol carries its market with it. Legacy entries that
+            # inherited it from the source config get it pinned here, so a
+            # move into a strategy with a different default cannot silently
+            # retarget the symbol at another exchange.
+            entry.setdefault("market", source["market"])
 
             # ponytail: two writes, not one transaction. Add to the target
             # first so a failure between them leaves a visible duplicate
@@ -2598,6 +2599,18 @@ def create_app() -> FastAPI:
                 )
             finally:
                 await storage.close()
+
+        # A strategy can hold several markets, so show the ones its symbols
+        # actually trade rather than the config's default.
+        for cfg in strategy_configs:
+            markets = []
+            for s in cfg.get("symbols", []):
+                mkt = (
+                    s.get("market") if isinstance(s, dict) else None
+                ) or cfg["market"]
+                if mkt and mkt not in markets:
+                    markets.append(mkt)
+            cfg["markets"] = markets
 
         # Get available strategy classes
         from src.strategy import available_strategies

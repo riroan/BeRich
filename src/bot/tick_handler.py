@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 import logging
 
-from src.bot._utils import extract_symbols
+from src.bot._utils import extract_symbols, extract_symbol_markets
 from src.core.events import Event, EventType
 from src.core.types import Bar
 from src.utils.scheduler import daytime_tag
@@ -55,11 +55,15 @@ class TickHandlerMixin:
                 await self.storage.get_all_strategy_configs()
             )
             symbols_by_strategy = defaultdict(set)
+            markets_by_strategy = defaultdict(dict)
             for cfg in configs:
                 if not cfg["enabled"]:
                     continue
                 symbols_by_strategy[cfg["name"]].update(
                     extract_symbols(cfg["symbols"])
+                )
+                markets_by_strategy[cfg["name"]].update(
+                    extract_symbol_markets(cfg)
                 )
 
             for strategy in self.strategy_engine.get_strategies():
@@ -71,13 +75,20 @@ class TickHandlerMixin:
                     added = enabled - current
                     removed = current - enabled
                     strategy.symbols = list(enabled)
+                    # A newly enabled symbol brings its own market with it —
+                    # without this the bar fetch below has no market to use.
+                    strategy.symbol_markets = {
+                        sym: mkt
+                        for sym, mkt in markets_by_strategy[name].items()
+                        if sym in enabled
+                    }
 
                     for symbol in added:
                         try:
                             await asyncio.sleep(0.5)
                             bars = await self.broker.get_historical_bars(
                                 symbol=symbol,
-                                market=strategy.market,
+                                market=strategy.market_for(symbol),
                                 days=strategy.required_history,
                             )
                             if bars and hasattr(strategy, "initialize"):
@@ -109,7 +120,7 @@ class TickHandlerMixin:
             # Rate limit: wait between API calls
             await asyncio.sleep(1)
 
-            price = await self.broker.get_current_price(symbol, strategy.market)
+            price = await self.broker.get_current_price(symbol, strategy.market_for(symbol))
 
             if not price or price <= 0:
                 logger.warning(f"[{symbol}] Invalid price: {price}")
@@ -120,7 +131,7 @@ class TickHandlerMixin:
 
             bar = Bar(
                 symbol=symbol,
-                market=strategy.market,
+                market=strategy.market_for(symbol),
                 open=price,
                 high=price,
                 low=price,
@@ -147,7 +158,7 @@ class TickHandlerMixin:
 
             await self.storage.save_price_rsi(
                 symbol=symbol,
-                market=strategy.market,
+                market=strategy.market_for(symbol),
                 price=price,
                 rsi=rsi,
             )
@@ -155,7 +166,7 @@ class TickHandlerMixin:
             if rsi is not None:
                 self.dashboard.update_rsi(
                     symbol, rsi, price=float(price),
-                    market=strategy.market.value.upper(),
+                    market=strategy.market_for(symbol).value.upper(),
                 )
                 self.dashboard.add_rsi_point(symbol, datetime.now(), rsi)
                 self.dashboard.add_price_point(

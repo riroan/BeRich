@@ -54,7 +54,7 @@ class MomentumStrategy(BaseStrategy):
             return Signal(
                 signal_type=SignalType.ENTRY_LONG,
                 symbol=symbol,
-                market=self.market,
+                market=self.market_for(symbol),
                 strength=strength,
                 target_price=Decimal(str(current_price * 1.05)),
                 stop_loss=Decimal(str(current_price * 0.97)),
@@ -69,7 +69,7 @@ class MomentumStrategy(BaseStrategy):
             return Signal(
                 signal_type=SignalType.EXIT_LONG,
                 symbol=symbol,
-                market=self.market,
+                market=self.market_for(symbol),
                 strength=0.8,
                 metadata={"rsi": float(current_rsi), "reason": "dead_cross_or_overbought"},
             )

@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING
 from datetime import datetime
+from decimal import Decimal
 import logging
 
 from src.bot._utils import extract_symbols
@@ -30,7 +31,7 @@ class DataLoaderMixin:
                         if (rsi := strategy.get_current_rsi(symbol)) is not None:
                             df = strategy.get_dataframe(symbol)
                             price = float(df["close"].iloc[-1]) if len(df) > 0 else None
-                            market = strategy.market.value.upper()
+                            market = strategy.market_for(symbol).value.upper()
 
                             self.dashboard.update_rsi(
                                 symbol, rsi, price=price, market=market
@@ -115,12 +116,13 @@ class DataLoaderMixin:
         except Exception as e:
             logger.warning(f"Failed to load current positions: {e}")
 
-    def restore_strategy_stage_state_from_positions(self: "TradingBot") -> None:
-        """Restore persisted strategy stages from DB-backed dashboard positions.
+    def restore_strategy_state_from_positions(self: "TradingBot") -> None:
+        """Rehydrate a strategy instance from DB-backed dashboard positions.
 
-        Broker position sync restores quantity and average price, but stage
-        counters are strategy state. If those counters reset on restart, the
-        same staged sell/buy level can fire again.
+        Restores everything a freshly built instance is missing: the broker
+        mirrors (quantity, cost basis) and the stage counters. Hot reload
+        replaces instances without touching the broker, so this is the only
+        thing standing between a param edit and a strategy that cannot exit.
         """
         if not self.strategy_engine:
             return
@@ -136,13 +138,30 @@ class DataLoaderMixin:
             ):
                 continue
 
-            strategy_market = strategy.market.value.upper()
             for symbol in strategy.symbols:
                 position = positions.get(symbol)
                 if not position or position.quantity <= 0:
                     continue
-                if position.market.upper() != strategy_market:
+                # Market is per symbol now, so compare against the symbol's
+                # own market rather than one market for the whole strategy.
+                symbol_market = strategy.market_for(symbol)
+                if (
+                    symbol_market is None
+                    or position.market.upper() != symbol_market.value.upper()
+                ):
                     continue
+
+                # Quantity and cost basis are mirrors of broker truth, and a
+                # rebuilt instance starts with them empty. Every exit path is
+                # gated on `current_position > 0` while the buy path is not,
+                # so skipping these leaves the strategy buying with no way
+                # out — and the first buy fill then overwrites the real cost
+                # basis with that fill price.
+                strategy._positions[symbol] = int(position.quantity)
+                if hasattr(strategy, "_entry_prices"):
+                    strategy._entry_prices[symbol] = Decimal(
+                        str(position.avg_price),
+                    )
 
                 strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
                 strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)

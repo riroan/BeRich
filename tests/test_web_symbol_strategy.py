@@ -68,11 +68,16 @@ def test_move_symbol_to_another_strategy_keeps_weight_and_enabled(client):
     # The entry moves whole, so weight and the per-symbol enabled flag survive.
     assert after["momentum"]["symbols"] == [
         {"symbol": "MSFT", "max_weight": 10.0},
-        {"symbol": "AAPL", "max_weight": 35.0, "enabled": False},
+        {
+            "symbol": "AAPL", "max_weight": 35.0, "enabled": False,
+            "market": "nasdaq",
+        },
     ]
 
 
-def test_move_symbol_across_markets_is_rejected(client):
+def test_move_into_a_strategy_of_another_market_keeps_the_symbol_market(client):
+    # A strategy holds several markets now, so this move is allowed. What
+    # must not happen is AAPL silently becoming a KRX symbol.
     strategies = {
         s["name"]: s for s in client.get("/api/strategies").json()["strategies"]
     }
@@ -82,17 +87,32 @@ def test_move_symbol_across_markets_is_rejected(client):
         json={"strategy_name": "krx_rsi"},
     )
 
-    assert resp.status_code == 400
-    assert "KRX" in resp.json()["detail"]
+    assert resp.status_code == 200
 
-    # Rejected move must leave the symbol exactly where it was.
     after = {
         s["name"]: s for s in client.get("/api/strategies").json()["strategies"]
     }
-    assert after["rsi"]["symbols"] == [
-        {"symbol": "AAPL", "max_weight": 35.0, "enabled": False},
-    ]
-    assert after["krx_rsi"]["symbols"] == []
+    assert after["rsi"]["symbols"] == []
+    moved = after["krx_rsi"]["symbols"][0]
+    assert moved["symbol"] == "AAPL"
+    assert moved["market"] == "nasdaq"
+
+
+def test_symbols_api_reports_the_symbol_market_not_the_config_market(client):
+    strategies = {
+        s["name"]: s for s in client.get("/api/strategies").json()["strategies"]
+    }
+    client.post(
+        f"/api/symbols/{strategies['rsi']['id']}/strategy?symbol=AAPL",
+        json={"strategy_name": "krx_rsi"},
+    )
+
+    rows = {
+        r["symbol"]: r for r in client.get("/api/symbols").json()["symbols"]
+    }
+
+    assert rows["AAPL"]["strategy_name"] == "krx_rsi"
+    assert rows["AAPL"]["market"] == "nasdaq"
 
 
 def test_move_symbol_already_in_target_is_rejected(client):
@@ -131,7 +151,9 @@ def test_add_symbol_uses_supplied_weight(client):
     after = {
         s["name"]: s for s in client.get("/api/strategies").json()["strategies"]
     }
-    assert {"symbol": "TSLA", "max_weight": 7.5} in after["momentum"]["symbols"]
+    assert {
+        "symbol": "TSLA", "market": "nasdaq", "max_weight": 7.5,
+    } in after["momentum"]["symbols"]
 
 
 def test_add_symbol_defaults_weight_when_omitted(client):
@@ -145,7 +167,9 @@ def test_add_symbol_defaults_weight_when_omitted(client):
     after = {
         s["name"]: s for s in client.get("/api/strategies").json()["strategies"]
     }
-    assert {"symbol": "TSLA", "max_weight": 20.0} in after["momentum"]["symbols"]
+    assert {
+        "symbol": "TSLA", "market": "nasdaq", "max_weight": 20.0,
+    } in after["momentum"]["symbols"]
 
 
 def test_add_symbol_rejects_out_of_range_weight(client):

@@ -141,14 +141,17 @@ class Fill:
 def trade_action(side: str, reason: str | None) -> str:
     """Map an order side + signal reason to a dashboard trade-log action.
 
-    Single source for the buy / sell / partial_sell / stop_loss labels used
-    by both the live submit path and the DB-reload path, so they agree.
+    Single source for the buy / sell / partial_sell / stop_loss /
+    take_profit labels used by both the live submit path and the DB-reload
+    path, so they agree.
     """
     if side == "buy":
         return "buy"
     r = reason or ""
     if r == "stop_loss":
         return "stop_loss"
+    if r == "take_profit":
+        return "take_profit"
     if "staged_sell" in r:
         return "partial_sell"
     return "sell"

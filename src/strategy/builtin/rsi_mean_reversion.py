@@ -246,7 +246,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 return Signal(
                     signal_type=SignalType.EXIT_LONG,
                     symbol=symbol,
-                    market=self.market,
+                    market=self.market_for(symbol),
                     strength=1.0,  # 전량 매도
                     metadata={
                         "rsi": float(current_rsi),
@@ -301,7 +301,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 return Signal(
                     signal_type=SignalType.EXIT_LONG,
                     symbol=symbol,
-                    market=self.market,
+                    market=self.market_for(symbol),
                     strength=portion,  # Portion to sell
                     metadata={
                         "rsi": float(current_rsi),
@@ -352,7 +352,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             return Signal(
                 signal_type=SignalType.ENTRY_LONG,
                 symbol=symbol,
-                market=self.market,
+                market=self.market_for(symbol),
                 strength=portion,
                 target_price=current_price * Decimal("1.10"),
                 stop_loss=current_price * Decimal(str(1 + stop_loss_pct / 100)),
