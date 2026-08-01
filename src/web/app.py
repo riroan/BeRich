@@ -92,6 +92,8 @@ class PositionInfo(BaseModel):
     # Strategy-specific info
     buy_stage: int = 0
     sell_stage: int = 0
+    tp_stage: int = 0
+    sl_stage: int = 0
     max_buy_stages: int = 3
     max_sell_stages: int = 3
     stage_cooldown_days: int = 0
@@ -182,6 +184,7 @@ class BacktestRequest(BaseModel):
     rsi_period: int = Field(14, ge=5, le=30)
     rsi_method: str = Field("wilder", pattern="^(wilder|cutler)$")
     stop_loss: float = Field(-10.0, ge=-100.0, le=-1.0)
+    take_profit: float | None = Field(None, ge=1.0, le=1000.0)
     cooldown_days: int = Field(1, ge=1, le=30)
     reset_requires_recovery: bool = False
     recovery_rsi: float = Field(50.0, ge=0.0, le=100.0)
@@ -386,6 +389,8 @@ class DashboardState:
         rsi: float | None = None,
         buy_stage: int = 0,
         sell_stage: int = 0,
+        tp_stage: int = 0,
+        sl_stage: int = 0,
         max_buy_stages: int = 3,
         max_sell_stages: int = 3,
         stage_cooldown_days: int = 0,
@@ -408,6 +413,8 @@ class DashboardState:
             rsi=rsi,
             buy_stage=buy_stage,
             sell_stage=sell_stage,
+            tp_stage=tp_stage,
+            sl_stage=sl_stage,
             max_buy_stages=max_buy_stages,
             max_sell_stages=max_sell_stages,
             stage_cooldown_days=stage_cooldown_days,
@@ -494,6 +501,8 @@ class DashboardState:
             ),
             buy_stage=buy_stage,
             sell_stage=sell_stage,
+            tp_stage=int(record.get("tp_stage", 0)),
+            sl_stage=int(record.get("sl_stage", 0)),
             max_buy_stages=int(record.get("max_buy_stages", 3)),
             max_sell_stages=int(record.get("max_sell_stages", 3)),
             stage_cooldown_days=stage_cooldown_days,
@@ -1689,6 +1698,7 @@ def create_app() -> FastAPI:
                     "rsi_period": body.rsi_period,
                     "rsi_method": body.rsi_method,
                     "stop_loss": body.stop_loss,
+                    "take_profit": body.take_profit,
                     "cooldown_days": body.cooldown_days,
                     "reset_requires_recovery": body.reset_requires_recovery,
                     "recovery_rsi": body.recovery_rsi,

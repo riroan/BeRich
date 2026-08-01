@@ -78,6 +78,45 @@ def resolve_buy_stage(
     return stage_idx, next_threshold
 
 
+def resolve_take_profit_stage(
+    pnl_pct: float,
+    current_stage: int,
+    levels: list,
+) -> tuple[int | None, float | None]:
+    """Profit ladder on PnL% instead of RSI: fires on pnl >= threshold.
+
+    Same ascending shape as the RSI sell ladder, so it reuses it. Repetition
+    is off on purpose: PnL does not oscillate the way RSI does, so a price
+    parked above a threshold would otherwise drain the position one cooldown
+    at a time. Stages advance only by reaching a deeper level.
+    """
+    return resolve_sell_stage(pnl_pct, current_stage, levels, False)
+
+
+def resolve_stop_loss_stage(
+    pnl_pct: float,
+    current_stage: int,
+    levels: list,
+) -> tuple[int | None, float | None]:
+    """Loss ladder on PnL%: fires on pnl <= threshold, descending.
+
+    Same shape as the buy ladder (thresholds decrease as it deepens), no
+    repetition, for the same reason as resolve_take_profit_stage.
+    """
+    return resolve_buy_stage(pnl_pct, current_stage, levels, False)
+
+
+def as_levels(scalar, portion: float = 1.0) -> list | None:
+    """Normalise a plain `stop_loss: -10` / `take_profit: 20` into a ladder.
+
+    Keeps single-threshold configs working unchanged: one stage that exits
+    the whole position.
+    """
+    if scalar is None:
+        return None
+    return [[float(scalar), portion]]
+
+
 def resolve_sell_stage(
     current_rsi: float,
     current_stage: int,

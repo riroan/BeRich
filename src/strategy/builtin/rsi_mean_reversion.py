@@ -19,8 +19,11 @@ from src.core.types import Signal, SignalType
 from src.strategy.base import BaseStrategy
 from src.strategy.rsi_rules import (
     calculate_rsi,
+    as_levels,
     resolve_buy_stage,
     resolve_sell_stage,
+    resolve_stop_loss_stage,
+    resolve_take_profit_stage,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +44,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
         self._last_buy_time: dict[str, datetime] = {}
         # Track last staged sell time for sell-stage repetition cooldown
         self._last_sell_time: dict[str, datetime] = {}
+        # PnL-ladder stages (take profit / stop loss), independent of RSI
+        self._tp_stages: dict[str, int] = {}
+        self._sl_stages: dict[str, int] = {}
+        # When a symbol last went flat. Deliberately survives
+        # _reset_position — it is the one fact about a closed position that
+        # still matters, and it gates re-entry.
+        self._last_exit_time: dict[str, datetime] = {}
         # CONFIRMED regular-session daily bars (immutable base for RSI)
         self._daily_bars: dict[str, pd.DataFrame] = {}
         # Live/forming price — updated every tick in ALL sessions; layered
@@ -188,8 +198,25 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
         # Parameters
         rsi_period = self.params.get("rsi_period", 14)
-        stop_loss_pct = self.params.get("stop_loss", -10)
+        # PnL ladders. `stop_loss_levels` / `take_profit_levels` stage the
+        # exit; the plain `stop_loss` / `take_profit` scalars still work and
+        # mean a single stage that exits everything.
+        # An explicitly empty ladder means "no exit at this side". Only a
+        # missing key falls back to the scalar, so clearing the levels in the
+        # UI can never silently re-arm the -10 default.
+        if "stop_loss_levels" in self.params:
+            stop_loss_levels = self.params["stop_loss_levels"]
+        else:
+            stop_loss_levels = as_levels(self.params.get("stop_loss", -10))
+        if "take_profit_levels" in self.params:
+            take_profit_levels = self.params["take_profit_levels"]
+        else:
+            take_profit_levels = as_levels(self.params.get("take_profit"))
         cooldown_days = self.params.get("cooldown_days", 1)
+        # A full exit wipes the symbol's state, so the next tick sees a
+        # fresh symbol and stage 1 fires on RSI alone — right after a
+        # stop-loss, when RSI is guaranteed to be low. 0 keeps that.
+        reentry_cooldown_days = self.params.get("reentry_cooldown_days", 0)
 
         # Averaging down levels: [(RSI threshold, portion)]
         avg_down_levels = self.params.get("avg_down_levels", [
@@ -233,28 +260,57 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 avg_price = current_price
             pnl_pct = float((current_price - avg_price) / avg_price * 100)
 
-            if pnl_pct <= stop_loss_pct:
-                # Calculate actual PnL
-                pnl = (current_price - avg_price) * current_position
+            # Loss ladder first: a position can only be on one side of the
+            # entry, so the two ladders are mutually exclusive, but checking
+            # losses first keeps the ordering explicit.
+            for levels, stages, reason, resolve in (
+                (
+                    stop_loss_levels, self._sl_stages, "stop_loss",
+                    resolve_stop_loss_stage,
+                ),
+                (
+                    take_profit_levels, self._tp_stages, "take_profit",
+                    resolve_take_profit_stage,
+                ),
+            ):
+                if not levels:
+                    continue
+                stage_idx, _ = resolve(
+                    pnl_pct, stages.get(symbol, 0), levels,
+                )
+                if stage_idx is None:
+                    continue
+
+                threshold, portion = levels[stage_idx]
+                sell_qty = int(current_position * Decimal(str(portion)))
+                # Order manager floors this to 1 share; mirror it so the
+                # logged PnL matches what actually gets sold.
+                if sell_qty <= 0 and current_position > 0:
+                    sell_qty = 1
+                pnl = (current_price - avg_price) * sell_qty
                 logger.info(
-                    f"[{symbol}] *** STOP LOSS TRIGGERED *** | "
-                    f"PnL: {pnl_pct:.1f}% <= {stop_loss_pct}% | "
+                    f"[{symbol}] *** {reason.upper()} TRIGGERED *** | "
+                    f"PnL: {pnl_pct:.1f}% vs {threshold}% | "
+                    f"Stage {stage_idx + 1}/{len(levels)} | "
+                    f"Portion: {portion * 100:.0f}% | "
                     f"Avg: {avg_price:,} → Current: {current_price:,}"
                 )
-                # State reset moved to on_fill: a stop-loss that doesn't
-                # fill (e.g. extended hours) must NOT drop the position.
+                # State advance stays in on_fill: an exit that doesn't fill
+                # (e.g. extended hours) must NOT move the ladder.
                 return Signal(
                     signal_type=SignalType.EXIT_LONG,
                     symbol=symbol,
                     market=self.market_for(symbol),
-                    strength=1.0,  # 전량 매도
+                    strength=portion,
                     metadata={
                         "rsi": float(current_rsi),
-                        "reason": "stop_loss",
+                        "reason": reason,
                         "pnl": pnl,
                         "pnl_pct": pnl_pct,
                         "avg_price": float(avg_price),
-                        "sell_portion": 1.0,
+                        "sell_portion": portion,
+                        "stage": stage_idx + 1,
+                        "total_stages": len(levels),
                     },
                 )
 
@@ -316,6 +372,20 @@ class RSIMeanReversionStrategy(BaseStrategy):
                     },
                 )
 
+        if (
+            reentry_cooldown_days
+            and current_position <= 0
+            and (last_exit := self._last_exit_time.get(symbol)) is not None
+            and datetime.now() - last_exit
+            < timedelta(days=reentry_cooldown_days)
+        ):
+            logger.info(
+                f"[{symbol}] RE-ENTRY BLOCKED | exited "
+                f"{(datetime.now() - last_exit).days}d ago < "
+                f"{reentry_cooldown_days}d"
+            )
+            return None
+
         # Buy signals: progress to the next stage immediately when its
         # threshold is hit. Cooldown repeats the current stage, except after
         # the final stage where it restarts the ladder at stage 1.
@@ -355,7 +425,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 market=self.market_for(symbol),
                 strength=portion,
                 target_price=current_price * Decimal("1.10"),
-                stop_loss=current_price * Decimal(str(1 + stop_loss_pct / 100)),
+                # First rung of the loss ladder — the level where an exit
+                # first fires, which is what a protective stop means here.
+                stop_loss=(
+                    current_price
+                    * Decimal(str(1 + stop_loss_levels[0][0] / 100))
+                    if stop_loss_levels else None
+                ),
                 metadata={
                     "rsi": float(current_rsi),
                     "reason": f"avg_down_stage_{buy_stage_idx + 1}",
@@ -390,6 +466,8 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # Assume at least 1 buy stage completed
         self._buy_stages[symbol] = 1
         self._sell_stages[symbol] = 0
+        self._tp_stages[symbol] = 0
+        self._sl_stages[symbol] = 0
 
         logger.info(
             f"[{symbol}] Position synced | "
@@ -409,6 +487,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._last_buy_time[symbol]
         if symbol in self._last_sell_time:
             del self._last_sell_time[symbol]
+        if symbol in self._tp_stages:
+            del self._tp_stages[symbol]
+        if symbol in self._sl_stages:
+            del self._sl_stages[symbol]
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI using the method configured in strategy params"""
@@ -462,22 +544,25 @@ class RSIMeanReversionStrategy(BaseStrategy):
             self._last_buy_time[symbol] = datetime.now()
             if old_qty <= 0:
                 self._sell_stages[symbol] = 0
+                self._last_exit_time.pop(symbol, None)
 
         await super().on_fill(fill)  # updates _positions
 
         if fill.side.value == "sell":
-            # Staged-sell counter advances on the fill.
-            if reason != "stop_loss" and target_stage is not None:
-                self._sell_stages[symbol] = target_stage
-                self._last_sell_time[symbol] = datetime.now()
+            # Each ladder advances its own counter on the fill. The PnL
+            # ladders deliberately do NOT touch _last_sell_time: that clock
+            # only gates RSI-stage repetition, which they do not use.
+            if target_stage is not None:
+                if reason == "stop_loss":
+                    self._sl_stages[symbol] = target_stage
+                elif reason == "take_profit":
+                    self._tp_stages[symbol] = target_stage
+                else:
+                    self._sell_stages[symbol] = target_stage
+                    self._last_sell_time[symbol] = datetime.now()
 
-            # Position-closing exits reset all tracking. A stop-loss is a
-            # full exit — reset only once the position is actually flat
-            # (a partial stop-loss fill must not wipe state). Staged sells
-            # keep their counter until the sell cooldown resets it; if a
-            # staged sell fully flattens the position, reset immediately.
-            if reason == "stop_loss":
-                if self.get_position(symbol) <= 0:
-                    self._reset_position(symbol)
-            elif self.get_position(symbol) <= 0:
+            # Reset only once the position is actually flat, so a partial
+            # fill (e.g. extended hours) never wipes ladder state.
+            if self.get_position(symbol) <= 0:
                 self._reset_position(symbol)
+                self._last_exit_time[symbol] = datetime.now()

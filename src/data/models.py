@@ -95,6 +95,10 @@ class CurrentPositionModel(Base):
     avg_price = Column(Numeric(20, 8), nullable=False)
     buy_stage = Column(Integer, nullable=False, default=0)
     sell_stage = Column(Integer, nullable=False, default=0)
+    # PnL ladders. Persisted for the same reason as buy/sell stages: a
+    # restart that forgets them re-fires the same level at the same PnL.
+    tp_stage = Column(Integer, nullable=False, default=0)
+    sl_stage = Column(Integer, nullable=False, default=0)
     max_buy_stages = Column(Integer, nullable=False, default=3)
     max_sell_stages = Column(Integer, nullable=False, default=3)
     stage_cooldown_days = Column(Integer, nullable=False, default=0)

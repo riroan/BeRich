@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 import logging
 
 from src.core.types import Fill, Market, OrderSide
+from src.strategy.rsi_rules import as_levels
 from src.utils.scheduler import is_us_market_holiday
 from src.web.app import broadcast_update
 
@@ -154,10 +155,29 @@ class DashboardSyncMixin:
         strategy_states = {}
         for strategy in self.strategy_engine.get_strategies():
             if hasattr(strategy, "_buy_stages"):
+                # Same key-existence rule as rsi_mean_reversion.py: only a
+                # missing key falls back to the scalar. An explicitly empty
+                # ladder means "no stop loss armed" — falling back on `or`
+                # would misreport the old scalar as still active once the
+                # user clears the ladder in settings. -1000 is unreachable
+                # by any real PnL, so distance_to_stop alerts never fire.
+                if "stop_loss_levels" in strategy.params:
+                    _sl_levels = strategy.params["stop_loss_levels"]
+                else:
+                    _sl_levels = as_levels(
+                        strategy.params.get("stop_loss", -10),
+                    )
+                _sl_pct = _sl_levels[0][0] if _sl_levels else -1000.0
                 for symbol in strategy.symbols:
                     strategy_states[symbol] = {
                         "buy_stage": strategy._buy_stages.get(symbol, 0),
                         "sell_stage": strategy._sell_stages.get(symbol, 0),
+                        "tp_stage": getattr(
+                            strategy, "_tp_stages", {},
+                        ).get(symbol, 0),
+                        "sl_stage": getattr(
+                            strategy, "_sl_stages", {},
+                        ).get(symbol, 0),
                         "max_buy_stages": len(
                             strategy.params.get(
                                 "avg_down_levels", [(30, 0.5), (25, 0.3), (20, 0.2)]
@@ -175,7 +195,7 @@ class DashboardSyncMixin:
                         "last_sell_time": getattr(
                             strategy, "_last_sell_time", {},
                         ).get(symbol),
-                        "stop_loss_pct": strategy.params.get("stop_loss", -10),
+                        "stop_loss_pct": _sl_pct,
                     }
         return strategy_states
 
@@ -223,6 +243,8 @@ class DashboardSyncMixin:
                     "rsi": rsi,
                     "buy_stage": state.get("buy_stage", 0),
                     "sell_stage": state.get("sell_stage", 0),
+                    "tp_stage": state.get("tp_stage", 0),
+                    "sl_stage": state.get("sl_stage", 0),
                     "max_buy_stages": state.get("max_buy_stages", 3),
                     "max_sell_stages": state.get("max_sell_stages", 3),
                     "stage_cooldown_days": state.get("stage_cooldown_days", 0),

@@ -21,8 +21,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.core.types import Market
 from src.strategy.rsi_rules import (
     calculate_rsi,
+    as_levels,
     resolve_buy_stage,
     resolve_sell_stage,
+    resolve_stop_loss_stage,
+    resolve_take_profit_stage,
 )
 from scripts._backtest_seed import BACKTEST_STRATEGIES
 
@@ -67,8 +70,20 @@ def _run_simulation(
     """
     rsi_period = params.get("rsi_period", 14)
     rsi_method = params.get("rsi_method", "wilder")
-    stop_loss_pct = params.get("stop_loss", -10)
+    # Explicit empty ladder = no exit on that side; missing key falls back
+    # to the scalar. Must match the live strategy exactly.
+    if "stop_loss_levels" in params:
+        stop_loss_levels = params["stop_loss_levels"]
+    else:
+        stop_loss_levels = as_levels(params.get("stop_loss", -10))
+    if "take_profit_levels" in params:
+        take_profit_levels = params["take_profit_levels"]
+    else:
+        take_profit_levels = as_levels(params.get("take_profit"))
     cooldown_days = params.get("cooldown_days", 1)
+    # Must mirror rsi_mean_reversion exactly: 0 = re-enter immediately after
+    # a full exit, which is what happens when a symbol's state is wiped.
+    reentry_cooldown_days = params.get("reentry_cooldown_days", 0)
     reset_requires_recovery = params.get("reset_requires_recovery", False)
     recovery_rsi = params.get("recovery_rsi", 50)
     avg_down_levels = params.get("avg_down_levels", [[30, 0.5], [25, 0.3], [20, 0.2]])
@@ -88,8 +103,11 @@ def _run_simulation(
     position_cost = 0.0
     buy_stage = 0
     sell_stage = 0
+    tp_stage = 0
+    sl_stage = 0
     last_buy_date = None
     last_sell_date = None
+    last_exit_date = None
     rsi_recovered = False
 
     for date, row in df.iterrows():
@@ -106,23 +124,50 @@ def _run_simulation(
             avg_price = position_cost / position_shares
             pnl_pct = (price - avg_price) / avg_price * 100
 
-            if pnl_pct <= stop_loss_pct:
-                sell_value = position_shares * price
-                capital += sell_value
-                trade = Trade(
+            pnl_exit = None
+            for levels, stage, reason, resolve, tag in (
+                (stop_loss_levels, sl_stage, "stop_loss",
+                 resolve_stop_loss_stage, "STOP"),
+                (take_profit_levels, tp_stage, "take_profit",
+                 resolve_take_profit_stage, "TAKE"),
+            ):
+                if not levels:
+                    continue
+                stage_idx, _ = resolve(pnl_pct, stage, levels)
+                if stage_idx is not None:
+                    pnl_exit = (levels, stage_idx, reason, tag)
+                    break
+
+            if pnl_exit is not None:
+                levels, stage_idx, reason, tag = pnl_exit
+                portion = levels[stage_idx][1]
+                shares_to_sell = int(position_shares * portion)
+                if shares_to_sell == 0 and position_shares > 0 and portion > 0:
+                    shares_to_sell = 1
+                capital += shares_to_sell * price
+                trades.append(Trade(
                     symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
-                    buy_stage=buy_stage, portion=1.0, shares=position_shares,
-                    sell_date=date, sell_price=price, sell_reason="stop_loss",
+                    buy_stage=buy_stage, portion=portion,
+                    shares=shares_to_sell,
+                    sell_date=date, sell_price=price, sell_reason=reason,
                     pnl_pct=pnl_pct,
-                )
-                trades.append(trade)
+                ))
                 if verbose:
-                    print(f"[STOP] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | PnL:{pnl_pct:+.1f}%")
-                position_shares = 0
-                position_cost = 0.0
-                buy_stage = 0
-                sell_stage = 0
-                last_sell_date = None
+                    print(f"[{tag}{stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | PnL:{pnl_pct:+.1f}%")
+                position_cost -= avg_price * shares_to_sell
+                position_shares -= shares_to_sell
+                if reason == "stop_loss":
+                    sl_stage = stage_idx + 1
+                else:
+                    tp_stage = stage_idx + 1
+                if position_shares == 0:
+                    position_cost = 0.0
+                    buy_stage = 0
+                    sell_stage = 0
+                    tp_stage = 0
+                    sl_stage = 0
+                    last_sell_date = None
+                    last_exit_date = date
                 continue
 
         if position_shares > 0:
@@ -160,8 +205,19 @@ def _run_simulation(
                     if position_shares == 0:
                         buy_stage = 0
                         sell_stage = 0
+                        tp_stage = 0
+                        sl_stage = 0
                         position_cost = 0.0
                         last_sell_date = None
+                        last_exit_date = date
+
+        if (
+            reentry_cooldown_days
+            and position_shares == 0
+            and last_exit_date is not None
+            and (date - last_exit_date).days < reentry_cooldown_days
+        ):
+            continue
 
         buy_repeat_ready = (
             last_buy_date is not None
@@ -189,6 +245,7 @@ def _run_simulation(
                 buy_stage = buy_stage_idx + 1
                 if not had_position:
                     sell_stage = 0
+                    last_exit_date = None
                 last_buy_date = date
                 rsi_recovered = False
                 buy_events.append({
@@ -223,7 +280,7 @@ def _run_simulation(
     def _stage_from_reason(reason: str) -> int:
         if reason and reason.startswith("sell_stage_"):
             return int(reason.split("_")[-1])
-        return 0  # stop_loss / end_of_period — frontend reads `reason` not `stage`
+        return 0  # stop_loss / take_profit / end_of_period — frontend reads `reason`
 
     sell_trades_payload = [
         {

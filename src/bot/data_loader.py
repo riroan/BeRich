@@ -165,6 +165,13 @@ class DataLoaderMixin:
 
                 strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
                 strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)
+                if hasattr(strategy, "_tp_stages"):
+                    strategy._tp_stages[symbol] = max(
+                        int(getattr(position, "tp_stage", 0)), 0,
+                    )
+                    strategy._sl_stages[symbol] = max(
+                        int(getattr(position, "sl_stage", 0)), 0,
+                    )
                 last_buy_date = getattr(position, "last_buy_date", None)
                 if (
                     hasattr(strategy, "_last_buy_time")

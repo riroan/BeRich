@@ -414,6 +414,7 @@
                 letter-spacing: .3px;
             }
             .level-table td:nth-child(2)::before { content: "RSI"; }
+            .level-table.pnl-table td:nth-child(2)::before { content: "PNL"; }
             .level-table .read-val {
                 padding: 0;
                 color: var(--white);
@@ -571,7 +572,7 @@
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="new-market">Market</label>
+                        <label for="new-market">Market for these symbols</label>
                         <select id="new-market">
                             <option value="nasdaq">NASDAQ</option>
                             <option value="nyse">NYSE</option>
@@ -614,8 +615,8 @@
                 </div>
                 <div class="strategy-meta-grid">
                     <div class="strategy-meta-item">
-                        <span>Market</span>
-                        <strong>{{ cfg.market|upper }}</strong>
+                        <span>{{ 'Markets' if cfg.markets|length > 1 else 'Market' }}</span>
+                        <strong title="{{ cfg.markets|map('upper')|join(', ') }}">{{ cfg.markets|map('upper')|join(' · ') or '—' }}</strong>
                     </div>
                     <div class="strategy-meta-item">
                         <span>Symbols</span>
@@ -634,12 +635,6 @@
                             <span class="read-val">{{ params.get('rsi_period', 14) }}</span>
                             <input type="number" id="cfg-{{ cfg_idx }}-rsi-period" name="rsi_period" value="{{ params.get('rsi_period', 14) }}" min="1" max="100" step="1" inputmode="numeric">
                             <span class="hint">Lookback window in days</span>
-                        </div>
-                        <div class="form-group">
-                            <label for="cfg-{{ cfg_idx }}-stop-loss">Stop Loss</label>
-                            <span class="read-val">{{ params.get('stop_loss', -10) }}%</span>
-                            <input type="number" id="cfg-{{ cfg_idx }}-stop-loss" name="stop_loss" value="{{ params.get('stop_loss', -10) }}" min="-100" max="0" step="0.1" inputmode="decimal">
-                            <span class="hint">Exit threshold (%)</span>
                         </div>
                         <div class="form-group">
                             <label for="cfg-{{ cfg_idx }}-cooldown-days">Cooldown Days</label>
@@ -701,6 +696,59 @@
                                     <td>
                                         <span class="read-val">{{ (level[1] * 100)|round(0)|int }}</span>
                                         <input type="number" class="level-input" data-type="sell-portion" value="{{ (level[1] * 100)|round(0)|int }}" min="0" max="100" step="1" inputmode="numeric" aria-label="{{ cfg.name }} sell level {{ loop.index }} portion percent">
+                                        <span class="dim"> %</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- PnL ladders: exit on % from average price, ignoring RSI.
+                     Blank rows are skipped; all blank turns the ladder off. -->
+                <div class="levels-row">
+                    <div class="card">
+                        <div class="section-title">Stop Loss Levels</div>
+                        {% set sl_levels = params.get('stop_loss_levels') or ([[params.get('stop_loss'), 1.0]] if params.get('stop_loss') is not none else []) %}
+                        <table class="level-table pnl-table center-table">
+                            <thead><tr><th>Level</th><th>PnL &le;</th><th>Portion</th></tr></thead>
+                            <tbody id="sl-levels-{{ cfg.name }}">
+                                {% for i in range(3) %}
+                                {% set level = sl_levels[i] if i < sl_levels|length else None %}
+                                <tr>
+                                    <td><span class="level-badge">{{ i + 1 }}</span></td>
+                                    <td>
+                                        <span class="read-val">{{ level[0] ~ '%' if level else '—' }}</span>
+                                        <input type="number" class="level-input" data-type="sl-pct" value="{{ level[0] if level else '' }}" min="-100" max="-1" step="0.1" inputmode="decimal" placeholder="—" aria-label="{{ cfg.name }} stop loss level {{ i + 1 }} percent">
+                                    </td>
+                                    <td>
+                                        <span class="read-val">{{ (level[1] * 100)|round(0)|int if level else '—' }}</span>
+                                        <input type="number" class="level-input" data-type="sl-portion" value="{{ (level[1] * 100)|round(0)|int if level else '' }}" min="1" max="100" step="1" inputmode="numeric" placeholder="—" aria-label="{{ cfg.name }} stop loss level {{ i + 1 }} portion percent">
+                                        <span class="dim"> %</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card">
+                        <div class="section-title">Take Profit Levels</div>
+                        {% set tp_levels = params.get('take_profit_levels') or ([[params.get('take_profit'), 1.0]] if params.get('take_profit') else []) %}
+                        <table class="level-table pnl-table center-table">
+                            <thead><tr><th>Level</th><th>PnL &ge;</th><th>Portion</th></tr></thead>
+                            <tbody id="tp-levels-{{ cfg.name }}">
+                                {% for i in range(3) %}
+                                {% set level = tp_levels[i] if i < tp_levels|length else None %}
+                                <tr>
+                                    <td><span class="level-badge">{{ i + 1 }}</span></td>
+                                    <td>
+                                        <span class="read-val">{{ level[0] ~ '%' if level else '—' }}</span>
+                                        <input type="number" class="level-input" data-type="tp-pct" value="{{ level[0] if level else '' }}" min="1" max="1000" step="0.1" inputmode="decimal" placeholder="—" aria-label="{{ cfg.name }} take profit level {{ i + 1 }} percent">
+                                    </td>
+                                    <td>
+                                        <span class="read-val">{{ (level[1] * 100)|round(0)|int if level else '—' }}</span>
+                                        <input type="number" class="level-input" data-type="tp-portion" value="{{ (level[1] * 100)|round(0)|int if level else '' }}" min="1" max="100" step="1" inputmode="numeric" placeholder="—" aria-label="{{ cfg.name }} take profit level {{ i + 1 }} portion percent">
                                         <span class="dim"> %</span>
                                     </td>
                                 </tr>
@@ -787,8 +835,11 @@
                 return;
             }
 
+            // Market rides on the symbol, so the strategy can later hold
+            // symbols from other markets alongside these.
             const symbols = symbolsStr.split(',').map(s => ({
                 symbol: s.trim().toUpperCase(),
+                market: market,
                 max_weight: 15.0
             }));
 
@@ -883,9 +934,42 @@
             const params = {
                 rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
                 rsi_method: form.querySelector('[name="rsi_method"]').value,
-                stop_loss: parseFloat(form.querySelector('[name="stop_loss"]').value),
                 cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
             };
+
+            // PnL ladders. A row counts only when both cells are filled; an
+            // empty table is sent as [] so the backend reads it as "off"
+            // rather than falling back to the scalar default.
+            function pnlLevels(containerId, pctType, portionType) {
+                const rows = [];
+                document.getElementById(containerId).querySelectorAll('tr').forEach(row => {
+                    const pct = row.querySelector(`[data-type="${pctType}"]`).value.trim();
+                    const portion = row.querySelector(`[data-type="${portionType}"]`).value.trim();
+                    if (pct === '' || portion === '') return;
+                    rows.push([parseFloat(pct), parseInt(portion) / 100]);
+                });
+                return rows;
+            }
+
+            params.stop_loss_levels = pnlLevels(
+                'sl-levels-' + strategyName, 'sl-pct', 'sl-portion');
+            params.take_profit_levels = pnlLevels(
+                'tp-levels-' + strategyName, 'tp-pct', 'tp-portion');
+
+            // Thresholds must deepen as the ladder progresses, or a later
+            // stage can never fire and the portion is stranded.
+            const ordered = (rows, cmp) => rows.every(
+                (r, i) => i === 0 || cmp(r[0], rows[i - 1][0]));
+            if (!ordered(params.stop_loss_levels, (a, b) => a < b)) {
+                statusEl.textContent = 'Stop loss levels must get more negative';
+                statusEl.className = 'save-status error';
+                return;
+            }
+            if (!ordered(params.take_profit_levels, (a, b) => a > b)) {
+                statusEl.textContent = 'Take profit levels must increase';
+                statusEl.className = 'save-status error';
+                return;
+            }
 
             const buyContainer = document.getElementById('buy-levels-' + strategyName);
             params.avg_down_levels = [];
@@ -933,8 +1017,12 @@
                 form.querySelectorAll('.read-val').forEach(el => {
                     const input = el.nextElementSibling;
                     if (input && input.tagName === 'INPUT') {
-                        const suffix = el.textContent.includes('%') ? '%' : '';
-                        el.textContent = input.value + suffix;
+                        if (input.value === '') {
+                            el.textContent = '—';
+                        } else {
+                            const suffix = el.textContent.includes('%') ? '%' : '';
+                            el.textContent = input.value + suffix;
+                        }
                     } else if (input && input.tagName === 'SELECT') {
                         el.textContent = input.options[input.selectedIndex].text;
                     }

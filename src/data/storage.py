@@ -138,7 +138,7 @@ class Storage:
                         "to current_positions",
                     )
                 if "stage_cooldown_days" not in cols:
-                    _add_column_if_missing(
+                    cols = _add_column_if_missing(
                         "current_positions",
                         "stage_cooldown_days",
                         "ALTER TABLE current_positions "
@@ -146,6 +146,16 @@ class Storage:
                         "Migrated: added stage_cooldown_days column "
                         "to current_positions",
                     )
+                for _stage_col in ("tp_stage", "sl_stage"):
+                    if _stage_col not in cols:
+                        cols = _add_column_if_missing(
+                            "current_positions",
+                            _stage_col,
+                            f"ALTER TABLE current_positions "
+                            f"ADD COLUMN {_stage_col} INTEGER NOT NULL DEFAULT 0",
+                            f"Migrated: added {_stage_col} column "
+                            f"to current_positions",
+                        )
 
             if "equity_snapshots" in insp.get_table_names():
                 cols = {c["name"] for c in insp.get_columns("equity_snapshots")}
@@ -590,6 +600,8 @@ class Storage:
                     "avg_price": Decimal(str(position["avg_price"])),
                     "buy_stage": int(position.get("buy_stage", 0)),
                     "sell_stage": int(position.get("sell_stage", 0)),
+                    "tp_stage": int(position.get("tp_stage", 0)),
+                    "sl_stage": int(position.get("sl_stage", 0)),
                     "max_buy_stages": int(position.get("max_buy_stages", 3)),
                     "max_sell_stages": int(position.get("max_sell_stages", 3)),
                     "stage_cooldown_days": int(
@@ -620,6 +632,8 @@ class Storage:
                         item["avg_price"],
                         item["buy_stage"],
                         item["sell_stage"],
+                        item["tp_stage"],
+                        item["sl_stage"],
                         item["max_buy_stages"],
                         item["max_sell_stages"],
                         item["stage_cooldown_days"],
@@ -633,6 +647,8 @@ class Storage:
                     Decimal(str(item.avg_price)),
                     item.buy_stage,
                     item.sell_stage,
+                    item.tp_stage,
+                    item.sl_stage,
                     item.max_buy_stages,
                     item.max_sell_stages,
                     item.stage_cooldown_days,
@@ -661,6 +677,8 @@ class Storage:
                     avg_price=position["avg_price"],
                     buy_stage=position["buy_stage"],
                     sell_stage=position["sell_stage"],
+                    tp_stage=position["tp_stage"],
+                    sl_stage=position["sl_stage"],
                     max_buy_stages=position["max_buy_stages"],
                     max_sell_stages=position["max_sell_stages"],
                     stage_cooldown_days=position["stage_cooldown_days"],
@@ -734,6 +752,8 @@ class Storage:
                         if latest and latest.rsi is not None else None
                     ),
                     "buy_stage": row.buy_stage,
+                    "tp_stage": row.tp_stage,
+                    "sl_stage": row.sl_stage,
                     "sell_stage": row.sell_stage,
                     "max_buy_stages": row.max_buy_stages,
                     "max_sell_stages": row.max_sell_stages,
