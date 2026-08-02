@@ -161,6 +161,7 @@ class StrategyEngine:
                     commission=Decimal("0"),
                     timestamp=datetime.now(),
                     metadata=getattr(order, "metadata", None) or {},
+                    complete=cum_q >= (order.quantity or 0),
                 )
                 await strategy.on_fill(fill)
 

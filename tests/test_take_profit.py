@@ -307,3 +307,73 @@ def test_backtest_cleared_stop_loss_ladder_matches_live():
     )
 
     assert all(t.sell_reason != "stop_loss" for t in result["trades"])
+
+
+# ---------- partial fills must not spend a rung ----------
+
+async def _sell_fill(strategy, *, qty, reason, stage, complete):
+    from src.core.types import Fill, OrderSide
+
+    await strategy.on_fill(Fill(
+        order_id="1", symbol="X", market=Market.NASDAQ, side=OrderSide.SELL,
+        quantity=qty, price=Decimal("60"), commission=Decimal("0"),
+        timestamp=__import__("datetime").datetime.now(),
+        metadata={"reason": reason, "stage": stage}, reason=reason,
+        complete=complete,
+    ))
+
+
+@pytest.mark.asyncio
+async def test_a_partial_stop_loss_fill_leaves_the_stop_armed():
+    """The one-rung case: any scalar stop_loss normalises to a single rung.
+
+    If a partial fill retires it, the shares that did not sell are never
+    stopped out again — not on the next tick, and not after a restart, since
+    the spent rung is persisted.
+    """
+    strategy = _live()
+    strategy.params["stop_loss"] = -10
+    strategy._entry_prices["X"] = Decimal("1000")   # deep loss
+
+    first = await strategy.calculate_signal("X")
+    assert first.metadata["reason"] == "stop_loss"
+
+    # 10 of the 10 requested never filled; only 4 did.
+    await _sell_fill(strategy, qty=4, reason="stop_loss", stage=1,
+                     complete=False)
+
+    assert strategy._sl_stages.get("X", 0) == 0
+    assert strategy.get_position("X") == 6
+
+    again = await strategy.calculate_signal("X")
+    assert again is not None
+    assert again.metadata["reason"] == "stop_loss"
+
+
+@pytest.mark.asyncio
+async def test_a_complete_fill_does_spend_the_rung():
+    strategy = _live()
+    strategy.params.update(STAGED)
+    strategy._entry_prices["X"] = Decimal("1000")
+
+    await _sell_fill(strategy, qty=3, reason="stop_loss", stage=1,
+                     complete=True)
+
+    assert strategy._sl_stages["X"] == 1
+
+
+@pytest.mark.asyncio
+async def test_the_same_guard_covers_the_rsi_sell_ladder():
+    # staged_sell advances through the same branch and takes the same
+    # partial-fill events, so fixing only the PnL ladders would leave a
+    # sibling caller broken.
+    strategy = _live()
+
+    await _sell_fill(strategy, qty=2, reason="staged_sell_1", stage=1,
+                     complete=False)
+    assert strategy._sell_stages.get("X", 0) == 0
+    assert "X" not in strategy._last_sell_time
+
+    await _sell_fill(strategy, qty=2, reason="staged_sell_1", stage=1,
+                     complete=True)
+    assert strategy._sell_stages["X"] == 1

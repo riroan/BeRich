@@ -148,3 +148,42 @@ def test_config_name_is_the_reload_identity():
     # rebuilt from market + class name, which broke on rename and cannot
     # work at all once a strategy spans markets.
     assert _probe().name_with_market == "Mixed"
+
+
+# ---------- the engine decides whether a rung is spent ----------
+
+@pytest.mark.asyncio
+async def test_engine_marks_a_fill_complete_only_when_the_order_is_done():
+    """`complete` is derived from the order, not tracked as new state.
+
+    ORDER_PARTIAL_FILLED and ORDER_FILLED both route to the same handler, so
+    this flag is the only thing separating "money moved" from "rung spent".
+    """
+    from datetime import datetime
+    from decimal import Decimal
+    from unittest.mock import MagicMock
+
+    from src.core.types import OrderSide
+
+    engine = StrategyEngine(event_bus=MagicMock(), broker=MagicMock())
+    strategy = _probe()
+    seen = []
+    strategy.on_fill = lambda fill: seen.append(fill) or _noop()
+    engine.register_strategy(strategy)
+
+    def _order(cum_filled):
+        o = MagicMock()
+        o.order_id, o.symbol, o.market = "o1", "AAPL", Market.NASDAQ
+        o.side, o.quantity = OrderSide.SELL, 10
+        o.filled_quantity, o.filled_avg_price = cum_filled, Decimal("100")
+        o.metadata = {}
+        return o
+
+    await engine._on_fill(MagicMock(data=_order(4)))
+    await engine._on_fill(MagicMock(data=_order(10)))
+
+    assert [(f.quantity, f.complete) for f in seen] == [(4, False), (6, True)]
+
+
+async def _noop():
+    return None

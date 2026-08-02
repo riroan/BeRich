@@ -552,7 +552,12 @@ class RSIMeanReversionStrategy(BaseStrategy):
             # Each ladder advances its own counter on the fill. The PnL
             # ladders deliberately do NOT touch _last_sell_time: that clock
             # only gates RSI-stage repetition, which they do not use.
-            if target_stage is not None:
+            # A rung is spent only when the order that claimed it filled in
+            # full. A partial fill moves the money but leaves the rung armed,
+            # so the next tick re-sizes against what is actually still held.
+            # Without this, one partial fill retires a one-rung ladder — any
+            # scalar stop_loss — and the remainder is never sold.
+            if target_stage is not None and fill.complete:
                 if reason == "stop_loss":
                     self._sl_stages[symbol] = target_stage
                 elif reason == "take_profit":

@@ -136,6 +136,12 @@ class Fill:
     # Originating signal reason (avg_down_stage_N / staged_sell_N /
     # stop_loss), persisted so trade-log labels survive a restart.
     reason: str | None = None
+    # Did the originating order reach the quantity it was submitted for?
+    # Money moves on every fill, but a ladder rung is only spent once the
+    # order that claimed it is done — otherwise one partial fill retires a
+    # rung that never sold its share. Defaults True so fills reconstructed
+    # from the DB or built in tests keep the old behaviour.
+    complete: bool = True
 
 
 def trade_action(side: str, reason: str | None) -> str:
