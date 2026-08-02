@@ -311,7 +311,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                             await self.broker.get_historical_bars(
                                 symbol=symbol,
                                 market=strategy.market_for(symbol),
-                                days=strategy.required_history,
+                                days=strategy.history_window,
                             )
                         )
                         historical_bars[symbol] = bars

@@ -53,6 +53,30 @@ class TestRSIMeanReversionStrategy:
         assert strategy.market_for("AAPL") == Market.NASDAQ
         assert strategy.markets == {Market.NASDAQ}
 
+    def test_history_window_exceeds_signal_gate(self, strategy):
+        """The RSI warm-up must be far wider than the min-bars gate.
+
+        Wilder smoothing is recursive, so a short window leaves the window
+        start baked into today's RSI. The gate stays small so newly-listed
+        symbols still trade; the window is what feeds the indicator.
+        """
+        assert strategy.history_window >= 100
+        assert strategy.required_history == 20
+
+    def test_short_history_symbol_still_signals(self, strategy):
+        """A symbol with fewer bars than history_window is not blocked."""
+        bars = []
+        for i in range(25):  # > required_history, << history_window
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=25 - i)
+            bar.open = bar.high = bar.low = bar.close = 100.0 + (i % 7)
+            bar.volume = 1000
+            bars.append(bar)
+        strategy.initialize({"AAPL": bars})
+
+        assert len(strategy._daily_bars["AAPL"]) == 25
+        assert strategy.get_current_rsi("AAPL") is not None
+
     def test_initialize(self, strategy, sample_bars):
         """Test initialization with historical data"""
         strategy.initialize({"AAPL": sample_bars})
@@ -116,10 +140,10 @@ class TestRSIMeanReversionStrategy:
             timestamp=datetime.now() + timedelta(days=1), timeframe="1d",
         )
         assert strategy.confirm_daily_bar("AAPL", bar) == "appended"
-        # Rolling window: base is capped at required_history, so a slide keeps
+        # Rolling window: base is capped at history_window, so a slide keeps
         # it at the cap rather than growing unbounded.
         assert len(strategy._daily_bars["AAPL"]) == min(
-            base_len + 1, strategy.required_history
+            base_len + 1, strategy.history_window
         )
         assert strategy._daily_bars["AAPL"].iloc[-1]["close"] == 110.0
         assert strategy.last_confirmed_date("AAPL") > last

@@ -65,13 +65,28 @@ class RSIMeanReversionStrategy(BaseStrategy):
 
     @property
     def required_history(self) -> int:
-        # Single knob for the RSI window: bars fetched at init, the rolling
-        # cap kept by confirm_daily_bar, AND the minimum before signals turn
-        # on. init size == rolling cap, so RSI uses the same last-N daily bars
-        # whether just restarted or long-running (restart-invariant). Must
-        # exceed rsi_period (default 14); 20 also lets short-history symbols
-        # (e.g. newly-listed ETFs like SPCX) start tracking.
+        # Minimum bars before signals turn on. Must exceed rsi_period
+        # (default 14); 20 also lets short-history symbols (e.g. newly-listed
+        # ETFs like SPCX) start tracking instead of waiting a warm-up they
+        # have no data for. Deliberately NOT the window size — see
+        # history_window.
         return 20
+
+    @property
+    def history_window(self) -> int:
+        # Bars fetched at init and the rolling cap kept by confirm_daily_bar.
+        # init size == rolling cap, so RSI uses the same last-N daily bars
+        # whether just restarted or long-running (restart-invariant).
+        #
+        # Wilder smoothing is a recursive EMA (alpha = 1/period, adjust=False),
+        # so today's RSI depends on every prior bar with weight decaying by
+        # (1 - 1/period). At the old 20-bar window ~25% of the value was still
+        # the arbitrary window start: measured against full history on AAPL
+        # 2020-2026 that was 4.2 RSI points of error on average (max 17.2),
+        # firing RSI<=35 202 times where the true series fires it 96. 100 bars
+        # drops that to 0.009 average (max 0.077) — converged for any practical
+        # threshold, and it is what one KIS overseas dailyprice call returns.
+        return 100
 
     def initialize(self, historical_bars: dict[str, list]) -> None:
         """Initialize with daily historical data"""
@@ -92,6 +107,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 for b in bars
             ])
             df.set_index("timestamp", inplace=True)
+            # Cap here too: a broker that over-delivers must not leave the
+            # base wider than confirm_daily_bar will keep it, or RSI would
+            # shift on the first slide after a restart.
+            df = df.tail(self.history_window)
             self._daily_bars[symbol] = df
             if len(df):
                 self._last_confirmed_date[symbol] = (
@@ -163,7 +182,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             new_row = pd.DataFrame([row], index=[bar.timestamp])
             self._daily_bars[symbol] = pd.concat(
                 [self._daily_bars[symbol], new_row]
-            ).tail(self.required_history)
+            ).tail(self.history_window)
             self._last_confirmed_date[symbol] = d
             logger.info(
                 f"[{symbol}] RSI base slid → confirmed close {row['close']} "

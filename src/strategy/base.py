@@ -45,8 +45,15 @@ class BaseStrategy(ABC):
 
     @property
     def required_history(self) -> int:
-        """Minimum number of bars required"""
+        """Minimum number of bars required before signals turn on"""
         return 100
+
+    @property
+    def history_window(self) -> int:
+        """Bars to fetch and keep. Defaults to the minimum, but an indicator
+        with a longer memory than its gate can widen it (see
+        RSIMeanReversionStrategy)."""
+        return self.required_history
 
     def market_for(self, symbol: str) -> Market | None:
         """The market this symbol trades on."""

@@ -89,7 +89,7 @@ class TickHandlerMixin:
                             bars = await self.broker.get_historical_bars(
                                 symbol=symbol,
                                 market=strategy.market_for(symbol),
-                                days=strategy.required_history,
+                                days=strategy.history_window,
                             )
                             if bars and hasattr(strategy, "initialize"):
                                 strategy.initialize({symbol: bars})
