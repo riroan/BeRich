@@ -44,8 +44,8 @@
                 <div class="perf-label">Total Return</div>
                 <div class="perf-hero-row">
                     <div class="perf-hero-value {{ return_class }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
-                    <div class="perf-hero-delta {{ pnl_class }}">
-                        {{ "+" if performance.total_pnl >= 0 else "-" }} ${{ "{:,.2f}".format((performance.total_pnl if performance.total_pnl >= 0 else -performance.total_pnl)) }}
+                    <div class="perf-hero-delta {{ return_class }}">
+                        {{ "+" if performance.total_return_usd >= 0 else "-" }} ${{ "{:,.2f}".format((performance.total_return_usd if performance.total_return_usd >= 0 else -performance.total_return_usd)) }}
                     </div>
                 </div>
                 <div class="perf-hero-stats">

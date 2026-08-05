@@ -73,10 +73,19 @@ def test_performance_prefers_adjusted_equity_history():
             "adjusted_total_usd": 1200,
         },
     ]
+    state.cash_flows = [
+        {
+            "timestamp": "2026-06-01T00:00:00",
+            "amount_usd": 1000.0,
+            "flow_type": "initial",
+        },
+    ]
 
     state.calculate_performance()
 
+    # +20% off adjusted_total_usd; total_usd would have said -10%
     assert state.performance.total_return_pct == pytest.approx(20.0)
+    assert state.performance.total_return_usd == pytest.approx(200.0)
     assert state.performance.mdd == pytest.approx(0.0)
 
 
@@ -91,6 +100,11 @@ def test_deposit_flow_does_not_count_as_return():
     ]
     state.cash_flows = [
         {
+            "timestamp": "2026-06-01T00:00:00",
+            "amount_usd": 1000.0,
+            "flow_type": "initial",
+        },
+        {
             "timestamp": "2026-06-02T12:00:00",
             "amount_usd": 1000.0,
             "flow_type": "adjustment",
@@ -99,9 +113,11 @@ def test_deposit_flow_does_not_count_as_return():
 
     state.calculate_performance()
 
-    # 10% gain, flat interval around the deposit, then 10% gain: 21% TWR
-    # (naive first-vs-last math would report +131%)
-    assert state.performance.total_return_pct == pytest.approx(21.0)
+    # $2000 in, worth $2310: +$310 on principal. The deposit raises the
+    # denominator instead of counting as gain (naive first-vs-last math
+    # against the opening $1000 would report +131%).
+    assert state.performance.total_return_usd == pytest.approx(310.0)
+    assert state.performance.total_return_pct == pytest.approx(15.5)
     assert state.performance.mdd == pytest.approx(0.0)
 
 
@@ -113,6 +129,11 @@ def test_withdrawal_flow_does_not_count_as_loss():
     ]
     state.cash_flows = [
         {
+            "timestamp": "2026-06-01T00:00:00",
+            "amount_usd": 1000.0,
+            "flow_type": "initial",
+        },
+        {
             "timestamp": "2026-06-01T12:00:00",
             "amount_usd": -500.0,
             "flow_type": "adjustment",
@@ -121,7 +142,10 @@ def test_withdrawal_flow_does_not_count_as_loss():
 
     state.calculate_performance()
 
+    # $500 left in, worth $500: flat. The withdrawal lowers the denominator
+    # rather than reading as a -50% loss.
     assert state.performance.total_return_pct == pytest.approx(0.0)
+    assert state.performance.total_return_usd == pytest.approx(0.0)
     assert state.performance.mdd == pytest.approx(0.0)
 
 
@@ -211,6 +235,10 @@ def test_performance_page_computes_metrics_from_db_equity(tmp_path):
             for snap, (ts, _) in zip(snaps, rows):
                 snap.timestamp = ts
             await session.commit()
+        await storage.save_cash_flow(
+            Decimal("1000"), flow_type="initial",
+            timestamp=datetime(2026, 7, 1, 9, 0),
+        )
         # $1000 deposited before the 2100 snapshot
         await storage.save_cash_flow(
             Decimal("1000"), flow_type="adjustment",
@@ -237,8 +265,8 @@ def test_performance_page_computes_metrics_from_db_equity(tmp_path):
         web_app.dashboard_state = original_dashboard_state
 
     assert response.status_code == 200
-    # 10% then flat around the deposit — not the naive +110%
-    assert "+10.00%" in response.text
+    # $2000 in, worth $2100 — not the naive +110% off the opening $1000
+    assert "+5.00%" in response.text
 
 
 def test_performance_page_loads_fills_from_db(tmp_path):

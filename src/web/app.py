@@ -134,6 +134,7 @@ class SystemStatus(BaseModel):
 class PerformanceMetrics(BaseModel):
     """Performance analysis metrics"""
     total_return_pct: float = 0.0
+    total_return_usd: float = 0.0
     cagr: float = 0.0
     mdd: float = 0.0
     win_rate: float = 0.0
@@ -875,8 +876,16 @@ class DashboardState:
             current = series[-1]
             final_index = current["twr_index"]
 
-            # Total return (using USD as primary)
-            self.performance.total_return_pct = final_index - 100.0
+            # Total return is measured against principal, not the TWR index.
+            # TWR only strips a deposit out if the deposit's date is known,
+            # and deposits are registered by editing 원금 — which records the
+            # new total, not when the money arrived. Against principal only
+            # the total matters, so this stays correct with undated deposits.
+            principal = sum(f["amount_usd"] for f in self.cash_flows)
+            if principal > 0:
+                gain = _equity_usd_value(current) - principal
+                self.performance.total_return_usd = gain
+                self.performance.total_return_pct = gain / principal * 100.0
 
             # Calculate MDD (Maximum Drawdown) on the TWR index
             peak = 0
