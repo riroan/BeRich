@@ -406,8 +406,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             return None
 
         # Buy signals: progress to the next stage immediately when its
-        # threshold is hit. Cooldown repeats the current stage, except after
-        # the final stage where it restarts the ladder at stage 1.
+        # threshold is hit. Cooldown resets the ladder back to stage 1.
         buy_stage_idx, next_buy_threshold = resolve_buy_stage(
             current_rsi, current_buy_stage, avg_down_levels, buy_repeat_ready,
         )

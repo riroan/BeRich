@@ -51,8 +51,8 @@ def resolve_buy_stage(
     """Decide which buy stage fires, if any.
 
     Progress to the next stage immediately when its threshold is hit.
-    Cooldown (repeat_ready) repeats the current stage, except after the
-    final stage where it restarts the ladder at stage 1.
+    Cooldown (repeat_ready) resets the ladder: whatever stage it reached,
+    the next buy starts over at stage 1.
 
     levels: [(rsi_threshold, portion), ...] — buys fire on RSI <= threshold.
     Returns (stage_idx or None, next actionable threshold or None).
@@ -68,12 +68,10 @@ def resolve_buy_stage(
     ):
         stage_idx = current_stage
     elif current_stage > 0 and repeat_ready:
-        repeat_idx = (
-            0 if current_stage >= len(levels) else current_stage - 1
-        )
-        next_threshold = levels[repeat_idx][0]
+        # Cooldown resets the buy ladder back to stage 1.
+        next_threshold = levels[0][0]
         if current_rsi <= next_threshold:
-            stage_idx = repeat_idx
+            stage_idx = 0
 
     return stage_idx, next_threshold
 

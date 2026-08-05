@@ -104,19 +104,19 @@ class TestResolveBuyStage:
         idx, _ = resolve_buy_stage(29.0, 1, BUY_LEVELS, False)
         assert idx == 1
 
-    def test_stage1_threshold_consumed_mid_ladder(self):
-        # NASA case: stage 2/3 with RSI 32.4 — stage-1's 35 must NOT
-        # re-fire; the actionable threshold is the stage-2 repeat (30).
+    def test_cooldown_resets_mid_ladder_to_stage1(self):
+        # Stage 2/3 with RSI 32.4: the cooldown reset re-arms stage 1, so
+        # its 35 fires again even though the ladder is mid-way.
         idx, thr = resolve_buy_stage(32.4, 2, BUY_LEVELS, True)
+        assert idx == 0
+        assert thr == 35
+
+    def test_reset_requires_reaching_stage1_threshold(self):
+        idx, thr = resolve_buy_stage(36.0, 2, BUY_LEVELS, True)
         assert idx is None
-        assert thr == 30
+        assert thr == 35
 
-    def test_cooldown_repeats_current_stage(self):
-        idx, thr = resolve_buy_stage(29.0, 2, BUY_LEVELS, True)
-        assert idx == 1
-        assert thr == 30
-
-    def test_repeat_requires_cooldown(self):
+    def test_reset_requires_cooldown(self):
         idx, _ = resolve_buy_stage(29.0, 2, BUY_LEVELS, False)
         assert idx is None
 
