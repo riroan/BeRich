@@ -1,57 +1,70 @@
-"""Tests for dashboard equity synchronization helpers."""
+"""Tests for execution-basis (체결기준) USD account value."""
 
-from datetime import datetime
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
-from src.bot.dashboard_sync import calculate_us_settlement_adjustment
-from src.core.types import Fill, Market, OrderSide
+import pytest
+
+from src.broker.kis.client import KISBroker
+
+# Real CTRP6504R response shape, from the 2026-08-05 production account.
+_PROD_RESPONSE = {
+    "rt_cd": "0",
+    "output1": [],
+    "output2": [
+        {
+            "crcy_cd": "USD",
+            "frcr_dncl_amt_2": "903.170000",
+            "frcr_sll_amt_smtl": "1493.840000",
+            "frcr_buy_amt_smtl": "435.990000",
+            "frcr_drwg_psbl_amt_1": "903.170000",
+        }
+    ],
+    "output3": {"evlu_amt_smtl": "5567", "evlu_pfls_amt_smtl": "107"},
+}
 
 
-def _fill(
-    *,
-    side: OrderSide,
-    market: Market = Market.NASDAQ,
-    quantity: int = 1,
-    price: str = "100",
-    commission: str = "0",
-    timestamp: datetime = datetime(2026, 6, 19, 4, 47),
-) -> Fill:
-    return Fill(
-        order_id=f"{side.value}-1",
-        symbol="AAPL",
-        market=market,
-        side=side,
-        quantity=quantity,
-        price=Decimal(price),
-        commission=Decimal(commission),
-        timestamp=timestamp,
+def _broker_returning(payload: dict) -> KISBroker:
+    broker = KISBroker(
+        event_bus=AsyncMock(),
+        app_key="k",
+        app_secret="s",
+        account_no="12345678-01",
+        paper_trading=False,
     )
+    broker._auth.get_headers = MagicMock(return_value={})
+    resp = MagicMock()
+    resp.json = AsyncMock(return_value=payload)
+    ctx = MagicMock()
+    ctx.__aenter__ = AsyncMock(return_value=resp)
+    ctx.__aexit__ = AsyncMock(return_value=False)
+    broker._session = MagicMock()
+    broker._session.get = MagicMock(return_value=ctx)
+    return broker
 
 
-def test_us_settlement_adjustment_applies_pending_cash_movements():
-    fills = [
-        _fill(side=OrderSide.SELL, quantity=2, price="50", commission="1"),
-        _fill(side=OrderSide.BUY, quantity=1, price="40", commission="0.50"),
-        _fill(side=OrderSide.SELL, market=Market.KRX, quantity=1, price="100"),
+@pytest.mark.asyncio
+async def test_total_eval_includes_unsettled_but_cash_does_not():
+    balance = await _broker_returning(_PROD_RESPONSE)._get_overseas_balance()
+
+    # Unsettled = pending sells - pending buys.
+    assert balance["unsettled"] == Decimal("1057.850000")
+    # Cash stays settlement basis — this is what order sizing caps on.
+    assert balance["cash"] == Decimal("903.170000")
+    # Account value is execution basis: cash + stock + unsettled.
+    assert balance["total_eval"] == Decimal("7528.020000")
+
+
+@pytest.mark.asyncio
+async def test_unsettled_is_zero_when_broker_omits_the_fields():
+    # Paper trading (VTRP6504R) can omit or blank these fields; account value
+    # must fall back to plain cash + stock rather than blowing up.
+    payload = dict(_PROD_RESPONSE)
+    payload["output2"] = [
+        {"crcy_cd": "USD", "frcr_dncl_amt_2": "903.17", "frcr_sll_amt_smtl": ""}
     ]
 
-    adjustment = calculate_us_settlement_adjustment(
-        fills=fills,
-        now=datetime(2026, 6, 19, 12, 0),
-        settlement_business_days=1,
-    )
+    balance = await _broker_returning(payload)._get_overseas_balance()
 
-    assert adjustment == Decimal("58.50")
-
-
-def test_us_settlement_adjustment_expires_after_settlement_date():
-    adjustment = calculate_us_settlement_adjustment(
-        fills=[
-            _fill(side=OrderSide.SELL, quantity=2, price="50"),
-            _fill(side=OrderSide.BUY, quantity=1, price="40"),
-        ],
-        now=datetime(2026, 6, 24, 12, 0),
-        settlement_business_days=1,
-    )
-
-    assert adjustment == Decimal("0.00")
+    assert balance["unsettled"] == Decimal("0")
+    assert balance["total_eval"] == Decimal("6470.17")

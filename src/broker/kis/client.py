@@ -278,12 +278,20 @@ class KISBroker:
             logger.info(f"Overseas balance output3: {output3}")
 
             # output2 is a list of currency balances, get USD balance
-            # frcr_dncl_amt_2: 외화예수금액 (USD cash)
+            # frcr_dncl_amt_2: 외화예수금액 (USD cash, 결제기준)
+            # frcr_sll/buy_amt_smtl: 미결제 매도/매수금액 — 예수금은 결제
+            # 기준이라 매도 대금이 T+n 동안 빠져 있다. KIS가 그 미결제분을
+            # 직접 주므로 체결 이력으로 재구성하지 않는다.
             usd_cash = Decimal("0")
+            unsettled = Decimal("0")
             if output2 and isinstance(output2, list):
                 for currency_balance in output2:
                     if currency_balance.get("crcy_cd") == "USD":
                         usd_cash = Decimal(currency_balance.get("frcr_dncl_amt_2", "0") or "0")
+                        unsettled = (
+                            Decimal(currency_balance.get("frcr_sll_amt_smtl", "0") or "0")
+                            - Decimal(currency_balance.get("frcr_buy_amt_smtl", "0") or "0")
+                        )
                         break
 
             # Stock eval + P/L come from the output3 summary, NOT a per-row
@@ -301,11 +309,16 @@ class KISBroker:
 
             logger.info(f"Account balance - USD cash: {usd_cash:,.2f}, stocks: {stock_eval:,.2f}")
 
+            # total_eval is execution basis (체결기준): unsettled sale proceeds
+            # are already yours, so they belong in account value. "cash" stays
+            # settlement basis — that is what is actually spendable today, and
+            # order sizing caps on it.
             return {
-                "total_eval": usd_cash + stock_eval,
+                "total_eval": usd_cash + stock_eval + unsettled,
                 "cash": usd_cash,
                 "stocks_eval": stock_eval,
                 "profit_loss": total_profit_loss,
+                "unsettled": unsettled,
             }
 
     async def _get_overseas_balance_fallback(self) -> dict:

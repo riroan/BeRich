@@ -1,97 +1,19 @@
 """Dashboard synchronization for trading bot"""
 
 import asyncio
-from datetime import date, datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
-from typing import Iterable, TYPE_CHECKING
-from zoneinfo import ZoneInfo
+from typing import TYPE_CHECKING
 import logging
 
-from src.core.types import Fill, Market, OrderSide
+from src.core.types import Market
 from src.strategy.rsi_rules import as_levels
-from src.utils.scheduler import is_us_market_holiday
 from src.web.app import broadcast_update
 
 if TYPE_CHECKING:
     from src.bot.core import TradingBot
 
 logger = logging.getLogger(__name__)
-
-US_MARKETS = {Market.NASDAQ, Market.NYSE, Market.AMEX}
-KST = ZoneInfo("Asia/Seoul")
-ET = ZoneInfo("America/New_York")
-
-
-def _as_datetime(value: datetime | str) -> datetime:
-    if isinstance(value, datetime):
-        return value
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
-
-
-def _us_trade_date(timestamp: datetime | str) -> date:
-    ts = _as_datetime(timestamp)
-    if ts.tzinfo is None:
-        ts = ts.replace(tzinfo=KST)
-    return ts.astimezone(ET).date()
-
-
-def _add_us_trading_days(start: date, days: int) -> date:
-    current = start
-    remaining = max(days, 0)
-    while remaining > 0:
-        current += timedelta(days=1)
-        if not is_us_market_holiday(current):
-            remaining -= 1
-    return current
-
-
-def _is_us_market(market: Market | str) -> bool:
-    if isinstance(market, Market):
-        return market in US_MARKETS
-    try:
-        return Market.from_string(str(market)) in US_MARKETS
-    except ValueError:
-        return False
-
-
-def calculate_us_settlement_adjustment(
-    fills: Iterable[Fill],
-    now: datetime,
-    settlement_business_days: int = 1,
-) -> Decimal:
-    """Cash adjustment for US fills that are executed but not yet settled.
-
-    KIS balance snapshots can temporarily miss sale proceeds or double-count
-    freshly bought positions while settlement catches up. Keep raw balances,
-    but derive an adjusted equity value by applying pending cash movement.
-    """
-    if settlement_business_days <= 0:
-        return Decimal("0.00")
-
-    now_us_date = _us_trade_date(now)
-    adjustment = Decimal("0")
-
-    for fill in fills:
-        if not _is_us_market(fill.market):
-            continue
-
-        settlement_date = _add_us_trading_days(
-            _us_trade_date(fill.timestamp),
-            settlement_business_days,
-        )
-        if now_us_date > settlement_date:
-            continue
-
-        notional = Decimal(str(fill.quantity)) * Decimal(str(fill.price))
-        commission = Decimal(str(fill.commission or 0))
-        side = fill.side.value if isinstance(fill.side, OrderSide) else str(fill.side)
-
-        if side.lower() == OrderSide.SELL.value:
-            adjustment += notional - commission
-        elif side.lower() == OrderSide.BUY.value:
-            adjustment -= notional + commission
-
-    return adjustment.quantize(Decimal("0.01"))
 
 
 class DashboardSyncMixin:
@@ -295,6 +217,7 @@ class DashboardSyncMixin:
             self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
             self.dashboard.pnl_usd = balance.get("profit_loss", Decimal("0"))
+            self._unsettled_usd = balance.get("unsettled", Decimal("0"))
         return balance
 
     async def _update_balances(
@@ -349,9 +272,15 @@ class DashboardSyncMixin:
         self._equity_save_counter = 0
 
         position_value_krw = self.dashboard.balance_krw - self.dashboard.cash_krw
-        position_value_usd = self.dashboard.balance_usd - self.dashboard.cash_usd
-        settlement_adjustment_usd = await self._get_us_settlement_adjustment()
-        adjusted_total_usd = self.dashboard.balance_usd + settlement_adjustment_usd
+        # balance_usd is execution basis, so back the unsettled leg out of the
+        # position figure — otherwise pending sale proceeds show up as holdings.
+        settlement_adjustment_usd = getattr(self, "_unsettled_usd", Decimal("0"))
+        position_value_usd = (
+            self.dashboard.balance_usd
+            - self.dashboard.cash_usd
+            - settlement_adjustment_usd
+        )
+        adjusted_total_usd = self.dashboard.balance_usd
 
         await self.storage.save_equity_snapshot(
             total_krw=self.dashboard.balance_krw,
@@ -381,40 +310,6 @@ class DashboardSyncMixin:
         # Keep only last 1000 points in memory
         if len(self.dashboard.equity_history) > 1000:
             self.dashboard.equity_history = self.dashboard.equity_history[-1000:]
-
-    async def _get_us_settlement_adjustment(self: "TradingBot") -> Decimal:
-        """Calculate pending USD cash movement from recent US fills."""
-        if not self.storage:
-            return Decimal("0")
-
-        raw_days = 1
-        if getattr(self, "config", None):
-            try:
-                raw_days = self.config.get("trading.us_settlement_business_days", 1)
-            except Exception:
-                raw_days = 1
-        try:
-            settlement_days = max(int(raw_days), 0)
-        except (TypeError, ValueError):
-            settlement_days = 1
-
-        now = datetime.now()
-        lookback_days = max(10, settlement_days * 4 + 7)
-
-        try:
-            fills = await self.storage.get_fills(
-                start=now - timedelta(days=lookback_days),
-                end=now,
-            )
-        except Exception as e:
-            logger.warning(f"Failed to calculate settlement adjustment: {e}")
-            return Decimal("0")
-
-        return calculate_us_settlement_adjustment(
-            fills=fills,
-            now=now,
-            settlement_business_days=settlement_days,
-        )
 
     async def _check_low_cash_alert(self: "TradingBot") -> None:
         """Check and send low cash ratio alerts"""
