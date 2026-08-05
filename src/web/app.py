@@ -530,6 +530,17 @@ class DashboardState:
             for position in (self._position_from_record(record) for record in records)
         }
 
+        # `current_positions` is a holding-only table — it has no rsi column,
+        # so records read back from it always carry rsi=None. Without this,
+        # every /api/positions request replaced the tick's in-memory RSI with
+        # nothing and the Positions table showed "-" while the RSI Monitor,
+        # reading the same rsi_values, showed the number.
+        for symbol, position in positions.items():
+            if position.rsi is None and symbol in self.rsi_values:
+                positions[symbol] = position.model_copy(
+                    update={"rsi": self.rsi_values[symbol]},
+                )
+
         if market is None:
             self.positions = positions
         else:
