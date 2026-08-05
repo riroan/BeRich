@@ -16,8 +16,8 @@
             margin-left: auto; background: none; border: none;
             color: var(--blue); font-size: 12px; cursor: pointer; padding: 2px 4px;
         }
-        .principal-form { display: flex; gap: 8px; margin-top: 10px; }
-        .principal-form input { flex: 1; min-width: 0; }
+        .principal-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .principal-form input { flex: 1 1 120px; min-width: 0; }
         .principal-form[hidden] { display: none; }
         .principal-error { color: var(--red); font-size: 12px; margin-top: 6px; }
     </style>
@@ -70,6 +70,8 @@
                 <form class="principal-form" id="principal-form" hidden>
                     <input type="number" id="principal-input" step="0.01" min="0"
                            value="{{ '%.2f'|format(principal_usd) }}" aria-label="원금 (USD)">
+                    <input type="date" id="principal-date" max="{{ today }}"
+                           aria-label="입금일 (비우면 오늘)">
                     <button type="submit" class="btn-save">저장</button>
                 </form>
                 <div class="principal-error" id="principal-error" hidden></div>
@@ -366,11 +368,15 @@
                 errEl.hidden = true;
                 const value = parseFloat(document.getElementById('principal-input').value);
                 if (!(value >= 0)) return;
+                const occurredOn = document.getElementById('principal-date').value;
                 try {
                     const res = await fetch('/api/principal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ principal_usd: value }),
+                        body: JSON.stringify({
+                            principal_usd: value,
+                            occurred_on: occurredOn || null,
+                        }),
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);
                     location.reload();

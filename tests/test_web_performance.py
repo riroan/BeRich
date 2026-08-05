@@ -1,7 +1,7 @@
 """Tests for dashboard performance metric rendering."""
 
 import asyncio
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -205,6 +205,60 @@ def test_principal_api_records_delta_ledger(tmp_path):
     assert current.json()["principal_usd"] == pytest.approx(1500.0)
     assert [f["flow_type"] for f in flows] == ["initial", "adjustment"]
     assert flows[1]["amount_usd"] == pytest.approx(500.0)
+
+
+def test_principal_backfill_dates_the_flow_when_the_money_moved(tmp_path):
+    db_url = f"sqlite+aiosqlite:///{tmp_path / 'backfill.db'}"
+
+    async def init_db():
+        storage = Storage(db_url)
+        await storage.initialize()
+        await storage.close()
+
+    asyncio.run(init_db())
+
+    original_auth_password = web_app.AUTH_PASSWORD
+    original_mock_mode = web_app.MOCK_MODE
+    original_dashboard_state = web_app.dashboard_state
+
+    web_app.AUTH_PASSWORD = "test"
+    web_app.MOCK_MODE = True
+    web_app.dashboard_state = DashboardState()
+    web_app.dashboard_state.db_url = db_url
+
+    try:
+        client = TestClient(web_app.create_app())
+        client.post(
+            "/api/principal",
+            json={"principal_usd": 1000, "occurred_on": "2026-06-01"},
+        )
+        # A deposit that arrived in June but is only being entered now.
+        client.post(
+            "/api/principal",
+            json={"principal_usd": 1500, "occurred_on": "2026-06-04"},
+        )
+        undated = client.post("/api/principal", json={"principal_usd": 1600})
+        future = client.post(
+            "/api/principal",
+            json={"principal_usd": 9999, "occurred_on": "2099-01-01"},
+        )
+        current = client.get("/api/principal")
+    finally:
+        web_app.AUTH_PASSWORD = original_auth_password
+        web_app.MOCK_MODE = original_mock_mode
+        web_app.dashboard_state = original_dashboard_state
+
+    assert undated.status_code == 200
+    assert future.status_code == 400
+
+    flows = current.json()["flows"]
+    assert current.json()["principal_usd"] == pytest.approx(1600.0)
+    # Backfilled flows carry the date the money moved, not the entry time.
+    assert flows[0]["timestamp"].startswith("2026-06-01")
+    assert flows[1]["timestamp"].startswith("2026-06-04")
+    assert flows[1]["amount_usd"] == pytest.approx(500.0)
+    # Omitting the date still means "now", so the common case is unchanged.
+    assert flows[2]["timestamp"].startswith(date.today().isoformat())
 
 
 def test_performance_page_computes_metrics_from_db_equity(tmp_path):

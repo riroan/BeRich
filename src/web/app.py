@@ -4,7 +4,7 @@ import asyncio
 import hmac
 import secrets
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 from pathlib import Path
@@ -1311,6 +1311,7 @@ def create_app() -> FastAPI:
             "principal_usd": sum(
                 f["amount_usd"] for f in dashboard_state.cash_flows
             ),
+            "today": date.today().isoformat(),
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
             "balance_usd": float(dashboard_state.balance_usd),
@@ -1621,6 +1622,10 @@ def create_app() -> FastAPI:
 
     class PrincipalUpdate(BaseModel):
         principal_usd: float
+        # When the money actually moved. Without it the flow is stamped with
+        # the moment of the edit, so a deposit entered late reads as return
+        # for the whole stretch between arrival and entry.
+        occurred_on: date | None = None
 
     @app.get("/api/principal")
     async def get_principal():
@@ -1648,16 +1653,29 @@ def create_app() -> FastAPI:
         excluded from return adjustment since it is already reflected in the
         equity history). Later updates store only the difference as an
         'adjustment' flow, which the TWR metrics strip out.
+
+        Pass occurred_on to backfill a deposit that already happened; the
+        flow is dated then instead of now, which is what the time-weighted
+        metrics need to strip it out of the right interval. Backfilling
+        several deposits means one call each, oldest first.
         """
         if body.principal_usd < 0:
             raise HTTPException(
                 status_code=400, detail="Principal must be >= 0",
+            )
+        if body.occurred_on and body.occurred_on > date.today():
+            raise HTTPException(
+                status_code=400, detail="Date must not be in the future",
             )
         storage = await _get_web_storage()
         if not storage:
             raise HTTPException(
                 status_code=503, detail="Storage not available",
             )
+        occurred_at = (
+            datetime.combine(body.occurred_on, datetime.min.time())
+            if body.occurred_on else None
+        )
         try:
             flows = await storage.get_cash_flows()
             current = sum(f["amount_usd"] for f in flows)
@@ -1665,10 +1683,12 @@ def create_app() -> FastAPI:
             if not flows:
                 await storage.save_cash_flow(
                     Decimal(str(body.principal_usd)), flow_type="initial",
+                    timestamp=occurred_at,
                 )
             elif abs(delta) >= 0.01:
                 await storage.save_cash_flow(
                     Decimal(str(round(delta, 2))), flow_type="adjustment",
+                    timestamp=occurred_at,
                 )
             flows = await storage.get_cash_flows()
         finally:
