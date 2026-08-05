@@ -373,8 +373,9 @@ class DashboardState:
         # Live strategy instances (set by bot)
         self.strategy_instances: list[Any] | None = None
 
-        # Hot reload callback (set by bot)
+        # Hot reload callback, and the bot loop it has to run on (set by bot)
         self.reload_callback: Any | None = None
+        self.bot_loop: asyncio.AbstractEventLoop | None = None
 
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
@@ -963,6 +964,31 @@ class DashboardState:
 
 # Global dashboard state
 dashboard_state = DashboardState()
+
+
+def _trigger_bot_reload() -> bool:
+    """Hot-reload the bot's strategies. Returns whether the bot was reachable.
+
+    The reload has to run on the BOT's event loop. This web app lives in its
+    own thread with its own loop, and reloading refetches daily bars through
+    the broker, whose aiohttp session is bound to the bot's loop — driving it
+    from here fails mid-fetch ("attached to a different loop"), leaving every
+    strategy with an empty RSI base and the bot silently unable to trade.
+    """
+    cb = dashboard_state.reload_callback
+    loop = dashboard_state.bot_loop
+    if cb is None or loop is None:
+        return False
+
+    async def _reload():
+        try:
+            await cb()
+        except Exception as e:
+            logger.error(f"Strategy reload failed: {e}")
+
+    asyncio.run_coroutine_threadsafe(_reload(), loop)
+    return True
+
 
 # Global templates (created once)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -2872,16 +2898,7 @@ def create_app() -> FastAPI:
             await storage.close()
 
         # Trigger hot reload
-        bot_running = False
-        cb = dashboard_state.reload_callback
-        if cb:
-            async def _reload():
-                try:
-                    await cb()
-                except Exception as e:
-                    logger.error(f"Strategy reload failed: {e}")
-            asyncio.create_task(_reload())
-            bot_running = True
+        bot_running = _trigger_bot_reload()
 
         return {
             "success": True,
@@ -2954,16 +2971,7 @@ def create_app() -> FastAPI:
             )
 
         # Trigger hot reload
-        bot_running = False
-        cb = dashboard_state.reload_callback
-        if cb:
-            async def _reload():
-                try:
-                    await cb()
-                except Exception as e:
-                    logger.error(f"Strategy reload failed: {e}")
-            asyncio.create_task(_reload())
-            bot_running = True
+        bot_running = _trigger_bot_reload()
 
         return {
             "success": True,
@@ -2995,16 +3003,7 @@ def create_app() -> FastAPI:
             )
 
         # Trigger hot reload
-        bot_running = False
-        cb = dashboard_state.reload_callback
-        if cb:
-            async def _reload():
-                try:
-                    await cb()
-                except Exception as e:
-                    logger.error(f"Strategy reload failed: {e}")
-            asyncio.create_task(_reload())
-            bot_running = True
+        bot_running = _trigger_bot_reload()
 
         return {
             "success": True,

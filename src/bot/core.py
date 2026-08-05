@@ -158,10 +158,14 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             self.strategy_engine.get_strategies()
         )
 
-        # Wire reload callback for web API hot reload
+        # Wire reload callback for web API hot reload. The loop travels with
+        # it: the web server runs in its own thread with its own loop, and
+        # reloading touches the broker, whose aiohttp session belongs to this
+        # one. Reloading on the wrong loop fails mid-fetch.
         self.dashboard.reload_callback = (
             self.reload_strategies
         )
+        self.dashboard.bot_loop = asyncio.get_running_loop()
 
         # Initialize order manager
         self.order_manager = OrderManager(
@@ -317,9 +321,18 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                         historical_bars[symbol] = bars
                     strategy.initialize(historical_bars)
                 except Exception as e:
-                    logger.warning(
-                        f"[{name}] Init failed: {e}"
+                    # An uninitialized strategy has no daily bars, so its RSI
+                    # is None forever: it evaluates no signals while still
+                    # showing up as active. Keep the running instance, which
+                    # at least has a valid base, rather than swapping in one
+                    # that cannot trade.
+                    logger.error(
+                        f"[{name}] Init failed, keeping the running "
+                        f"instance: {e}"
                     )
+                    if old is not None:
+                        new_list.append(old)
+                    continue
 
                 new_list.append(strategy)
                 logger.info(f"Strategy reloaded: {name}")
