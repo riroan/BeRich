@@ -994,6 +994,23 @@ def _trigger_bot_reload() -> bool:
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
+def _usd_signed(value: float | None) -> str:
+    """Signed USD with the sign outside the symbol: +$1,234.56 / -$1,234.56.
+
+    Writing this inline as ``${{ "{:+,.2f}".format(x) }}`` puts the sign
+    INSIDE, rendering "$-1,234.56". Six templates had drifted into that,
+    each disagreeing with the live WebSocket update that overwrote it a
+    second later. Registered as a filter so there is one copy to be wrong.
+    """
+    if value is None:
+        return "-"
+    sign = "+" if value > 0 else ("-" if value < 0 else "")
+    return f"{sign}${abs(value):,.2f}"
+
+
+templates.env.filters["usd_signed"] = _usd_signed
+
+
 def _asset_version(name: str) -> int:
     """Cache-buster derived from the file's mtime.
 

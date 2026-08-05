@@ -79,7 +79,7 @@
                         <td data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi is not none else '-' }}</td>
                         <td data-label="Result" class="{{ 'positive' if log.result == 'success' else 'negative' }}">{{ log.result }}</td>
                         <td data-label="P&L" class="{{ 'positive' if log.pnl is not none and log.pnl >= 0 else ('negative' if log.pnl is not none else '') }}">
-                            {% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}
+                            {% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}{{ log.pnl|usd_signed }}{% endif %}{% else %}-{% endif %}
                         </td>
                         <td data-label="P&L %" class="{{ 'positive' if log.pnl_pct is not none and log.pnl_pct >= 0 else ('negative' if log.pnl_pct is not none else '') }}">
                             {{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '-' }}
@@ -126,7 +126,7 @@
                             </div>
                         </div>
                         <div class="tcm-pnl {{ 'positive' if log.pnl is not none and log.pnl >= 0 else ('negative' if log.pnl is not none else '') }}">
-                            <div class="tcm-pnl-amt">{% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}${{ "{:+,.2f}".format(log.pnl) }}{% endif %}{% else %}-{% endif %}</div>
+                            <div class="tcm-pnl-amt">{% if log.pnl is not none %}{% if log.market == 'KRX' %}{{ "{:+,.0f}".format(log.pnl) }}{% else %}{{ log.pnl|usd_signed }}{% endif %}{% else %}-{% endif %}</div>
                             <div class="tcm-pnl-pct">{{ "{:+.1f}%".format(log.pnl_pct) if log.pnl_pct is not none else '' }}</div>
                         </div>
                     </div>

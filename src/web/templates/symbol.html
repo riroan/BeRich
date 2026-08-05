@@ -100,7 +100,7 @@
             <div class="card">
                 <div class="label">P&L</div>
                 <div class="value small {{ 'positive' if position.pnl >= 0 else 'negative' }}">{{ "{:+.1f}%".format(position.pnl_pct) }}</div>
-                <div class="delta {{ 'positive' if position.pnl >= 0 else 'negative' }}">{% if position.market == 'KRX' %}{{ "{:+,.0f}".format(position.pnl) }}{% else %}${{ "{:+,.2f}".format(position.pnl) }}{% endif %}</div>
+                <div class="delta {{ 'positive' if position.pnl >= 0 else 'negative' }}">{% if position.market == 'KRX' %}{{ "{:+,.0f}".format(position.pnl) }}{% else %}{{ position.pnl|usd_signed }}{% endif %}</div>
             </div>
             <div class="card">
                 <div class="label">RSI</div>

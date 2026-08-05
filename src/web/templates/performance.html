@@ -45,7 +45,7 @@
                 <div class="perf-hero-row">
                     <div class="perf-hero-value {{ return_class }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
                     <div class="perf-hero-delta {{ return_class }}">
-                        {{ "+" if performance.total_return_usd >= 0 else "-" }} ${{ "{:,.2f}".format((performance.total_return_usd if performance.total_return_usd >= 0 else -performance.total_return_usd)) }}
+                        {{ performance.total_return_usd|usd_signed }}
                     </div>
                 </div>
                 <div class="perf-hero-stats">
@@ -90,7 +90,7 @@
                 </div>
                 <div class="perf-stat-card">
                     <div class="label">Total P&L</div>
-                    <div class="value small {{ pnl_class }}">${{ "{:,.2f}".format(performance.total_pnl) }}</div>
+                    <div class="value small {{ pnl_class }}">{{ performance.total_pnl|usd_signed }}</div>
                     <div class="delta dim">{{ performance.total_trades }} trades</div>
                 </div>
                 <div class="perf-stat-card">
