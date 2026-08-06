@@ -5,7 +5,7 @@
 {% block content %}
         {% set buy_count = trade_logs|selectattr('action', 'equalto', 'buy')|list|length %}
         {% set sell_count = trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length %}
-        {% set stop_count = trade_logs|selectattr('action', 'equalto', 'stop_loss')|list|length %}
+        {% set total_pnl = trade_logs|rejectattr('pnl', 'none')|sum(attribute='pnl') %}
 
         <header class="page-mobile-title"><h1>Trades</h1></header>
         <!-- Summary — mobile strip (6a, ≤768px) -->
@@ -13,7 +13,7 @@
             <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">Total</div></div>
             <div class="tss-item"><div class="tss-num positive">{{ buy_count }}</div><div class="tss-label">Buy</div></div>
             <div class="tss-item"><div class="tss-num negative">{{ sell_count }}</div><div class="tss-label">Sell</div></div>
-            <div class="tss-item"><div class="tss-num warning">{{ stop_count }}</div><div class="tss-label">Stop</div></div>
+            <div class="tss-item"><div class="tss-num {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div><div class="tss-label">Total P&amp;L</div></div>
         </div>
 
         <!-- Summary Cards — desktop (>768px) -->
@@ -31,8 +31,8 @@
                 <div class="value small">{{ sell_count }}</div>
             </div>
             <div class="card">
-                <div class="label">Stop Losses</div>
-                <div class="value small negative">{{ stop_count }}</div>
+                <div class="label">Total P&amp;L</div>
+                <div class="value small {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div>
             </div>
         </div>
 
