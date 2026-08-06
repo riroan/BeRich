@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Correlation Preview - BeRich Dashboard{% endblock %}
+
+{% block content %}
+        <header class="page-mobile-title"><h1>Correlation</h1></header>
+
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Portfolio Correlation</h2>
+                <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
+                    각 종목이 다른 보유종목과 최근 60일간 가장 비슷하게 움직인 정도 (0 = 무관, 1 = 항상 같이 움직임)
+                </p>
+
+                {% if symbol_count < 3 %}
+                <p style="color:var(--dim);">보유종목이 3개 미만이라 상관관계를 계산할 의미가 없어요.</p>
+                {% elif not correlations %}
+                <p style="color:var(--dim);">계산할 가격 데이터가 아직 부족해요.</p>
+                {% else %}
+                <div style="display:flex; gap:16px; margin-bottom:14px;">
+                    <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
+                        <span class="alloc-dot" style="background:var(--positive); width:10px; height:10px;"></span>낮음
+                    </span>
+                    <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
+                        <span class="alloc-dot" style="background:var(--warning); width:10px; height:10px;"></span>보통
+                    </span>
+                    <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
+                        <span class="alloc-dot" style="background:var(--negative); width:10px; height:10px;"></span>높음
+                    </span>
+                </div>
+
+                <div class="summary-list">
+                    {% for c in correlations %}
+                    <div class="summary-row-item">
+                        <span style="display:flex; align-items:center; gap:8px;">
+                            <span class="alloc-dot" style="background:{{ c.color }};" title="{{ c.symbol }}, {{ c.with_symbol }}와(과) 상관계수 {{ c.max_corr }}"></span>
+                            <span class="summary-label">{{ c.symbol }}</span>
+                            <span style="font-size:12px; color:var(--dim);">{{ c.with_symbol }}와</span>
+                        </span>
+                        <span class="summary-val">{{ c.max_corr }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </section>
+
+        {% if matrix_rows %}
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>전체 매트릭스 (비교용)</h2>
+                <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
+                    위 리스트가 압축한 원본 데이터. 종목이 몇 개 안 될 땐 괜찮지만 늘어날수록 옆으로 스크롤해야 함 — 그래서 리스트를 기본으로 씀.
+                </p>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th></th>
+                                {% for sym in matrix_symbols %}
+                                <th style="text-align:center;">{{ sym }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in matrix_rows %}
+                            <tr>
+                                <th style="text-align:left;">{{ row.symbol }}</th>
+                                {% for cell in row.cells %}
+                                <td style="width:18px; height:18px; padding:0; background:{{ cell.color }};" title="{{ row.symbol }} × {{ cell.other }}: {{ cell.value }}"></td>
+                                {% endfor %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+        {% endif %}
+{% endblock %}

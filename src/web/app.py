@@ -2670,6 +2670,95 @@ def create_app() -> FastAPI:
             "positions": portfolio,
         }
 
+    @app.get("/portfolio/correlation", response_class=HTMLResponse)
+    async def portfolio_correlation_page(request: Request):
+        """Preview: how correlated is each holding with its single most
+        correlated other holding? One number per symbol (not a full N×N
+        matrix, which stops being readable past a handful of holdings, and
+        not an average, which dilutes a genuinely dangerous pair once the
+        rest of the portfolio is diversified)."""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        def corr_color(value: float) -> str:
+            if value < 0.3:
+                return "var(--positive)"
+            if value < 0.6:
+                return "var(--warning)"
+            return "var(--negative)"
+
+        positions = await _get_current_positions_for_web()
+        symbols = [p.symbol for p in positions]
+        correlations: list[dict[str, Any]] = []
+        matrix_symbols: list[str] = []
+        matrix_rows: list[dict[str, Any]] = []
+
+        if len(symbols) >= 3:
+            import pandas as pd
+
+            storage = await _get_web_storage()
+            closes = {}
+            if storage:
+                try:
+                    for sym in symbols:
+                        rows = await storage.get_daily_ohlc_rsi(sym, limit=60)
+                        if rows:
+                            closes[sym] = pd.Series(
+                                {r["day"]: r["close"] for r in rows}
+                            )
+                finally:
+                    await storage.close()
+
+            if len(closes) >= 3:
+                df = pd.DataFrame(closes).sort_index().pct_change().dropna(how="all")
+                corr = df.corr().abs()
+                for sym in corr.columns:
+                    others = corr[sym].drop(sym).dropna()
+                    if others.empty:
+                        continue
+                    max_corr = float(others.max())
+                    with_symbol = others.idxmax()
+                    correlations.append({
+                        "symbol": sym,
+                        "max_corr": round(max_corr, 2),
+                        "with_symbol": with_symbol,
+                        "color": corr_color(max_corr),
+                    })
+                correlations.sort(key=lambda c: c["max_corr"], reverse=True)
+
+                # Full N×N grid — kept for side-by-side comparison against the
+                # per-symbol list above. Same corr() call, just rendered in
+                # full instead of collapsed to one number per symbol; gets
+                # unreadable past a handful of holdings (that's the whole
+                # reason the list exists), so .table-wrap scrolls it instead
+                # of breaking the page layout.
+                matrix_symbols = list(corr.columns)
+                for sym in matrix_symbols:
+                    cells = []
+                    for other in matrix_symbols:
+                        value = float(corr.loc[sym, other])
+                        cells.append({
+                            "other": other,
+                            "value": round(value, 2),
+                            "color": "var(--card)" if sym == other else corr_color(value),
+                            "dim": sym == other,
+                        })
+                    matrix_rows.append({"symbol": sym, "cells": cells})
+
+        context = {
+            "request": request,
+            "active_page": "portfolio",
+            "correlations": correlations,
+            "symbol_count": len(symbols),
+            "matrix_symbols": matrix_symbols,
+            "matrix_rows": matrix_rows,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="portfolio_correlation.html",
+            context=context,
+        )
+
     # ==================== Strategy Settings Routes ====================
 
     class StrategyParamsUpdate(BaseModel):
