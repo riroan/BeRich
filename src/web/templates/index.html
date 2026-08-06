@@ -176,12 +176,12 @@
             <div class="signal-card recent-trades-card">
                 <h3>Recent Trades</h3>
                 {% for log in trade_logs[:5] %}
-                <div class="signal-item">
+                <a class="signal-item" href="/symbol/{{ log.symbol }}" aria-label="Open {{ log.symbol }} chart">
                     <span class="sym-badge">{{ log.symbol }}</span>
                     <span class="signal-tag {{ 'buy' if log.action == 'buy' else 'sell' }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
                     <span class="trade-qty">x{{ log.quantity }}</span>
                     <span class="trade-price">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</span>
-                </div>
+                </a>
                 {% else %}
                 <div class="empty-state">No recent activity</div>
                 {% endfor %}
