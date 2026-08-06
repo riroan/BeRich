@@ -1,7 +1,7 @@
 """Core TradingBot class"""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from pathlib import Path
 import logging
@@ -63,12 +63,12 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Equity snapshot settings
         self._equity_save_interval = 5  # Every 5 ticks (5 minutes)
-        self._equity_save_counter = 0
+        self._equity_save_counter: int = 0
 
         # Daily-bar confirmation poll (RSI base slide on regular close)
         self._last_session: Session | None = None
         self._confirm_poll_task: asyncio.Task | None = None
-        self._confirm_poll_date = None
+        self._confirm_poll_date: date | None = None
 
         # Config-sync loop: reconcile strategy symbols from the DB
         # regardless of market hours (the web UI runs in a separate
@@ -117,6 +117,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
         # Initialize broker first (needed for account balance)
         await self._initialize_broker()
+        assert self.broker is not None  # set by _initialize_broker() above
 
         # US-only bot: risk equity = USD overseas total eval, already
         # fetched into the dashboard by _initialize_broker above. If it's
@@ -236,6 +237,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
     async def _load_strategies(self) -> None:
         """Load strategies from DB (strategy_configs table)"""
+        assert self.storage is not None
         configs = await self.storage.get_all_strategy_configs()
 
         if not configs:
@@ -257,6 +259,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
     def _register_strategy_from_config(self, cfg: dict) -> None:
         """Create and register a strategy instance from DB config"""
+        assert self.strategy_engine is not None
         try:
             if not extract_symbols(cfg["symbols"]):
                 logger.warning(
@@ -279,6 +282,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
     async def reload_strategies(self) -> None:
         """Hot reload: rebuild strategies from DB (atomic swap)"""
+        assert self.storage is not None
+        assert self.strategy_engine is not None
+        assert self.broker is not None
         configs = await self.storage.get_all_strategy_configs()
 
         # Build comparison key for incremental reload
@@ -372,6 +378,8 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         forever. Terminal-state changes are persisted here; the strategy
         position itself is restored separately by sync_positions().
         """
+        assert self.storage is not None
+        assert self.broker is not None
         try:
             open_orders = await self.storage.get_open_orders()
             if not open_orders:
@@ -428,6 +436,8 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         5-min interval, up to 30 min. A symbol whose new bar never appears
         keeps its previous-session base (no silent clock-based slide).
         """
+        assert self.strategy_engine is not None
+        assert self.broker is not None
         strategies = [
             s for s in self.strategy_engine.get_strategies()
             if hasattr(s, "confirm_daily_bar")
@@ -495,6 +505,10 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
 
     async def start(self) -> None:
         """Start the bot"""
+        assert self.strategy_engine is not None
+        assert self.order_manager is not None
+        assert self.scheduler is not None
+        assert self.broker is not None
         logger.info("Starting Trading Bot...")
         self._running = True
         self._bot_start_time = datetime.now()

@@ -74,6 +74,7 @@ class DashboardSyncMixin:
 
     def _get_strategy_states(self: "TradingBot") -> dict:
         """Get strategy states for all symbols"""
+        assert self.strategy_engine is not None
         strategy_states = {}
         for strategy in self.strategy_engine.get_strategies():
             if hasattr(strategy, "_buy_stages"):
@@ -125,6 +126,7 @@ class DashboardSyncMixin:
         self: "TradingBot", market: Market, strategy_states: dict
     ) -> list[dict] | None:
         """Update positions for a specific market"""
+        assert self.broker is not None
         try:
             positions = await self.broker.get_positions(market)
             dashboard_positions = []
@@ -207,6 +209,7 @@ class DashboardSyncMixin:
         self: "TradingBot", market: Market,
     ) -> dict:
         """Fetch balance for market and update corresponding dashboard fields"""
+        assert self.broker is not None
         balance = await self.broker.get_account_balance(market)
         logger.debug(f"{market.value} balance response: {balance}")
         if market == Market.KRX:
@@ -265,6 +268,7 @@ class DashboardSyncMixin:
 
     async def _save_equity_snapshot(self: "TradingBot") -> None:
         """Save equity snapshot periodically"""
+        assert self.storage is not None
         self._equity_save_counter += 1
         if self._equity_save_counter < self._equity_save_interval:
             return
@@ -334,6 +338,9 @@ class DashboardSyncMixin:
 
     async def update_dashboard_status(self: "TradingBot") -> None:
         """Update dashboard with current bot status"""
+        assert self.strategy_engine is not None
+        assert self.broker is not None
+        assert self.risk_manager is not None
         strategy_names = [s.name for s in self.strategy_engine.get_strategies()]
 
         # Calculate uptime from bot start time

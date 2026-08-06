@@ -21,6 +21,7 @@ class TickHandlerMixin:
 
     async def on_tick(self: "TradingBot") -> None:
         """Called every minute - fetch prices and check strategies"""
+        assert self.strategy_engine is not None
         if getattr(self.dashboard, 'debug_freeze', False):
             return
         await self._warmup.log_status()
@@ -48,14 +49,17 @@ class TickHandlerMixin:
 
     async def _sync_enabled_symbols(self: "TradingBot") -> None:
         """Sync strategy symbols with DB (strategy_configs)"""
+        assert self.storage is not None
+        assert self.strategy_engine is not None
+        assert self.broker is not None
         try:
             from collections import defaultdict
 
             configs = (
                 await self.storage.get_all_strategy_configs()
             )
-            symbols_by_strategy = defaultdict(set)
-            markets_by_strategy = defaultdict(dict)
+            symbols_by_strategy: dict = defaultdict(set)
+            markets_by_strategy: dict = defaultdict(dict)
             for cfg in configs:
                 if not cfg["enabled"]:
                     continue
@@ -116,6 +120,8 @@ class TickHandlerMixin:
 
     async def _process_symbol_tick(self: "TradingBot", strategy, symbol: str) -> None:
         """Process tick for a single symbol"""
+        assert self.broker is not None
+        assert self.storage is not None
         try:
             # Rate limit: wait between API calls
             await asyncio.sleep(1)

@@ -62,6 +62,7 @@ class WarmupManager:
 
         if complete:
             self._complete = True
+            assert self._storage is not None  # set by _sync_from_db() above
             await self._storage.delete_bot_state(WARMUP_KEY)
 
         return complete

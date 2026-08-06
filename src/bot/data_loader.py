@@ -19,6 +19,7 @@ class DataLoaderMixin:
 
     async def update_initial_rsi(self: "TradingBot") -> None:
         """Calculate and update initial RSI values from loaded historical data"""
+        assert self.strategy_engine is not None
         logger.info("Calculating initial RSI values...")
 
         self.dashboard.rsi_values.clear()
@@ -42,6 +43,7 @@ class DataLoaderMixin:
 
     async def load_chart_history(self: "TradingBot") -> None:
         """Load price/RSI history from database on startup (enabled only)"""
+        assert self.storage is not None
         try:
             # Only load history for enabled symbols
             configs = (
@@ -93,6 +95,7 @@ class DataLoaderMixin:
 
     async def load_equity_history(self: "TradingBot") -> None:
         """Load equity history from database for equity curve chart"""
+        assert self.storage is not None
         try:
             history = await self.storage.get_equity_history(days=90)
             self.dashboard.equity_history = history
@@ -203,6 +206,7 @@ class DataLoaderMixin:
 
     async def load_fills(self: "TradingBot") -> None:
         """Load fills from database for performance calculation and trade logs"""
+        assert self.storage is not None
         try:
             fills = await self.storage.get_all_fills()
             self.dashboard.fills = [
