@@ -560,6 +560,16 @@ body {
     font-variant-numeric: tabular-nums;
     min-width: 55px; text-align: right;
 }
+/* Desktop: past 20 holdings the legend gets taller than the donut next to
+   it, so split into two columns instead of one long list. */
+.alloc-legend:has(.alloc-item:nth-child(21)) {
+    display: block;
+    column-count: 2;
+    column-gap: 16px;
+}
+.alloc-legend:has(.alloc-item:nth-child(21)) .alloc-item {
+    break-inside: avoid;
+}
 
 /* Portfolio holdings — mobile cards (4a, shown ≤768px) */
 .portfolio-holdings-mobile { display: none; }
