@@ -223,21 +223,22 @@
             });
 
             // Center label: highlighted slice on hover, else invested total
+            const light = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             if (highlightIdx !== undefined && highlightIdx >= 0) {
                 const h = data[highlightIdx];
-                ctx.fillStyle = '#f8fafc';
+                ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
                 ctx.font = 'bold 18px Inter, sans-serif';
                 ctx.fillText(h.label, cx, cy - 10);
                 ctx.font = '14px Inter, sans-serif';
-                ctx.fillStyle = '#94a3b8';
+                ctx.fillStyle = light ? '#64748b' : '#94a3b8';
                 ctx.fillText(h.value.toFixed(1) + '%', cx, cy + 12);
             } else {
                 ctx.fillStyle = '#64748b';
                 ctx.font = '600 10px Inter, sans-serif';
                 ctx.fillText('INVESTED', cx, cy - 20);
-                ctx.fillStyle = '#f8fafc';
+                ctx.fillStyle = light ? '#0f172a' : '#f8fafc';
                 ctx.font = 'bold 18px Inter, sans-serif';
                 ctx.fillText('$' + investedValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cx, cy + 2);
                 ctx.fillStyle = '#64748b';
