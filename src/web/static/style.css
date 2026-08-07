@@ -555,6 +555,22 @@ body {
 .summary-label { font-size: 13px; color: var(--dim); }
 .summary-val { font-size: 15px; font-weight: 600; color: var(--white); font-variant-numeric: tabular-nums; }
 
+.btn-text {
+    background: none; border: none; padding: 0; cursor: pointer;
+    color: var(--blue); font-size: 13px; font-weight: 500;
+}
+.btn-text:hover { text-decoration: underline; }
+
+/* Custom tooltip — replaces title="" so mobile tap can show it too */
+.tip-box {
+    position: fixed; z-index: 200; pointer-events: none;
+    background: var(--surface); border: 1px solid var(--border); color: var(--text);
+    font-size: 12px; padding: 6px 10px; border-radius: 6px; box-shadow: var(--shadow);
+    opacity: 0; transform: translateY(4px); transition: opacity .12s, transform .12s;
+    white-space: nowrap;
+}
+.tip-box.visible { opacity: 1; transform: translateY(0); }
+
 .alloc-pct {
     font-size: 14px; font-weight: 700; color: var(--text);
     font-variant-numeric: tabular-nums;

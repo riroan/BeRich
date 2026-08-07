@@ -9,7 +9,7 @@
             <div class="panel">
                 <h2>Portfolio Correlation</h2>
                 <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
-                    각 종목이 다른 보유종목과 최근 60일간 가장 비슷하게 움직인 정도, 상위 5개 (0 = 무관, 1 = 항상 같이 움직임)
+                    각 종목이 다른 보유종목과 최근 60일간 가장 비슷하게 움직인 정도 (0 = 무관, 1 = 항상 같이 움직임)
                 </p>
 
                 {% if symbol_count < 3 %}
@@ -29,11 +29,11 @@
                     </span>
                 </div>
 
-                <div class="summary-list">
+                <div class="summary-list" id="corr-list">
                     {% for c in correlations %}
-                    <div class="summary-row-item">
+                    <div class="summary-row-item{{ ' corr-row-extra' if loop.index > 5 else '' }}"{{ ' style="display:none;"' if loop.index > 5 else '' }}>
                         <span style="display:flex; align-items:center; gap:8px;">
-                            <span class="alloc-dot" style="background:{{ c.color }};" title="{{ c.symbol }}, {{ c.with_symbol }}와(과) 상관계수 {{ c.max_corr }}"></span>
+                            <span class="alloc-dot" style="background:{{ c.color }};" data-tip="{{ c.symbol }} × {{ c.with_symbol }}: {{ c.max_corr }}"></span>
                             <span class="summary-label">{{ c.symbol }}</span>
                             <span style="font-size:12px; color:var(--dim);">{{ c.with_symbol }}와</span>
                         </span>
@@ -41,6 +41,12 @@
                     </div>
                     {% endfor %}
                 </div>
+                {% if correlations|length > 5 %}
+                <button type="button" class="btn-text" id="corr-list-toggle" onclick="toggleCorrList()"
+                        data-expanded="0" data-more-label="{{ correlations|length - 5 }}개 더보기" style="margin-top:10px;">
+                    {{ correlations|length - 5 }}개 더보기
+                </button>
+                {% endif %}
                 {% endif %}
             </div>
         </section>
@@ -67,7 +73,7 @@
                             <tr>
                                 <th style="text-align:left;">{{ row.symbol }}</th>
                                 {% for cell in row.cells %}
-                                <td style="width:18px; height:18px; padding:0; background:{{ cell.color }};" title="{{ row.symbol }} × {{ cell.other }}: {{ cell.value }}"></td>
+                                <td style="width:18px; height:18px; padding:0; background:{{ cell.color }};" data-tip="{{ row.symbol }} × {{ cell.other }}: {{ cell.value }}"></td>
                                 {% endfor %}
                             </tr>
                             {% endfor %}
@@ -77,4 +83,52 @@
             </div>
         </section>
         {% endif %}
+{% endblock %}
+
+{% block scripts %}
+        <script>
+            function toggleCorrList() {
+                const expanded = document.getElementById('corr-list-toggle').dataset.expanded === '1';
+                document.querySelectorAll('#corr-list .corr-row-extra').forEach(row => {
+                    row.style.display = expanded ? 'none' : 'flex';
+                });
+                const btn = document.getElementById('corr-list-toggle');
+                btn.dataset.expanded = expanded ? '0' : '1';
+                btn.textContent = expanded
+                    ? btn.dataset.moreLabel
+                    : '접기';
+            }
+
+            // Custom tooltip for [data-tip] elements — hover on desktop, tap on mobile.
+            (function () {
+                const box = document.createElement('div');
+                box.className = 'tip-box';
+                document.body.appendChild(box);
+                let openEl = null;
+
+                function show(el) {
+                    box.textContent = el.dataset.tip;
+                    const r = el.getBoundingClientRect();
+                    box.style.left = Math.round(r.left + r.width / 2) + 'px';
+                    box.style.top = Math.round(r.top) + 'px';
+                    box.style.transform = 'translate(-50%, calc(-100% - 8px))';
+                    box.classList.add('visible');
+                    openEl = el;
+                }
+                function hide() {
+                    box.classList.remove('visible');
+                    openEl = null;
+                }
+
+                document.querySelectorAll('[data-tip]').forEach(el => {
+                    el.addEventListener('mouseenter', () => show(el));
+                    el.addEventListener('mouseleave', hide);
+                    el.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openEl === el ? hide() : show(el);
+                    });
+                });
+                document.addEventListener('click', hide);
+            })();
+        </script>
 {% endblock %}

@@ -2725,7 +2725,6 @@ def create_app() -> FastAPI:
                         "color": corr_color(max_corr),
                     })
                 correlations.sort(key=lambda c: c["max_corr"], reverse=True)
-                correlations = correlations[:5]
 
                 # Full N×N grid — kept for side-by-side comparison against the
                 # per-symbol list above. Same corr() call, just rendered in
