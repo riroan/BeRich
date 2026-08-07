@@ -69,7 +69,7 @@
                 </div>
                 <form class="principal-form" id="principal-form" hidden>
                     <input type="number" id="principal-input" step="0.01" min="0"
-                           value="{{ '%.2f'|format(principal_usd) }}" aria-label="원금 (USD)">
+                           placeholder="입금액 (USD)" aria-label="입금액 (USD)">
                     <input type="date" id="principal-date" max="{{ today }}"
                            aria-label="입금일 (비우면 오늘)">
                     <button type="submit" class="btn-save">저장</button>
@@ -354,7 +354,9 @@
                 });
         }
 
-        // Principal (원금) editor — 갱신할 때마다 차액이 입출금 이력으로 쌓인다
+        // Principal (원금) editor — 입금액만 입력하면 기존 원금에 더해서 저장.
+        // 서버는 여전히 새 총액을 받아 차액을 입출금 이력으로 쌓는다.
+        const currentPrincipal = {{ '%.2f'|format(principal_usd) }};
         const principalBtn = document.getElementById('principal-edit-btn');
         const principalForm = document.getElementById('principal-form');
         if (principalBtn && principalForm) {
@@ -366,15 +368,15 @@
                 e.preventDefault();
                 const errEl = document.getElementById('principal-error');
                 errEl.hidden = true;
-                const value = parseFloat(document.getElementById('principal-input').value);
-                if (!(value >= 0)) return;
+                const deposit = parseFloat(document.getElementById('principal-input').value);
+                if (!(deposit >= 0)) return;
                 const occurredOn = document.getElementById('principal-date').value;
                 try {
                     const res = await fetch('/api/principal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            principal_usd: value,
+                            principal_usd: currentPrincipal + deposit,
                             occurred_on: occurredOn || null,
                         }),
                     });
