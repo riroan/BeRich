@@ -179,7 +179,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         )
 
         # Initialize scheduler
-        self.scheduler = TradingScheduler(interval_seconds=60, us_only=True)
+        self.scheduler = TradingScheduler(interval_seconds=10, us_only=True)
         self.scheduler.add_callback(self.on_tick)
 
         logger.info("Trading Bot initialized successfully")
