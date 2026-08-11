@@ -34,10 +34,13 @@ class ConnectionManager:
 
     def __init__(self):
         self.active_connections: list[WebSocket] = []
+        self.loop: asyncio.AbstractEventLoop | None = None
 
     async def connect(self, websocket: WebSocket):
         await websocket.accept()
         self.active_connections.append(websocket)
+        if self.loop is None:
+            self.loop = asyncio.get_running_loop()
         logger.info(f"WebSocket connected. Total: {len(self.active_connections)}")
 
     def disconnect(self, websocket: WebSocket):
@@ -46,10 +49,28 @@ class ConnectionManager:
         logger.info(f"WebSocket disconnected. Total: {len(self.active_connections)}")
 
     async def broadcast(self, message: dict):
-        """Broadcast message to all connected clients"""
+        """Broadcast message to all connected clients.
+
+        run_bot.py runs the web server in its own thread with its own
+        event loop, separate from the bot's loop that calls this via
+        broadcast_update(). WebSocket sends are bound to the loop that
+        accepted the connection, so awaiting them directly from the bot's
+        loop raises "Future attached to a different loop" — silently
+        caught below, which prunes every connection as "disconnected"
+        after the first tick and the dashboard never updates again. Hop
+        the actual send over to the connections' own loop.
+        """
         if not self.active_connections:
             return
 
+        if self.loop is not None and self.loop is not asyncio.get_running_loop():
+            fut = asyncio.run_coroutine_threadsafe(self._broadcast(message), self.loop)
+            await asyncio.wrap_future(fut)
+            return
+
+        await self._broadcast(message)
+
+    async def _broadcast(self, message: dict):
         message_json = json.dumps(message, default=str)
         disconnected = []
 
