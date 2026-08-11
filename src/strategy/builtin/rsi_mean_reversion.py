@@ -4,7 +4,7 @@ RSI Mean Reversion Strategy (Daily RSI)
 Rules:
 - Buy: Daily RSI <= 30 (oversold), with averaging down
 - Sell: Daily RSI >= 65/70/75 (staged selling) OR Stop Loss -10%
-- Repeat current stages after cooldown period
+- Restart the buy/sell ladder from stage 1 after cooldown period
 
 Note: RSI is calculated from daily bars, not intraday data.
 Current price updates today's daily close for real-time RSI estimation.
@@ -334,8 +334,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 )
 
         # Staged selling: progress to the next stage immediately when its
-        # threshold is hit. Cooldown repeats the current stage, except after
-        # the final stage where it restarts the ladder at stage 1.
+        # threshold is hit. Cooldown resets the ladder back to stage 1.
         if current_position > 0:
             sell_stage_idx, next_sell_threshold = resolve_sell_stage(
                 current_rsi, current_sell_stage, sell_levels, sell_repeat_ready,

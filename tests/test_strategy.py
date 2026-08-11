@@ -336,6 +336,41 @@ class TestRSIMeanReversionStrategy:
         assert signal.metadata["reason"] == "staged_sell_1"
 
     @pytest.mark.asyncio
+    async def test_sell_cooldown_resets_to_stage_one_from_deeper_stage(
+        self, strategy,
+    ):
+        """After cooldown, the sell ladder restarts at SELL1 even from
+        SELL2+ — it must not just repeat the previous rung (SELL2 here),
+        mirroring resolve_buy_stage's full reset."""
+        bars = []
+        for i in range(50):
+            price = 90.0 + (i * 0.1)
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=50 - i)
+            bar.open = price - 0.5
+            bar.high = price + 1
+            bar.low = price - 1
+            bar.close = price
+            bar.volume = 1000000
+            bars.append(bar)
+
+        strategy.initialize({"AAPL": bars})
+        df = strategy.get_daily_dataframe("AAPL")
+        # Between SELL2 (75) and SELL3 (80): not high enough to progress.
+        strategy._calculate_rsi = MagicMock(
+            return_value=pd.Series([77.0] * len(df), index=df.index)
+        )
+        strategy._positions["AAPL"] = 100
+        strategy._entry_prices["AAPL"] = Decimal("60")
+        strategy._sell_stages["AAPL"] = 2
+        strategy._last_sell_time["AAPL"] = datetime.now() - timedelta(days=10)
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert signal is not None
+        assert signal.metadata["reason"] == "staged_sell_1"
+
+    @pytest.mark.asyncio
     async def test_stop_loss_signal(self, strategy, sample_bars):
         """Test stop loss signal"""
         strategy.initialize({"AAPL": sample_bars})

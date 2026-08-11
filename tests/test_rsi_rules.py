@@ -145,15 +145,15 @@ class TestResolveSellStage:
         idx, _ = resolve_sell_stage(71.0, 1, SELL_LEVELS, False)
         assert idx == 1
 
-    def test_cooldown_repeats_current_stage(self):
+    def test_cooldown_resets_to_stage1_from_a_deeper_stage(self):
         idx, thr = resolve_sell_stage(71.0, 2, SELL_LEVELS, True)
-        assert idx == 1
-        assert thr == 70
+        assert idx == 0
+        assert thr == 65
 
-    def test_repeat_requires_reaching_repeat_threshold(self):
-        idx, thr = resolve_sell_stage(66.0, 2, SELL_LEVELS, True)
+    def test_reset_requires_reaching_stage1_threshold(self):
+        idx, thr = resolve_sell_stage(64.0, 2, SELL_LEVELS, True)
         assert idx is None
-        assert thr == 70
+        assert thr == 65
 
     def test_full_ladder_restarts_at_stage1_after_cooldown(self):
         idx, thr = resolve_sell_stage(66.0, 3, SELL_LEVELS, True)

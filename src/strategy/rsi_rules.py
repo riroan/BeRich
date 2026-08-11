@@ -133,11 +133,9 @@ def resolve_sell_stage(
     ):
         stage_idx = current_stage
     elif current_stage > 0 and repeat_ready:
-        repeat_idx = (
-            0 if current_stage >= len(levels) else current_stage - 1
-        )
-        next_threshold = levels[repeat_idx][0]
+        # Cooldown resets the sell ladder back to stage 1.
+        next_threshold = levels[0][0]
         if current_rsi >= next_threshold:
-            stage_idx = repeat_idx
+            stage_idx = 0
 
     return stage_idx, next_threshold
