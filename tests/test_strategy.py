@@ -27,6 +27,23 @@ class TestRSIMeanReversionStrategy:
             },
         )
 
+    def _bars(self, price_at):
+        """50-day bar series with the sell-ladder tests' standard OHLC/volume
+        shape. price_at(i) supplies day i's close; open/high/low derive
+        from it."""
+        bars = []
+        for i in range(50):
+            price = price_at(i)
+            bar = MagicMock()
+            bar.timestamp = datetime.now() - timedelta(days=50 - i)
+            bar.open = price - 0.5
+            bar.high = price + 1
+            bar.low = price - 1
+            bar.close = price
+            bar.volume = 1000000
+            bars.append(bar)
+        return bars
+
     @pytest.fixture
     def sample_bars(self):
         """Create sample historical bars"""
@@ -277,17 +294,7 @@ class TestRSIMeanReversionStrategy:
     @pytest.mark.asyncio
     async def test_next_sell_stage_ignores_cooldown(self, strategy):
         """SELL2 can fire before the sell cooldown if its RSI threshold is hit."""
-        bars = []
-        for i in range(50):
-            price = 50.0 + (i * 1.0)
-            bar = MagicMock()
-            bar.timestamp = datetime.now() - timedelta(days=50 - i)
-            bar.open = price - 0.5
-            bar.high = price + 1
-            bar.low = price - 1
-            bar.close = price
-            bar.volume = 1000000
-            bars.append(bar)
+        bars = self._bars(lambda i: 50.0 + i * 1.0)
 
         strategy.initialize({"AAPL": bars})
         strategy._positions["AAPL"] = 100
@@ -307,17 +314,7 @@ class TestRSIMeanReversionStrategy:
     @pytest.mark.asyncio
     async def test_sell_cooldown_allows_same_stage_again(self, strategy):
         """After sell cooldown, the sell ladder can start again at SELL1."""
-        bars = []
-        for i in range(50):
-            price = 90.0 + (i * 0.1)
-            bar = MagicMock()
-            bar.timestamp = datetime.now() - timedelta(days=50 - i)
-            bar.open = price - 0.5
-            bar.high = price + 1
-            bar.low = price - 1
-            bar.close = price
-            bar.volume = 1000000
-            bars.append(bar)
+        bars = self._bars(lambda i: 90.0 + i * 0.1)
 
         strategy.initialize({"AAPL": bars})
         df = strategy.get_daily_dataframe("AAPL")
@@ -342,17 +339,7 @@ class TestRSIMeanReversionStrategy:
         """After cooldown, the sell ladder restarts at SELL1 even from
         SELL2+ — it must not just repeat the previous rung (SELL2 here),
         mirroring resolve_buy_stage's full reset."""
-        bars = []
-        for i in range(50):
-            price = 90.0 + (i * 0.1)
-            bar = MagicMock()
-            bar.timestamp = datetime.now() - timedelta(days=50 - i)
-            bar.open = price - 0.5
-            bar.high = price + 1
-            bar.low = price - 1
-            bar.close = price
-            bar.volume = 1000000
-            bars.append(bar)
+        bars = self._bars(lambda i: 90.0 + i * 0.1)
 
         strategy.initialize({"AAPL": bars})
         df = strategy.get_daily_dataframe("AAPL")
