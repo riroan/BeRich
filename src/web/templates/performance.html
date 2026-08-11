@@ -70,8 +70,6 @@
                 <form class="principal-form" id="principal-form" hidden>
                     <input type="number" id="principal-input" step="0.01" min="0"
                            placeholder="입금액 (USD)" aria-label="입금액 (USD)">
-                    <input type="date" id="principal-date" max="{{ today }}"
-                           aria-label="입금일 (비우면 오늘)">
                     <button type="submit" class="btn-save">저장</button>
                 </form>
                 <div class="principal-error" id="principal-error" hidden></div>
@@ -377,14 +375,12 @@
                 errEl.hidden = true;
                 const deposit = parseFloat(document.getElementById('principal-input').value);
                 if (!(deposit >= 0)) return;
-                const occurredOn = document.getElementById('principal-date').value;
                 try {
                     const res = await fetch('/api/principal', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             principal_usd: currentPrincipal + deposit,
-                            occurred_on: occurredOn || null,
                         }),
                     });
                     if (!res.ok) throw new Error('HTTP ' + res.status);

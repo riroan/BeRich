@@ -407,3 +407,15 @@ def test_equity_chart_plots_raw_balance_not_deposit_adjusted():
     assert match, "equityUsdValue() not found in performance.html"
     assert "deposit_adjusted_usd" not in match.group(1)
     assert "adjusted_total_usd" in match.group(1)
+
+
+def test_principal_form_has_no_backdate_field():
+    """User has decided deposits are always entered same-day going
+    forward, so the form no longer offers a backdate input — every
+    deposit is stamped with the edit moment (occurred_on omitted, which
+    /api/principal already treats as "now"). The API itself still accepts
+    occurred_on for programmatic backfills; only the UI stopped using it.
+    """
+    html = Path("src/web/templates/performance.html").read_text()
+    assert "principal-date" not in html
+    assert "occurred_on" not in html
