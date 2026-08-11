@@ -125,13 +125,13 @@ class DashboardWebSocket {
 
         const usdPnl = document.getElementById('pnl-usd');
         if (usdPnl && data.pnl_usd !== undefined) {
-            usdPnl.textContent = this.formatUSD(data.pnl_usd, true);
+            usdPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
             usdPnl.className = `value small ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
 
         const stickyUsdPnl = document.getElementById('sticky-pnl-usd');
         if (stickyUsdPnl && data.pnl_usd !== undefined) {
-            stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true);
+            stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
             stickyUsdPnl.className = `sticky-value ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
 
@@ -148,7 +148,7 @@ class DashboardWebSocket {
 
         const heroPnl = document.getElementById('hero-pnl');
         if (heroPnl && data.pnl_usd !== undefined) {
-            heroPnl.textContent = this.formatUSD(data.pnl_usd, true);
+            heroPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
             const sign = data.pnl_usd >= 0 ? 'positive' : 'negative';
             heroPnl.className = `hero-stat-value ${sign}`;
             const heroPnlPct = document.getElementById('hero-pnl-pct');

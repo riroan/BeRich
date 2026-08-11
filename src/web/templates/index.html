@@ -10,7 +10,7 @@
             <div class="hero-stats">
                 <div class="hero-stat">
                     <div class="hero-stat-label">Today P&L</div>
-                    <div class="hero-stat-value {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl">{{ pnl_usd|usd_signed }}</div>
+                    <div class="hero-stat-value {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl">{{ pnl_usd|usd_signed(0) }}</div>
                     <div class="hero-stat-sub {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</div>
                 </div>
                 <div class="hero-stat">
@@ -38,7 +38,7 @@
             </div>
             <div class="card">
                 <div class="label">P&L</div>
-                <div class="value small {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd">{{ pnl_usd|usd_signed }}</div>
+                <div class="value small {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd">{{ pnl_usd|usd_signed(0) }}</div>
                 <div class="delta dim">{{ position_count }} positions</div>
             </div>
         </div>

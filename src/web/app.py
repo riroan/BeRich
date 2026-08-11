@@ -1015,7 +1015,7 @@ def _trigger_bot_reload() -> bool:
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
-def _usd_signed(value: float | None) -> str:
+def _usd_signed(value: float | None, decimals: int = 2) -> str:
     """Signed USD with the sign outside the symbol: +$1,234.56 / -$1,234.56.
 
     Writing this inline as ``${{ "{:+,.2f}".format(x) }}`` puts the sign
@@ -1026,7 +1026,7 @@ def _usd_signed(value: float | None) -> str:
     if value is None:
         return "-"
     sign = "+" if value > 0 else ("-" if value < 0 else "")
-    return f"{sign}${abs(value):,.2f}"
+    return f"{sign}${abs(value):,.{decimals}f}"
 
 
 templates.env.filters["usd_signed"] = _usd_signed
