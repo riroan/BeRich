@@ -9,6 +9,9 @@ Execution-environment concerns stay with the callers: how cooldown readiness
 is measured (wall clock vs bar dates), fills, sizing, and state tracking.
 """
 
+import operator
+from typing import Callable
+
 import pandas as pd
 
 
@@ -42,6 +45,40 @@ def calculate_rsi(
     return rsi
 
 
+def _resolve_stage(
+    value: float,
+    current_stage: int,
+    levels: list,
+    repeat_ready: bool,
+    fires: Callable[[float, float], bool],
+) -> tuple[int | None, float | None]:
+    """Shared ladder logic behind resolve_buy_stage and resolve_sell_stage.
+
+    Progress to the next stage immediately when fires(value, threshold) is
+    true for the next level. Cooldown (repeat_ready) resets the ladder:
+    whatever stage it reached, the next fire starts over at stage 1.
+
+    levels: [(threshold, portion), ...]. fires: operator.le for a
+    descending ladder (buy: fires on value <= threshold), operator.ge for
+    an ascending ladder (sell: fires on value >= threshold).
+    Returns (stage_idx or None, next actionable threshold or None).
+    """
+    stage_idx = None
+    next_threshold = (
+        levels[current_stage][0] if current_stage < len(levels) else None
+    )
+
+    if current_stage < len(levels) and fires(value, levels[current_stage][0]):
+        stage_idx = current_stage
+    elif current_stage > 0 and repeat_ready:
+        # Cooldown resets the ladder back to stage 1.
+        next_threshold = levels[0][0]
+        if fires(value, next_threshold):
+            stage_idx = 0
+
+    return stage_idx, next_threshold
+
+
 def resolve_buy_stage(
     current_rsi: float,
     current_stage: int,
@@ -57,23 +94,9 @@ def resolve_buy_stage(
     levels: [(rsi_threshold, portion), ...] — buys fire on RSI <= threshold.
     Returns (stage_idx or None, next actionable threshold or None).
     """
-    stage_idx = None
-    next_threshold = (
-        levels[current_stage][0] if current_stage < len(levels) else None
+    return _resolve_stage(
+        current_rsi, current_stage, levels, repeat_ready, operator.le,
     )
-
-    if (
-        current_stage < len(levels)
-        and current_rsi <= levels[current_stage][0]
-    ):
-        stage_idx = current_stage
-    elif current_stage > 0 and repeat_ready:
-        # Cooldown resets the buy ladder back to stage 1.
-        next_threshold = levels[0][0]
-        if current_rsi <= next_threshold:
-            stage_idx = 0
-
-    return stage_idx, next_threshold
 
 
 def resolve_take_profit_stage(
@@ -122,20 +145,6 @@ def resolve_sell_stage(
     repeat_ready: bool,
 ) -> tuple[int | None, float | None]:
     """Mirror of resolve_buy_stage for the sell ladder (RSI >= threshold)."""
-    stage_idx = None
-    next_threshold = (
-        levels[current_stage][0] if current_stage < len(levels) else None
+    return _resolve_stage(
+        current_rsi, current_stage, levels, repeat_ready, operator.ge,
     )
-
-    if (
-        current_stage < len(levels)
-        and current_rsi >= levels[current_stage][0]
-    ):
-        stage_idx = current_stage
-    elif current_stage > 0 and repeat_ready:
-        # Cooldown resets the sell ladder back to stage 1.
-        next_threshold = levels[0][0]
-        if current_rsi >= next_threshold:
-            stage_idx = 0
-
-    return stage_idx, next_threshold
