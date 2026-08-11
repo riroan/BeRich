@@ -111,6 +111,10 @@ body {
 .pill.paper, .mode.paper { background: rgba(245,158,11,0.15); color: var(--amber); }
 .pill.time { color: var(--dim); font-size: 13px; }
 .pill.warmup { background: rgba(245,158,11,0.15); color: var(--amber); }
+/* Backgrounds for the RSI badge; text color comes from .rsi-danger/-warning/-neutral */
+.pill.rsi-danger { background: rgba(239,68,68,0.15); }
+.pill.rsi-warning { background: rgba(245,158,11,0.15); }
+.pill.rsi-neutral { background: var(--card); }
 .bot-status {
     display: inline-flex;
     align-items: center;
@@ -3343,6 +3347,7 @@ select option { background: var(--surface); color: var(--text); }
 .header-right .bot-status,
 .header-right .mode,
 .header-right .warmup,
+.header-right .rsi-header-badge,
 .header-right .pause-btn {
     display: inline-flex;
     align-items: center;
@@ -3407,6 +3412,10 @@ select option { background: var(--surface); color: var(--text); }
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9'/%3E%3Cpath d='M12 7v5l3 2'/%3E%3C/svg%3E");
 }
+/* RSI badge — reuses .rsi-danger/.rsi-warning/.rsi-neutral for text color. */
+.header-right .rsi-header-badge { font-weight: 700; font-size: 12px; text-decoration: none; }
+.header-right .rsi-header-badge.rsi-danger { border-color: rgba(239,68,68,.32); }
+.header-right .rsi-header-badge.rsi-warning { border-color: rgba(245,158,11,.32); }
 /* TRADING — the one filled, primary action. Icon shows current state:
    running = play glyph, paused = pause glyph. */
 .header-right .pause-btn {

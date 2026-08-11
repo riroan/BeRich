@@ -1047,6 +1047,19 @@ def _asset_version(name: str) -> int:
 
 templates.env.globals["asset_v"] = _asset_version
 
+
+def _avg_rsi() -> float | None:
+    """Simple average of the live RSI values, for the header badge.
+
+    Registered as a Jinja global (not passed per-route) so it shows up in
+    _header.html on every page without every route wiring it through.
+    """
+    values = dashboard_state.rsi_values.values()
+    return sum(values) / len(values) if values else None
+
+
+templates.env.globals["avg_rsi"] = _avg_rsi
+
 # Session storage (in-memory)
 valid_sessions: dict[str, datetime] = {}
 
@@ -2776,6 +2789,62 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request=request,
             name="portfolio_correlation.html",
+            context=context,
+        )
+
+    @app.get("/portfolio/rsi-trend", response_class=HTMLResponse)
+    async def portfolio_rsi_trend_page(request: Request):
+        """Preview: one blended RSI line across every enabled registered
+        symbol (not just current holdings). View-only — no strategy reads
+        this; it's just a way to eyeball whether the whole book is
+        oversold/overbought as a group, day by day."""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        storage = await _get_web_storage()
+        symbols: list[str] = []
+        daily: dict[str, list[float]] = {}
+        if storage:
+            try:
+                configs = await storage.get_all_strategy_configs()
+                seen = set()
+                for cfg in configs:
+                    for s in cfg.get("symbols", []):
+                        sym = s["symbol"] if isinstance(s, dict) else s
+                        sym_enabled = (
+                            s.get("enabled", True)
+                            if isinstance(s, dict) else True
+                        )
+                        if cfg["enabled"] and sym_enabled and sym not in seen:
+                            seen.add(sym)
+                            symbols.append(sym)
+
+                for sym in symbols:
+                    # Same 60-day window the correlation preview uses.
+                    rows = await storage.get_daily_ohlc_rsi(sym, limit=60)
+                    for row in rows:
+                        daily.setdefault(row["day"], []).append(row["rsi"])
+            finally:
+                await storage.close()
+
+        # Simple equal-weighted average — every registered symbol counts the
+        # same regardless of position size, since this is a viewing aid, not
+        # a trading signal.
+        trend = [
+            {"day": day, "rsi": round(sum(vals) / len(vals), 2)}
+            for day, vals in sorted(daily.items())
+        ]
+
+        context = {
+            "request": request,
+            "active_page": "symbols",
+            "symbol_count": len(symbols),
+            "trend": trend,
+            "latest_rsi": trend[-1]["rsi"] if trend else None,
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="portfolio_rsi_trend.html",
             context=context,
         )
 

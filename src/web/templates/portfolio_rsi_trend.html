@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block title %}RSI Trend - BeRich Dashboard{% endblock %}
+
+{% block head_extra %}
+    <script src="/static/lightweight-charts.js"></script>
+{% endblock %}
+
+{% block content %}
+        <header class="page-mobile-title"><h1>RSI Trend</h1></header>
+
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Portfolio RSI Trend</h2>
+                <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
+                    등록된 활성 종목 {{ symbol_count }}개의 일별 RSI를 단순 평균한 최근 60일 추세선. 실제 매매엔 쓰이지 않고, 전체적으로 과매도/과매수 국면인지 훑어보는 용도예요.
+                </p>
+
+                {% if symbol_count == 0 %}
+                <p style="color:var(--dim);">등록된 활성 종목이 없어요.</p>
+                {% elif not trend %}
+                <p style="color:var(--dim);">계산할 RSI 데이터가 아직 부족해요.</p>
+                {% else %}
+                <div class="symbol-stat-value {% if latest_rsi <= 24 or latest_rsi >= 76 %}rsi-danger{% elif latest_rsi <= 35 or latest_rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}" style="font-size:32px; margin-bottom:14px;">
+                    {{ "{:.1f}".format(latest_rsi) }}
+                </div>
+
+                <div class="symbol-chart-stack">
+                    <div class="symbol-chart-block symbol-rsi-chart">
+                        <div class="symbol-chart-label">RSI (평균)</div>
+                        <div id="rsi-trend-chart" class="chart-container-small" role="img" aria-label="Portfolio RSI trend chart" tabindex="0"></div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </section>
+{% endblock %}
+
+{% block scripts %}
+        <script>
+            const trend = {{ trend | tojson | safe }};
+            if (trend.length) {
+                const colors = { bg: '#0f172a', grid: '#1e293b', rsi: '#3b82f6', oversold: '#10b981', overbought: '#ef4444' };
+                const container = document.getElementById('rsi-trend-chart');
+
+                function isMobile() { return window.innerWidth <= 768; }
+
+                const chart = LightweightCharts.createChart(container, {
+                    layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile() ? 10 : 12 },
+                    grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
+                    rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile() ? 50 : 80 },
+                    width: container.clientWidth,
+                    height: isMobile() ? 180 : 260,
+                    timeScale: { borderColor: colors.grid },
+                });
+
+                const rsiSeries = chart.addLineSeries({
+                    color: colors.rsi, lineWidth: 2,
+                    priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+                });
+                const data = trend.map(t => ({ time: t.day, value: t.rsi }));
+                rsiSeries.setData(data);
+
+                // Reference lines at the same 35/65 thresholds the live strategies trade on.
+                const oversoldLine = chart.addLineSeries({
+                    color: colors.oversold, lineWidth: 1, lineStyle: 2,
+                    priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+                });
+                const overboughtLine = chart.addLineSeries({
+                    color: colors.overbought, lineWidth: 1, lineStyle: 2,
+                    priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
+                });
+                oversoldLine.setData([{ time: data[0].time, value: 35 }, { time: data[data.length - 1].time, value: 35 }]);
+                overboughtLine.setData([{ time: data[0].time, value: 65 }, { time: data[data.length - 1].time, value: 65 }]);
+
+                chart.timeScale().fitContent();
+                window.addEventListener('resize', () => {
+                    chart.applyOptions({ width: container.clientWidth });
+                });
+            }
+        </script>
+{% endblock %}
