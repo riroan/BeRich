@@ -1,8 +1,10 @@
 """Tests for dashboard performance metric rendering."""
 
 import asyncio
+import re
 from datetime import date, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -383,3 +385,25 @@ def test_performance_page_loads_fills_from_db(tmp_path):
     assert "∞" in response.text
     assert trade_logs_response.status_code == 200
     assert trade_logs_response.json()[0]["symbol"] == "AAPL"
+
+
+def test_equity_chart_plots_raw_balance_not_deposit_adjusted():
+    """The Equity Curve chart must agree with the BALANCE stat above it.
+
+    deposit_adjusted_usd strips registered deposits out by their recorded
+    date, which isn't reliably when the money arrived (the same flaw Total
+    Return moved off of in 1712678) — so preferring it here pinned the
+    curve's latest point below BALANCE by the size of every deposit ever
+    registered. The chart must read raw total_usd/adjusted_total_usd
+    (identical at snapshot time), not deposit_adjusted_usd. Monthly
+    Returns' separate monthlyValue() is unaffected — it uses twr_index on
+    purpose.
+    """
+    html = Path("src/web/templates/performance.html").read_text()
+    match = re.search(
+        r"function equityUsdValue\(point\) \{\s*return ([^;]+);",
+        html,
+    )
+    assert match, "equityUsdValue() not found in performance.html"
+    assert "deposit_adjusted_usd" not in match.group(1)
+    assert "adjusted_total_usd" in match.group(1)

@@ -233,9 +233,16 @@
                 const date = new Date(timeStr.replace(' ', 'T'));
                 return Math.floor(date.getTime() / 1000) + 32400;
             }
-            // Prefer the deposit-adjusted value so 입출금이 커브에 점프로 안 나타남
+            // Raw balance, same source of truth as the BALANCE stat above —
+            // deposit_adjusted_usd/twr_index only strip out deposits by their
+            // registered date, which isn't reliably the date the money
+            // actually arrived (see Total Return, which moved off that same
+            // TWR chain for the same reason). Using it here made the curve's
+            // latest point disagree with BALANCE by the size of every
+            // deposit. Monthly Returns below still uses twr_index on
+            // purpose — that view's whole point is stripping deposits out.
             function equityUsdValue(point) {
-                return point.deposit_adjusted_usd ?? point.adjusted_total_usd ?? point.total_usd ?? 0;
+                return point.adjusted_total_usd ?? point.total_usd ?? 0;
             }
 
             // Bucket the fine-grained snapshots into one OHLC candle per day
