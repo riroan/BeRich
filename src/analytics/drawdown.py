@@ -8,6 +8,20 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def equity_usd_value(point: dict) -> float:
+    """The USD value an equity_history point actually represents.
+
+    Prefers ``adjusted_total_usd`` (execution-basis, settlement-adjusted)
+    and falls back to ``total_usd`` when it's absent. Shared by
+    DrawdownAnalyzer and the web dashboard's TWR/return calculations so
+    both read the same number for the same point.
+    """
+    value = point.get("adjusted_total_usd")
+    if value is None:
+        value = point.get("total_usd", 0)
+    return value or 0
+
+
 @dataclass
 class DrawdownPoint:
     """Single drawdown measurement"""
@@ -65,9 +79,7 @@ class DrawdownAnalyzer:
     @staticmethod
     def _equity_value(point: dict, currency: str = "usd"):
         if currency == "usd":
-            adjusted = point.get("adjusted_total_usd")
-            if adjusted is not None:
-                return adjusted
+            return equity_usd_value(point)
         return point.get(f"total_{currency}", 0)
 
     def analyze(self, currency: str = "usd") -> DrawdownAnalysis:

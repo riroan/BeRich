@@ -236,10 +236,8 @@ class BacktestRequest(BaseModel):
 
 
 def _equity_usd_value(point: dict[str, Any]) -> float:
-    value = point.get("adjusted_total_usd")
-    if value is None:
-        value = point.get("total_usd", 0)
-    return value or 0
+    from src.analytics.drawdown import equity_usd_value
+    return equity_usd_value(point)
 
 
 def _parse_flow_ts(value: Any) -> datetime | None:
