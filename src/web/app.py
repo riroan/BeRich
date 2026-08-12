@@ -5,7 +5,7 @@ import hmac
 import secrets
 import os
 from datetime import date, datetime, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 from typing import Any
 from pathlib import Path
 
@@ -1013,18 +1013,32 @@ def _trigger_bot_reload() -> bool:
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 
-def _usd_signed(value: float | None, decimals: int = 2) -> str:
+def _usd_signed(
+    value: float | None, decimals: int = 2, truncate: bool = False,
+) -> str:
     """Signed USD with the sign outside the symbol: +$1,234.56 / -$1,234.56.
 
     Writing this inline as ``${{ "{:+,.2f}".format(x) }}`` puts the sign
     INSIDE, rendering "$-1,234.56". Six templates had drifted into that,
     each disagreeing with the live WebSocket update that overwrote it a
     second later. Registered as a filter so there is one copy to be wrong.
+
+    truncate=True cuts the magnitude at `decimals` places instead of
+    rounding (main-page P&L wants the raw digits, not a rounded one).
+    Goes through Decimal(str(...)) rather than float math so a value
+    that's conceptually exact at the cut point (e.g. 743.50) can't drop
+    a cent from float representation error (743.499999999...).
     """
     if value is None:
         return "-"
     sign = "+" if value > 0 else ("-" if value < 0 else "")
-    return f"{sign}${abs(value):,.{decimals}f}"
+    magnitude = abs(value)
+    if truncate:
+        quantum = Decimal(1).scaleb(-decimals)
+        magnitude = float(
+            Decimal(str(magnitude)).quantize(quantum, rounding=ROUND_DOWN)
+        )
+    return f"{sign}${magnitude:,.{decimals}f}"
 
 
 templates.env.filters["usd_signed"] = _usd_signed

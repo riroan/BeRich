@@ -36,7 +36,7 @@
     </div>
     {% set sticky_pnl = pnl_usd if pnl_usd is defined else none %}
     <div class="sticky-pnl" aria-live="polite">
-        <div><span class="sticky-label">P&L</span> <span id="sticky-pnl-usd" class="sticky-value {{ 'positive' if sticky_pnl is not none and sticky_pnl >= 0 else ('negative' if sticky_pnl is not none else '') }}">{% if sticky_pnl is not none %}{{ sticky_pnl|usd_signed(0) }}{% else %}N/A{% endif %}</span></div>
+        <div><span class="sticky-label">P&L</span> <span id="sticky-pnl-usd" class="sticky-value {{ 'positive' if sticky_pnl is not none and sticky_pnl >= 0 else ('negative' if sticky_pnl is not none else '') }}">{% if sticky_pnl is not none %}{{ sticky_pnl|usd_signed(2, true) }}{% else %}N/A{% endif %}</span></div>
         <div><span class="sticky-label">WS</span> <span id="sticky-ws-value" class="sticky-value negative">OFFLINE</span></div>
         <div><span class="sticky-label">Last</span> <span id="sticky-last-update" class="sticky-value">{{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span></div>
     </div>

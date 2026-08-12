@@ -125,13 +125,13 @@ class DashboardWebSocket {
 
         const usdPnl = document.getElementById('pnl-usd');
         if (usdPnl && data.pnl_usd !== undefined) {
-            usdPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
+            usdPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);
             usdPnl.className = `value small ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
 
         const stickyUsdPnl = document.getElementById('sticky-pnl-usd');
         if (stickyUsdPnl && data.pnl_usd !== undefined) {
-            stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
+            stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);
             stickyUsdPnl.className = `sticky-value ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
 
@@ -148,7 +148,7 @@ class DashboardWebSocket {
 
         const heroPnl = document.getElementById('hero-pnl');
         if (heroPnl && data.pnl_usd !== undefined) {
-            heroPnl.textContent = this.formatUSD(data.pnl_usd, true, 0);
+            heroPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);
             const sign = data.pnl_usd >= 0 ? 'positive' : 'negative';
             heroPnl.className = `hero-stat-value ${sign}`;
             const heroPnlPct = document.getElementById('hero-pnl-pct');
@@ -445,8 +445,18 @@ class DashboardWebSocket {
         return formatted + ' KRW';
     }
 
-    formatUSD(value, showSign = false, decimals = 2) {
-        const formatted = Math.abs(value).toLocaleString('en-US', {
+    formatUSD(value, showSign = false, decimals = 2, truncate = false) {
+        let magnitude = Math.abs(value);
+        if (truncate) {
+            // Round to extra precision first to absorb binary float noise
+            // (743.5599999999999 -> "743.56000"), then cut the string at
+            // `decimals` instead of rounding. Mirrors _usd_signed's
+            // Decimal-based truncation server-side.
+            const fixed = magnitude.toFixed(decimals + 4);
+            const dot = fixed.indexOf('.');
+            magnitude = parseFloat(fixed.slice(0, dot + 1 + decimals));
+        }
+        const formatted = magnitude.toLocaleString('en-US', {
             minimumFractionDigits: decimals,
             maximumFractionDigits: decimals
         });
