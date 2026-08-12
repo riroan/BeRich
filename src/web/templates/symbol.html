@@ -420,6 +420,20 @@
             if (rsiData.length > 0) rsiChart.timeScale().fitContent();
         }
 
+        // 일봉 opens on the most recent DAILY_VISIBLE_COUNT candles instead
+        // of fitContent()'ing the whole (up to 250-day) fetch into view —
+        // the rest stays loaded, so panning left reveals it.
+        // priceChart/rsiChart's visible-range subscriptions (below) keep
+        // both charts in sync, so setting it on one is enough.
+        const DAILY_VISIBLE_COUNT = 60;
+        function showRecentDaily(count) {
+            if (count <= 0) return;
+            priceChart.timeScale().setVisibleLogicalRange({
+                from: count - DAILY_VISIBLE_COUNT,
+                to: count - 1,
+            });
+        }
+
         function stabilizeCharts(fitContent = false) {
             requestAnimationFrame(() => {
                 resizeCharts();
@@ -700,7 +714,8 @@
                         { time: last, value: 65 },
                     ]);
                 }
-                stabilizeCharts(fit);
+                stabilizeCharts(false);
+                if (fit) showRecentDaily(candles.length);
             } catch (error) {
                 console.error('Error loading daily chart data:', error);
             }
