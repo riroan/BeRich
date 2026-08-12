@@ -693,7 +693,11 @@ body {
 .sort-dir:hover, .sort-dir:focus { border-color: var(--blue); color: var(--blue); }
 
 /* ===================== Layout ===================== */
-.two-col { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; }
+/* Positions + RSI Monitor's only user. Side-by-side (3fr 2fr) squeezed the
+   RSI grid into ~40% width, so a growing symbol count wrapped it into many
+   rows and grid row-stretch dragged the Positions card's height along with
+   it. Stacked so each gets the full width to lay out in fewer rows. */
+.two-col { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .three-col { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .panel { background: var(--surface); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
