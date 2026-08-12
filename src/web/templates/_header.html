@@ -1,7 +1,6 @@
     <div class="header">
         <h1><a class="brand-link" href="/" aria-label="Dashboard">Be<span>Rich</span></a></h1>
         <div class="header-right" aria-live="polite">
-            <span id="ws-status" class="ws-status disconnected" role="status" aria-label="Offline connection" title="OFFLINE"></span>
             {% set portfolio_rsi = avg_rsi() %}
             {% if portfolio_rsi is not none %}
             <a href="/portfolio/rsi-trend" class="rsi-header-badge {% if portfolio_rsi <= 24 or portfolio_rsi >= 76 %}rsi-danger{% elif portfolio_rsi <= 35 or portfolio_rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}"
@@ -10,6 +9,7 @@
                 RSI {{ "{:.0f}".format(portfolio_rsi) }}
             </a>
             {% endif %}
+            <span id="ws-status" class="ws-status disconnected" role="status" aria-label="Offline connection" title="OFFLINE"></span>
             {% set is_running = bot_status.running if bot_status else false %}
             {% set is_paper = bot_status.paper_trading if bot_status else true %}
             {% set warmup_remaining = bot_status.warmup_remaining if bot_status and bot_status.warmup_remaining else 0 %}
