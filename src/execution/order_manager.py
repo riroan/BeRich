@@ -460,7 +460,12 @@ class OrderManager:
                 pnl_pct=meta.get("pnl_pct", 0),
                 stage=stage,
                 total_stages=total_stages,
-                is_partial="staged_sell" in reason,
+                # Reason-string sniffing missed take_profit (and any other
+                # non-"staged_sell" reason) staged below 100%, mislabeling a
+                # partial fill as "전량 매도". sell_portion is on every
+                # exit reason's metadata (stop_loss/take_profit/staged_sell
+                # all set it in rsi_mean_reversion.py) — use it directly.
+                is_partial=float(meta.get("sell_portion", 1.0)) < 1.0,
                 market=market_type,
                 submitted=submitted,
             )
