@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
+from decimal import Decimal
 
 import numpy as np
 import pandas as pd
@@ -11,7 +13,7 @@ os.environ.setdefault("DASHBOARD_PASSWORD", "test")
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
 import scripts.backtest_rsi as backtest_rsi  # noqa: E402
-from src.core.types import Market  # noqa: E402
+from src.core.types import Market, SignalType  # noqa: E402
 from src.strategy.builtin.rsi_mean_reversion import (  # noqa: E402
     RSIMeanReversionStrategy,
 )
@@ -159,3 +161,37 @@ class TestResolveSellStage:
         idx, thr = resolve_sell_stage(66.0, 3, SELL_LEVELS, True)
         assert idx == 0
         assert thr == 65
+
+
+class TestTakeProfitWiring:
+    """No live strategy_configs row sets `take_profit`, so this ladder
+    never fires today. Confirms the wiring works once one does."""
+
+    def _strategy(self, params):
+        strategy = RSIMeanReversionStrategy(
+            symbols=["AAPL"], market=Market.NASDAQ, params=params,
+        )
+        # Flat history + a jump on the last bar: satisfies required_history
+        # and puts the position in profit. RSI ends up overbought, but the
+        # PnL ladders are checked first and return before the RSI sell path.
+        closes = [100.0] * 25 + [121.0]
+        strategy._daily_bars["AAPL"] = pd.DataFrame(
+            {"close": closes},
+            index=pd.bdate_range(start="2022-01-03", periods=len(closes)),
+        )
+        strategy.sync_position("AAPL", 10, Decimal("100"))
+        strategy._entry_prices["AAPL"] = Decimal("100")
+        return strategy
+
+    def test_unset_take_profit_never_fires(self):
+        strategy = self._strategy({})
+        signal = asyncio.run(strategy.calculate_signal("AAPL"))
+        assert signal is None or signal.metadata["reason"] != "take_profit"
+
+    def test_take_profit_fires_once_configured(self):
+        strategy = self._strategy({"take_profit": 20})
+        signal = asyncio.run(strategy.calculate_signal("AAPL"))
+        assert signal is not None
+        assert signal.signal_type is SignalType.EXIT_LONG
+        assert signal.metadata["reason"] == "take_profit"
+        assert signal.metadata["sell_portion"] == 1.0
