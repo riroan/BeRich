@@ -2757,12 +2757,17 @@ def create_app() -> FastAPI:
             if len(closes) >= 3:
                 df = pd.DataFrame(closes).sort_index().pct_change().dropna(how="all")
                 corr = df.corr().abs()
+                seen_pairs: set[frozenset[str]] = set()
                 for sym in corr.columns:
                     others = corr[sym].drop(sym).dropna()
                     if others.empty:
                         continue
                     max_corr = float(others.max())
                     with_symbol = others.idxmax()
+                    pair = frozenset({sym, with_symbol})
+                    if pair in seen_pairs:
+                        continue
+                    seen_pairs.add(pair)
                     correlations.append({
                         "symbol": sym,
                         "max_corr": round(max_corr, 2),
