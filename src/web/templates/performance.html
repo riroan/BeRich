@@ -225,7 +225,16 @@
 
             let usdData = [];
             let dailyCandles = [];
+            let dailyCandlesLoaded = false;
             let equityTf = 'tick';
+
+            // 분봉 lazy-load: same cursor-pagination convention as
+            // /api/symbol/{symbol}/history (limit + before), so the initial
+            // page load doesn't pull the full 90-day snapshot history.
+            const EQUITY_PAGE_SIZE = 500;
+            let oldestCursor = null;
+            let isLoadingMore = false;
+            let reachedEnd = false;
 
             function parseKST(timeStr) {
                 const date = new Date(timeStr.replace(' ', 'T'));
@@ -260,8 +269,24 @@
                     .map(([day, c]) => ({ time: day, open: c.open, high: c.high, low: c.low, close: c.close }));
             }
 
-            function applyEquityTf() {
+            // Full 90-day fetch, only for 일봉 — bucketing to daily candles
+            // compresses it to ~90 points, so unlike 분봉 it's cheap and
+            // doesn't need pagination. Loaded once, on first switch to 일봉.
+            async function ensureDailyLoaded() {
+                if (dailyCandlesLoaded) return;
+                try {
+                    const res = await fetch('/api/equity-history');
+                    const result = await res.json();
+                    dailyCandles = toDailyCandles(result.data || []);
+                    dailyCandlesLoaded = true;
+                } catch (err) {
+                    console.error('Failed to load daily equity data:', err);
+                }
+            }
+
+            async function applyEquityTf() {
                 const daily = equityTf === 'daily';
+                if (daily) await ensureDailyLoaded();
                 usdSeries.setData(daily ? [] : usdData);
                 candleSeries.setData(daily ? dailyCandles : []);
                 chart.timeScale().fitContent();
@@ -276,9 +301,57 @@
                 b.addEventListener('click', () => { equityTf = b.dataset.tf; applyEquityTf(); });
             });
 
-            // Fetch real equity data from API
-            fetch('/api/equity-history')
-                .then(res => res.json())
+            async function fetchEquityPage(before = null) {
+                let url = `/api/equity-history?limit=${EQUITY_PAGE_SIZE}`;
+                if (before) url += `&before=${encodeURIComponent(before)}`;
+                const res = await fetch(url);
+                return await res.json();
+            }
+
+            function pointToBar(point) {
+                return { time: parseKST(point.timestamp), value: equityUsdValue(point) };
+            }
+
+            function mergeSorted(existing, incoming) {
+                // incoming is older; prepend, then sort + dedupe by time
+                return [...incoming, ...existing]
+                    .sort((a, b) => a.time - b.time)
+                    .filter((v, i, a) => i === 0 || v.time !== a[i - 1].time);
+            }
+
+            // Trigger lazy-load when the user scrolls within 10 bars of the
+            // left edge — 일봉 is a finite ~90-point set, no pagination needed.
+            const LOAD_MORE_THRESHOLD = 10;
+            async function loadMoreEquity() {
+                if (isLoadingMore || reachedEnd || !oldestCursor) return;
+                isLoadingMore = true;
+                try {
+                    const result = await fetchEquityPage(oldestCursor);
+                    const data = result.data || [];
+                    if (data.length === 0) {
+                        reachedEnd = true;
+                        return;
+                    }
+                    oldestCursor = data[0].timestamp;
+                    const newPoints = data.map(pointToBar).filter(p => p.value > 0);
+                    usdData = mergeSorted(usdData, newPoints);
+                    if (equityTf === 'tick') usdSeries.setData(usdData);
+                } catch (err) {
+                    console.error('Failed to load more equity history:', err);
+                } finally {
+                    isLoadingMore = false;
+                }
+            }
+
+            chart.timeScale().subscribeVisibleLogicalRangeChange(range => {
+                if (equityTf === 'tick' && range && range.from < LOAD_MORE_THRESHOLD) {
+                    loadMoreEquity();
+                }
+            });
+
+            // Initial 분봉 page — most recent EQUITY_PAGE_SIZE snapshots only;
+            // older history loads on scroll-back via loadMoreEquity().
+            fetchEquityPage()
                 .then(result => {
                     const data = result.data || [];
 
@@ -287,14 +360,8 @@
                         return;
                     }
 
-                    usdData = [];
-                    data.forEach(point => {
-                        const value = equityUsdValue(point);
-                        if (value > 0) {
-                            usdData.push({ time: parseKST(point.timestamp), value });
-                        }
-                    });
-                    dailyCandles = toDailyCandles(data);
+                    oldestCursor = data[0].timestamp;
+                    usdData = data.map(pointToBar).filter(p => p.value > 0);
 
                     applyEquityTf();
                 })

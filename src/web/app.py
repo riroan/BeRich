@@ -1684,18 +1684,33 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/equity-history")
-    async def get_equity_history():
+    async def get_equity_history(limit: int | None = None, before: str | None = None):
         """Get equity curve data from the DB.
 
         Reads from storage (full 90-day window) instead of the in-memory
         ``equity_history``, which is capped at the last 1000 snapshots and so
         truncated the curve to only the most recent ~3-4 weeks. Falls back to
         the in-memory cache if storage is unavailable.
+
+        ``limit``+``before`` switch to cursor pagination (same convention as
+        ``/api/symbol/{symbol}/history``) so the 분봉 chart can lazy-load
+        instead of pulling the full window upfront. Called with no params,
+        returns the full window — used by Monthly Returns, which needs the
+        complete flow-adjusted chain to compute correctly.
         """
+        before_dt: datetime | None = None
+        if before:
+            try:
+                before_dt = datetime.fromisoformat(before)
+            except ValueError:
+                raise HTTPException(
+                    status_code=400, detail="Invalid 'before' timestamp format",
+                )
+
         storage = await _get_web_storage()
         if storage:
             try:
-                points = await storage.get_equity_history()
+                points = await storage.get_equity_history(limit=limit, before=before_dt)
                 flows = await storage.get_cash_flows()
                 series, _ = flow_adjusted_series(points, flows)
                 return {"data": series}

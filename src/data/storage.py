@@ -805,18 +805,37 @@ class Storage:
             session.add(snapshot)
             await session.commit()
 
-    async def get_equity_history(self, days: int = 90) -> list[dict]:
-        """Get equity history for the last N days"""
+    async def get_equity_history(
+        self,
+        days: int = 90,
+        limit: int | None = None,
+        before: datetime | None = None,
+    ) -> list[dict]:
+        """Get equity history for the last N days.
+
+        With ``limit`` set, switches to cursor pagination instead (same
+        convention as ``get_price_rsi_history``): newest ``limit`` rows
+        strictly older than ``before``, returned in chronological order.
+        Used by the 분봉 equity chart to lazy-load instead of pulling the
+        full window on every request.
+        """
         async with self.async_session() as session:
-            from_date = datetime.now() - timedelta(days=days)
-            query = (
-                select(EquitySnapshot)
-                .where(EquitySnapshot.timestamp >= from_date)
-                .order_by(EquitySnapshot.timestamp)
-            )
+            query = select(EquitySnapshot)
+            if limit is not None:
+                if before is not None:
+                    query = query.where(EquitySnapshot.timestamp < before)
+                query = query.order_by(EquitySnapshot.timestamp.desc()).limit(limit)
+            else:
+                from_date = datetime.now() - timedelta(days=days)
+                query = (
+                    query.where(EquitySnapshot.timestamp >= from_date)
+                    .order_by(EquitySnapshot.timestamp)
+                )
 
             result = await session.execute(query)
             rows = result.scalars().all()
+            if limit is not None:
+                rows = list(reversed(rows))
 
             return [
                 {

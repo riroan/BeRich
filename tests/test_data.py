@@ -2,7 +2,7 @@
 
 import pytest
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from src.core.types import Market, OrderSide, OrderStatus, OrderType, Order
 from src.data.storage import Storage
@@ -398,3 +398,35 @@ class TestEquitySnapshots:
 
         assert history[0]["adjusted_total_usd"] == 1050.0
         assert history[0]["settlement_adjustment_usd"] == 50.0
+
+    @pytest.mark.asyncio
+    async def test_get_equity_history_pagination(self, storage: Storage):
+        """limit+before cursor pagination (분봉 chart lazy-load) returns
+        chronologically-ordered pages without disturbing the default
+        days-window call (used by Monthly Returns)."""
+        from src.data.models import EquitySnapshot
+
+        base = datetime.now() - timedelta(hours=1)
+        async with storage.async_session() as session:
+            for i in range(5):
+                session.add(EquitySnapshot(
+                    timestamp=base + timedelta(minutes=i),
+                    total_krw=Decimal("0"), total_usd=Decimal(str(1000 + i)),
+                    cash_krw=Decimal("0"), cash_usd=Decimal("0"),
+                    position_value_krw=Decimal("0"), position_value_usd=Decimal("0"),
+                    adjusted_total_usd=Decimal(str(1000 + i)),
+                ))
+            await session.commit()
+
+        # Default call (no limit) is unaffected — full window, ascending.
+        full = await storage.get_equity_history(days=90)
+        assert [h["total_usd"] for h in full] == [1000.0, 1001.0, 1002.0, 1003.0, 1004.0]
+
+        # First page: newest `limit` rows, still chronological order.
+        page1 = await storage.get_equity_history(limit=3)
+        assert [h["total_usd"] for h in page1] == [1002.0, 1003.0, 1004.0]
+
+        # Next page: strictly older than the oldest point of page1.
+        cursor = datetime.fromisoformat(page1[0]["timestamp"])
+        page2 = await storage.get_equity_history(limit=3, before=cursor)
+        assert [h["total_usd"] for h in page2] == [1000.0, 1001.0]
