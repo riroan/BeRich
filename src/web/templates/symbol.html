@@ -173,9 +173,10 @@
             <div class="panel symbol-combined-chart-panel">
                 <div class="symbol-chart-header">
                     <h2>Chart</h2>
-                    <div class="chart-tf-toggle" role="group" aria-label="Chart timeframe">
+                    <div class="chart-tf-toggle" role="group" aria-label="Chart mode">
                         <button type="button" class="chart-tf-btn active" data-tf="tick" aria-pressed="true">분봉</button>
                         <button type="button" class="chart-tf-btn" data-tf="daily" aria-pressed="false">일봉</button>
+                        <button type="button" class="chart-tf-btn" data-tf="ha" aria-pressed="false" title="하이킨아시 (일봉 기준)" aria-label="하이킨아시">HA</button>
                     </div>
                 </div>
                 <div class="symbol-chart-stack">
@@ -411,9 +412,11 @@
         let isLoading = false;
         let reachedEnd = false;
 
-        // Active chart timeframe: 'tick' (분봉, per-tick line) or 'daily'
-        // (일봉, daily OHLC candles from /daily).
+        // Active chart mode: 'tick' (분봉, per-tick line), 'daily' (일봉, daily
+        // OHLC candles from /daily), or 'ha' (하이킨아시, the same daily candles
+        // Heikin-Ashi smoothed). 'daily' and 'ha' share one fetch.
         let timeframe = 'tick';
+        let dailyCandles = [];     // raw OHLC from /daily, cached for mode swaps
 
         function fitLoadedContent() {
             if (priceData.length > 0) priceChart.timeScale().fitContent();
@@ -682,14 +685,14 @@
                 const data = await response.json();
                 resizeCharts();
 
-                const candles = (data.prices || []).map(p => ({
+                dailyCandles = (data.prices || []).map(p => ({
                     time: p.time,
                     open: p.open,
                     high: p.high,
                     low: p.low,
                     close: p.close,
                 }));
-                dailySeries.setData(candles);
+                renderDaily();
 
                 if (data.trade_points && data.trade_points.length > 0) {
                     dailySeries.setMarkers(
@@ -715,17 +718,40 @@
                     ]);
                 }
                 stabilizeCharts(false);
-                if (fit) showRecentDaily(candles.length);
+                if (fit) showRecentDaily(dailyCandles.length);
             } catch (error) {
                 console.error('Error loading daily chart data:', error);
             }
         }
 
-        // Switch between the tick (분봉) and daily (일봉) timeframes. Only one
-        // price series holds data at a time; both charts swap together so the
-        // logical-index sync between price and RSI stays aligned.
+        // Heikin-Ashi: close is the bar's OHLC average, open the midpoint of
+        // the previous HA bar; high/low extend to cover both.
+        function toHeikinAshi(candles) {
+            let prev = null;
+            return candles.map(c => {
+                const close = (c.open + c.high + c.low + c.close) / 4;
+                const open = prev ? (prev.open + prev.close) / 2 : (c.open + c.close) / 2;
+                prev = {
+                    time: c.time,
+                    open,
+                    high: Math.max(c.high, open, close),
+                    low: Math.min(c.low, open, close),
+                    close,
+                };
+                return prev;
+            });
+        }
+
+        function renderDaily() {
+            dailySeries.setData(timeframe === 'ha' ? toHeikinAshi(dailyCandles) : dailyCandles);
+        }
+
+        // Switch between the tick (분봉) and daily (일봉 / 하이킨아시) modes. Only
+        // one price series holds data at a time; both charts swap together so
+        // the logical-index sync between price and RSI stays aligned.
         function setTimeframe(tf) {
             if (tf === timeframe) return;
+            const wasDaily = timeframe !== 'tick';
             timeframe = tf;
             document.querySelectorAll('.chart-tf-btn').forEach((btn) => {
                 const active = btn.dataset.tf === tf;
@@ -733,7 +759,11 @@
                 btn.setAttribute('aria-pressed', active ? 'true' : 'false');
             });
 
-            if (tf === 'daily') {
+            if (tf !== 'tick') {
+                if (wasDaily) {
+                    renderDaily();   // 일봉 ↔ 하이킨아시: same data, no refetch
+                    return;
+                }
                 priceSeries.setData([]);
                 priceSeries.setMarkers([]);
                 loadDaily(true);
@@ -758,7 +788,7 @@
         // Refresh every 60 seconds. Tick refresh merges (preserves lazy-loaded
         // history + user pan); daily re-fetches without re-fitting the view.
         setInterval(() => {
-            if (timeframe === 'daily') loadDaily(false);
+            if (timeframe !== 'tick') loadDaily(false);
             else refreshLatest();
         }, 60000);
     </script>
