@@ -303,6 +303,16 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
             name = cfg["name"]
             new_names.append(name)
 
+            # A strategy with no enabled symbols is a normal state now — the
+            # create form makes one before any symbol is assigned. Build no
+            # instance for it (build_strategy raises on empty symbol_markets),
+            # the same skip the initial load does, instead of logging a reload
+            # failure every cycle. The name still shows in the dashboard list,
+            # which is also what the initial load does.
+            if not extract_symbols(cfg["symbols"]):
+                logger.info(f"No symbols for {name}, skipping")
+                continue
+
             # Check if unchanged — reuse existing instance
             if (old := old_strategies.get(name)) and self._strategy_unchanged(old, cfg):
                 new_list.append(old)

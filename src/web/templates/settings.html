@@ -142,6 +142,7 @@
         .modal-form-grid .form-group { gap: 6px; }
         .modal-form-grid input, .modal-form-grid select { width: 100%; box-sizing: border-box; }
         .modal-form-actions { margin-top: 0; }
+        .form-hint { margin: 10px 0 0; color: var(--dim); font-size: 12px; }
 
         /* Read-only mode */
         .strategy-content .read-val {
@@ -571,20 +572,8 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="form-group">
-                        <label for="new-market">Market for these symbols</label>
-                        <select id="new-market">
-                            <option value="nasdaq">NASDAQ</option>
-                            <option value="nyse">NYSE</option>
-                            <option value="amex">AMEX</option>
-                            <option value="krx">KRX</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="new-symbols">Symbols (comma-separated)</label>
-                        <input type="text" id="new-symbols" placeholder="AAPL, GOOG, NVDA">
-                    </div>
                 </div>
+                <p class="form-hint">Add symbols from the Symbols page once the strategy exists.</p>
                 <div class="form-actions modal-form-actions">
                     <span class="save-status" id="create-status"></span>
                     <button class="btn" onclick="toggleCreateForm(false)">Cancel</button>
@@ -826,22 +815,19 @@
             const statusEl = document.getElementById('create-status');
             const name = document.getElementById('new-name').value.trim();
             const classPath = document.getElementById('new-class').value;
-            const market = document.getElementById('new-market').value;
-            const symbolsStr = document.getElementById('new-symbols').value.trim();
 
-            if (!name || !symbolsStr) {
-                statusEl.textContent = 'Name and symbols required';
+            if (!name) {
+                statusEl.textContent = 'Name required';
                 statusEl.className = 'save-status error';
                 return;
             }
 
-            // Market rides on the symbol, so the strategy can later hold
-            // symbols from other markets alongside these.
-            const symbols = symbolsStr.split(',').map(s => ({
-                symbol: s.trim().toUpperCase(),
-                market: market,
-                max_weight: 15.0
-            }));
+            // Symbols are added later from the Symbols page, and each one
+            // carries its own market. The strategy-level market is only the
+            // fallback for legacy configs whose symbols are plain strings —
+            // nothing created here can hit it, so it just needs to be valid.
+            const market = 'nasdaq';
+            const symbols = [];
 
             const defaultParams = {
                 rsi_period: 14,

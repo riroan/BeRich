@@ -93,6 +93,42 @@ def test_successful_init_swaps_in_the_new_strategy():
     assert bot.strategy_engine._strategies == [fresh]
 
 
+def test_symbolless_strategy_is_skipped_not_failed():
+    """A strategy created before any symbol is assigned is a normal state.
+
+    build_strategy would raise on the empty symbol_markets, so the reload
+    must skip it instead of logging a failure every cycle — while still
+    listing the name, the way the initial load does.
+    """
+    old = _running_strategy()
+    cfg = _cfg()
+    cfg["symbols"] = []
+    bot = _bot_with_running_strategy(old, cfg)
+    builder = MagicMock()
+
+    with patch("src.bot.core.build_strategy", builder):
+        asyncio.run(bot.reload_strategies())
+
+    builder.assert_not_called()
+    assert bot.strategy_engine._strategies == []
+    assert bot.dashboard.strategy_names == ["Normal_RSI"]
+
+
+def test_disabled_symbols_only_counts_as_symbolless():
+    """Every symbol toggled off is the same as having none."""
+    old = _running_strategy()
+    cfg = _cfg()
+    cfg["symbols"] = [{"symbol": "AAPL", "market": "nasdaq", "enabled": False}]
+    bot = _bot_with_running_strategy(old, cfg)
+    builder = MagicMock()
+
+    with patch("src.bot.core.build_strategy", builder):
+        asyncio.run(bot.reload_strategies())
+
+    builder.assert_not_called()
+    assert bot.strategy_engine._strategies == []
+
+
 def test_reload_is_dispatched_to_the_bot_loop_not_the_web_loop():
     """The broker's session is bound to the bot loop; driving the reload from
     the web thread's loop is what silently emptied every RSI base."""
