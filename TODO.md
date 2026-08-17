@@ -378,3 +378,67 @@ EST(겨울)는 1시간 시프트 (단, **애프터 마감 07:00은 고정**). DS
 - 해외 주문: `src/broker/kis/client.py:458` (`_submit_overseas_order`)
 - RSI 전략: `src/strategy/builtin/rsi_mean_reversion.py`
 - 설정: `config/settings.yaml`
+
+---
+
+# TODO: push 시 자동 태그 + GitLab 미러 (2026-08-17)
+
+**What:** main에 푸시하면 GitHub Actions가 태그를 자동 생성하고, 커밋과 태그를
+GitLab에 함께 푸시한다.
+
+**현재 상태:** remote는 `origin`(GitHub) 하나. 태그 0개. `pyproject.toml` version은
+`0.1.0`에 멈춰 있고 CHANGELOG 없음. 워크플로는 `pr-review.yml`(AI 리뷰) 하나뿐이라
+**테스트를 도는 CI가 없다.**
+
+## 먼저 판단할 것 — CI가 정말 필요한가
+
+"GitLab에도 푸시"만 필요하면 CI 없이 로컬 한 줄로 끝난다:
+
+```
+git remote set-url --add --push origin <gitlab-url>
+```
+
+`git push` 한 번이 양쪽으로 나간다. 토큰도 시크릿도 불필요. CI를 세울 이유는
+**태그 자동 생성**이 필요하거나 **내 노트북과 무관하게 서버에서 보장**돼야 할 때뿐이다.
+
+## 블로킹 결정: 태그 규칙
+
+태그가 0개고 버전이 고정이라 semver를 쓰면 매번 손으로 올려야 하는데, main에 직접
+푸시하는 현 워크플로와 안 맞는다.
+
+- **날짜 기반** `v2026.08.17.1` (같은 날 2회차는 `.2`) — 충돌 없음, 버전 올리는 규율 불필요. 추천.
+- **pyproject version 변경 시에만** — 태그 수가 적고 의미 있지만, 올리는 걸 잊으면 태그가 안 생김.
+
+## 단계
+
+- [ ] 태그 규칙 확정 → 검증: 로컬에서 이름 생성만 돌려 의도대로 나오는지
+- [ ] GitLab 빈 프로젝트 생성 (초기 커밋 없이 — 히스토리 충돌 방지)
+- [ ] Project Access Token 발급 (scope `write_repository`, role Maintainer)
+- [ ] GitHub Secrets에 `GITLAB_TOKEN` / `GITLAB_REPO_URL` 등록
+      → 검증: 로컬에서 그 토큰으로 수동 push 1회 성공
+- [ ] `.github/workflows/release.yml` 작성 (`on: push: branches: [main]`)
+      → 검증: 커밋 1개 푸시 → GitHub 태그 생성 + GitLab에 커밋·태그 동시 반영
+
+순서 주의: **태그를 먼저 만들고 그 다음 GitLab 푸시** 해야 태그가 같이 넘어간다.
+
+## 함정 (놓치면 터짐)
+
+- **무한 루프.** 워크플로가 푼 태그가 다시 워크플로를 부를 수 있다. 기본 `GITHUB_TOKEN`
+  으로 푸시하면 GitHub가 재트리거를 막아줘 안전하지만, **PAT를 쓰면 이 보호가 사라져
+  무한 루프**가 된다. 태그 푸시는 `GITHUB_TOKEN` + `permissions: contents: write`.
+- **`git push --mirror` 금지.** GitLab에만 있는 ref를 지운다. `git push gitlab main --follow-tags`로 명시.
+- **`fetch-depth: 0` 필수.** `actions/checkout` 기본 depth 1이면 shallow update 에러.
+- **동시 푸시 경합.** `concurrency: { group: release, cancel-in-progress: false }` —
+  `pr-review.yml`과 달리 취소하면 안 된다.
+- **GitLab 브랜치 보호.** 기본 브랜치가 보호돼 있으면 토큰 role이 Maintainer여야 통과.
+
+## 선결 조건 (태그에 의미를 주려면)
+
+지금은 깨진 커밋에도 태그가 붙고 GitLab으로 넘어간다. 태그 생성 앞에 게이트를 두는 게 맞다.
+
+- `pytest`는 바로 게이트 가능 (574 passed).
+- `ruff check .`은 기존 에러 14건(전부 `scripts/`, `tests/`의 미사용 import·E402) 정리 후.
+- `mypy`는 기존 에러 198건이라 게이트 불가.
+
+**Depends on:** 태그 규칙 확정. GitLab pull mirroring(GitLab이 GitHub를 당겨오는 기능)은
+CI가 불필요하지만 Premium 전용이라 제외.
