@@ -487,6 +487,7 @@
             <div class="chart-tf-toggle" role="group" aria-label="Backtest strategy">
                 <button type="button" class="chart-tf-btn active" data-strategy="rsi" aria-pressed="true">RSI</button>
                 <button type="button" class="chart-tf-btn" data-strategy="ha" aria-pressed="false" title="하이킨아시 전환 매매" aria-label="하이킨아시">HA</button>
+                <button type="button" class="chart-tf-btn" data-strategy="rsi_ha" aria-pressed="false" title="RSI 조건과 하이킨아시 양봉이 동시에 성립할 때만 매수">RSI+HA</button>
             </div>
         </div>
 
@@ -891,6 +892,15 @@
             // them, so switching back keeps whatever was tuned.
             let strategy = 'rsi';
 
+            // Strategies that read the RSI ladder fields. HA is the only one
+            // with nothing to tune, so it is the only one that hides them.
+            const USES_RSI_PARAMS = ['rsi', 'rsi_ha'];
+            const STRATEGY_LABEL = {
+                rsi: 'RSI Mean Reversion',
+                ha: 'Heikin-Ashi Flip',
+                rsi_ha: 'RSI + Heikin-Ashi',
+            };
+
             function setStrategy(key) {
                 if (key === strategy) return;
                 strategy = key;
@@ -900,11 +910,12 @@
                     btn.setAttribute('aria-pressed', active ? 'true' : 'false');
                 });
                 document.getElementById('bt-strategy-label').textContent =
-                    key === 'ha' ? 'Heikin-Ashi Flip' : 'RSI Mean Reversion';
+                    STRATEGY_LABEL[key] || key;
                 // Every RSI-only block carries data-rsi-only, so a new one is
                 // hidden by marking it up — not by editing this list.
+                const showParams = USES_RSI_PARAMS.includes(key);
                 document.querySelectorAll('[data-rsi-only]').forEach(el => {
-                    el.hidden = key !== 'rsi';
+                    el.hidden = !showParams;
                 });
             }
 
@@ -924,7 +935,7 @@
                 };
                 // HA is the pure flip rule — it reads no settings, so none
                 // are sent and none are validated.
-                if (strategy !== 'rsi') return common;
+                if (!USES_RSI_PARAMS.includes(strategy)) return common;
                 return {
                     ...common,
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
@@ -1066,7 +1077,7 @@
                         ...result.buy_trades.map(t => ({
                             time: t.date, position: 'belowBar', color: colors.buyMarker,
                             shape: 'arrowUp',
-                            text: strategy === 'rsi' ? 'BUY' + t.stage : 'BUY',
+                            text: USES_RSI_PARAMS.includes(strategy) ? 'BUY' + t.stage : 'BUY',
                         })),
                         ...result.sell_trades.map(t => ({
                             time: t.date,
@@ -1075,7 +1086,7 @@
                             shape: 'arrowDown',
                             text: t.reason === 'stop_loss' ? 'STOP'
                                   : t.reason === 'end_of_period' ? 'CLOSE'
-                                  : strategy === 'rsi' ? 'SELL' + t.stage : 'SELL',
+                                  : USES_RSI_PARAMS.includes(strategy) ? 'SELL' + t.stage : 'SELL',
                         })),
                     ].sort((a, b) => a.time.localeCompare(b.time));
                     tradeMarkers = markers;

@@ -200,7 +200,7 @@ class PricePoint(BaseModel):
 class BacktestRequest(BaseModel):
     """Backtest parameters. The RSI fields are ignored when strategy='ha',
     which takes none — the flip rule has nothing to tune."""
-    strategy: str = Field("rsi", pattern="^(rsi|ha)$")
+    strategy: str = Field("rsi", pattern="^(rsi|ha|rsi_ha)$")
     symbol: str = Field(..., min_length=1, max_length=20)
     market: str = "krx"
     start_date: str  # "YYYY-MM-DD"
@@ -230,10 +230,13 @@ class BacktestRequest(BaseModel):
             raise ValueError("date_range_invalid: end_date must be after start_date")
         if (end - start).days > 365 * 5:
             raise ValueError("date_range_invalid: range exceeds 5 years")
-        if self.strategy != "rsi":
-            # Everything below is an RSI setting. A strategy that does not
-            # read them must not be rejected for their shape — the HA flip
-            # rule has nothing to tune.
+        # Everything below is an RSI setting. A strategy that does not read
+        # them must not be rejected for their shape — the HA flip rule has
+        # nothing to tune. The flag is inherited, so a strategy specialising
+        # the RSI one keeps the checks.
+        from scripts.backtest_registry import backtest_class
+
+        if not backtest_class(self.strategy).uses_rsi_params:
             return self
         if not (5 <= self.rsi_period <= 30):
             raise ValueError("rsi_period must be between 5 and 30")

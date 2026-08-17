@@ -36,8 +36,8 @@ def _flat(n, price=100.0):
 
 
 class TestRegistry:
-    def test_both_strategies_are_registered(self):
-        assert set(BACKTESTS) == {"rsi", "ha"}
+    def test_the_strategies_are_registered(self):
+        assert set(BACKTESTS) == {"rsi", "ha", "rsi_ha"}
 
     def test_build_by_key(self):
         assert isinstance(build_backtest("rsi", {}), RSIMeanReversionBacktest)

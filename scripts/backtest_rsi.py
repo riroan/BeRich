@@ -48,6 +48,7 @@ class RSIMeanReversionBacktest(BacktestStrategy):
     """
 
     key = "rsi"
+    uses_rsi_params = True
 
     def __init__(self, params: dict | None = None):
         super().__init__(params)

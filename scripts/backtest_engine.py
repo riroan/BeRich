@@ -94,6 +94,12 @@ class BacktestStrategy(ABC):
     #: stable id used by the API and the registry ("rsi", "ha", ...)
     key: str = ""
 
+    #: whether the request's RSI ladder fields apply. The API validates them
+    #: only for strategies that read them, so a strategy with nothing to tune
+    #: is never rejected over settings it ignores. Inherited, so specialising
+    #: an RSI strategy keeps the validation.
+    uses_rsi_params: bool = False
+
     def __init__(self, params: dict | None = None):
         self.params = params or {}
         self.pos = Position()

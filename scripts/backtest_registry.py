@@ -15,10 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.backtest_engine import BacktestStrategy
 from scripts.backtest_ha import HeikinAshiFlipBacktest
 from scripts.backtest_rsi import RSIMeanReversionBacktest
+from scripts.backtest_rsi_ha import RSIHeikinAshiBacktest
 
 BACKTESTS: dict[str, type[BacktestStrategy]] = {
     RSIMeanReversionBacktest.key: RSIMeanReversionBacktest,
     HeikinAshiFlipBacktest.key: HeikinAshiFlipBacktest,
+    RSIHeikinAshiBacktest.key: RSIHeikinAshiBacktest,
 }
 
 
