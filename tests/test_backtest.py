@@ -346,7 +346,7 @@ class TestLoadPriceHistory:
                 coro.close()
             raise aio.TimeoutError()
 
-        with patch("scripts.backtest_rsi.asyncio.wait_for", side_effect=fake_wait_for):
+        with patch("scripts.backtest_engine.asyncio.wait_for", side_effect=fake_wait_for):
             df, source = await load_price_history(
                 "005930", "krx", "2022-01-03", "2023-01-03", storage,
             )

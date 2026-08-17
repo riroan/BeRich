@@ -4,6 +4,7 @@
 
 {% block head_extra %}
     <script src="/static/lightweight-charts.js"></script>
+    <script src="/static/ha.js?v={{ asset_v('ha.js') }}"></script>
 {% endblock %}
 
 {% block content %}
@@ -724,24 +725,8 @@
             }
         }
 
-        // Heikin-Ashi: close is the bar's OHLC average, open the midpoint of
-        // the previous HA bar; high/low extend to cover both.
-        function toHeikinAshi(candles) {
-            let prev = null;
-            return candles.map(c => {
-                const close = (c.open + c.high + c.low + c.close) / 4;
-                const open = prev ? (prev.open + prev.close) / 2 : (c.open + c.close) / 2;
-                prev = {
-                    time: c.time,
-                    open,
-                    high: Math.max(c.high, open, close),
-                    low: Math.min(c.low, open, close),
-                    close,
-                };
-                return prev;
-            });
-        }
-
+        // toHeikinAshi() comes from /static/ha.js — shared with the backtest
+        // chart so the two never drift.
         function renderDaily() {
             dailySeries.setData(timeframe === 'ha' ? toHeikinAshi(dailyCandles) : dailyCandles);
         }

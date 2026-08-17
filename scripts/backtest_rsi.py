@@ -1,24 +1,22 @@
 #!/usr/bin/env python3
 """RSI Mean Reversion Strategy Backtest
 
-Used by both the CLI (`python -m scripts.backtest_rsi`) and the web dashboard
-(`/api/backtest`). The simulation loop lives in `_run_simulation()` so CLI
-and web produce identical results from identical input data.
+The decision logic lives in `RSIMeanReversionBacktest`; the money-side
+accounting is `scripts.backtest_engine.run_simulation()`, shared with every
+other backtest strategy. `_run_simulation()` stays as the RSI-flavoured
+entry both the CLI (`python -m scripts.backtest_rsi`) and the parity tests
+call, so CLI and web produce identical results from identical input data.
 """
 
-import asyncio
 import sys
-from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Iterator, Optional
 
 import pandas as pd
 import yfinance as yf
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.core.types import Market
 from src.strategy.rsi_rules import (
     calculate_rsi,
     as_levels,
@@ -28,31 +26,197 @@ from src.strategy.rsi_rules import (
     resolve_take_profit_stage,
 )
 from scripts._backtest_seed import BACKTEST_STRATEGIES
+from scripts.backtest_engine import (  # noqa: F401  (re-exported for callers)
+    BacktestSignal,
+    BacktestStrategy,
+    Trade,
+    get_yfinance_symbol,
+    load_price_history,
+    run_simulation,
+    run_symbol_async,
+)
 
 if TYPE_CHECKING:
     from src.data.storage import Storage
 
 
-@dataclass
-class Trade:
-    """Trade record"""
-    symbol: str
-    buy_date: datetime
-    buy_price: float
-    buy_stage: int
-    portion: float
-    shares: int
-    sell_date: datetime = None
-    sell_price: float = None
-    sell_reason: str = None
-    pnl_pct: float = None
+class RSIMeanReversionBacktest(BacktestStrategy):
+    """Averaging-down buy ladder + staged RSI sells + PnL ladders.
 
+    Mirrors src/strategy/builtin/rsi_mean_reversion.py bar for bar — see
+    tests/test_live_backtest_parity.py, which asserts the two agree.
+    """
 
-def get_yfinance_symbol(symbol: str, market: str) -> str:
-    """Convert symbol to yfinance format"""
-    if market == "krx":
-        return f"{symbol}.KS"
-    return symbol
+    key = "rsi"
+
+    def __init__(self, params: dict | None = None):
+        super().__init__(params)
+        p = self.params
+        self.rsi_period = p.get("rsi_period", 14)
+        self.rsi_method = p.get("rsi_method", "wilder")
+        # Explicit empty ladder = no exit on that side; missing key falls back
+        # to the scalar. Must match the live strategy exactly.
+        if "stop_loss_levels" in p:
+            self.stop_loss_levels = p["stop_loss_levels"]
+        else:
+            self.stop_loss_levels = as_levels(p.get("stop_loss", -10))
+        if "take_profit_levels" in p:
+            self.take_profit_levels = p["take_profit_levels"]
+        else:
+            self.take_profit_levels = as_levels(p.get("take_profit"))
+        self.cooldown_days = p.get("cooldown_days", 1)
+        # Must mirror rsi_mean_reversion exactly: 0 = re-enter immediately
+        # after a full exit, which is what happens when a symbol's state is
+        # wiped.
+        self.reentry_cooldown_days = p.get("reentry_cooldown_days", 0)
+        self.reset_requires_recovery = p.get("reset_requires_recovery", False)
+        self.recovery_rsi = p.get("recovery_rsi", 50)
+        self.avg_down_levels = p.get(
+            "avg_down_levels", [[30, 0.5], [25, 0.3], [20, 0.2]],
+        )
+        self.sell_levels = p.get(
+            "sell_levels", [[65, 0.3], [70, 0.3], [75, 0.4]],
+        )
+
+        # Ladder state
+        self.buy_stage = 0
+        self.sell_stage = 0
+        self.tp_stage = 0
+        self.sl_stage = 0
+        self.last_buy_date = None
+        self.last_sell_date = None
+        self.last_exit_date = None
+        self.rsi_recovered = False
+
+    @classmethod
+    def params_from_request(cls, body) -> dict:
+        return {
+            "rsi_period": body.rsi_period,
+            "rsi_method": body.rsi_method,
+            "stop_loss": body.stop_loss,
+            "take_profit": body.take_profit,
+            "cooldown_days": body.cooldown_days,
+            "reset_requires_recovery": body.reset_requires_recovery,
+            "recovery_rsi": body.recovery_rsi,
+            "avg_down_levels": body.buy_levels,
+            "sell_levels": body.sell_levels,
+        }
+
+    @property
+    def name(self) -> str:
+        return "RSI Mean Reversion"
+
+    def prepare(self, df: pd.DataFrame) -> pd.DataFrame:
+        df["RSI"] = calculate_rsi(df["Close"], self.rsi_period, self.rsi_method)
+        return df.dropna()
+
+    def indicator_series(self, df: pd.DataFrame) -> list[float]:
+        return [round(float(r), 2) for r in df["RSI"].tolist()]
+
+    def decide(self, date, row) -> Iterator[BacktestSignal]:
+        rsi = row["RSI"]
+
+        # Optional legacy gate: require RSI to recover once after a buy
+        # before cooldown can repeat the current buy stage. Default matches
+        # the live bot: cooldown_days alone unlocks stage repetition.
+        if (
+            self.reset_requires_recovery
+            and self.last_buy_date is not None
+            and rsi >= self.recovery_rsi
+        ):
+            self.rsi_recovered = True
+
+        # 1) PnL ladders. A position sits on one side of its entry, so the
+        # two are mutually exclusive; losses are checked first to keep the
+        # ordering explicit. Either one ends the bar.
+        if self.pos.shares > 0:
+            pnl_pct = self.pos.pnl_pct(row["Close"])
+            for levels, stage, reason, resolve in (
+                (self.stop_loss_levels, self.sl_stage, "stop_loss",
+                 resolve_stop_loss_stage),
+                (self.take_profit_levels, self.tp_stage, "take_profit",
+                 resolve_take_profit_stage),
+            ):
+                if not levels:
+                    continue
+                stage_idx, _ = resolve(pnl_pct, stage, levels)
+                if stage_idx is not None:
+                    yield BacktestSignal(
+                        side="sell",
+                        portion=levels[stage_idx][1],
+                        reason=reason,
+                        stage=stage_idx + 1,
+                        record_empty_fill=True,
+                    )
+                    return
+
+        # 2) Staged RSI sells.
+        if self.pos.shares > 0:
+            sell_repeat_ready = (
+                self.last_sell_date is not None
+                and (date - self.last_sell_date).days >= self.cooldown_days
+            )
+            sell_stage_idx, _ = resolve_sell_stage(
+                rsi, self.sell_stage, self.sell_levels, sell_repeat_ready,
+            )
+            if sell_stage_idx is not None:
+                yield BacktestSignal(
+                    side="sell",
+                    portion=self.sell_levels[sell_stage_idx][1],
+                    reason=f"sell_stage_{sell_stage_idx + 1}",
+                    stage=sell_stage_idx + 1,
+                )
+
+        # 3) Averaging-down buys.
+        if (
+            self.reentry_cooldown_days
+            and self.pos.shares == 0
+            and self.last_exit_date is not None
+            and (date - self.last_exit_date).days < self.reentry_cooldown_days
+        ):
+            return
+
+        buy_repeat_ready = (
+            self.last_buy_date is not None
+            and (date - self.last_buy_date).days >= self.cooldown_days
+            and (not self.reset_requires_recovery or self.rsi_recovered)
+        )
+        buy_stage_idx, _ = resolve_buy_stage(
+            rsi, self.buy_stage, self.avg_down_levels, buy_repeat_ready,
+        )
+        if buy_stage_idx is not None:
+            yield BacktestSignal(
+                side="buy",
+                portion=self.avg_down_levels[buy_stage_idx][1],
+                reason=f"avg_down_stage_{buy_stage_idx + 1}",
+                stage=buy_stage_idx + 1,
+            )
+
+    def on_fill(self, signal, date, price, filled, shares_before) -> None:
+        if signal.side == "buy":
+            self.buy_stage = signal.stage
+            if shares_before == 0:
+                self.sell_stage = 0
+                self.last_exit_date = None
+            self.last_buy_date = date
+            self.rsi_recovered = False
+            return
+
+        if signal.reason == "stop_loss":
+            self.sl_stage = signal.stage
+        elif signal.reason == "take_profit":
+            self.tp_stage = signal.stage
+        else:
+            self.sell_stage = signal.stage
+            self.last_sell_date = date
+
+        if self.pos.shares == 0:
+            self.buy_stage = 0
+            self.sell_stage = 0
+            self.tp_stage = 0
+            self.sl_stage = 0
+            self.last_sell_date = None
+            self.last_exit_date = date
 
 
 def _run_simulation(
@@ -62,325 +226,10 @@ def _run_simulation(
     initial_capital: float = 10_000_000,
     verbose: bool = False,
 ) -> dict:
-    """Run RSI Mean Reversion simulation on a price DataFrame.
-
-    df must have a `Close` column and a DatetimeIndex.
-    Returns the full result dict including timeseries for chart rendering.
-    Pure function — no I/O, no prints unless verbose=True.
-    """
-    rsi_period = params.get("rsi_period", 14)
-    rsi_method = params.get("rsi_method", "wilder")
-    # Explicit empty ladder = no exit on that side; missing key falls back
-    # to the scalar. Must match the live strategy exactly.
-    if "stop_loss_levels" in params:
-        stop_loss_levels = params["stop_loss_levels"]
-    else:
-        stop_loss_levels = as_levels(params.get("stop_loss", -10))
-    if "take_profit_levels" in params:
-        take_profit_levels = params["take_profit_levels"]
-    else:
-        take_profit_levels = as_levels(params.get("take_profit"))
-    cooldown_days = params.get("cooldown_days", 1)
-    # Must mirror rsi_mean_reversion exactly: 0 = re-enter immediately after
-    # a full exit, which is what happens when a symbol's state is wiped.
-    reentry_cooldown_days = params.get("reentry_cooldown_days", 0)
-    reset_requires_recovery = params.get("reset_requires_recovery", False)
-    recovery_rsi = params.get("recovery_rsi", 50)
-    avg_down_levels = params.get("avg_down_levels", [[30, 0.5], [25, 0.3], [20, 0.2]])
-    sell_levels = params.get("sell_levels", [[65, 0.3], [70, 0.3], [75, 0.4]])
-
-    df = df.copy()
-    df["RSI"] = calculate_rsi(df["Close"], rsi_period, rsi_method)
-    df = df.dropna()
-
-    if df.empty:
-        return _empty_result(symbol, initial_capital)
-
-    trades: list[Trade] = []
-    buy_events: list[dict] = []  # {date, price, stage} — every BUY at the moment it fires
-    capital = initial_capital
-    position_shares = 0
-    position_cost = 0.0
-    buy_stage = 0
-    sell_stage = 0
-    tp_stage = 0
-    sl_stage = 0
-    last_buy_date = None
-    last_sell_date = None
-    last_exit_date = None
-    rsi_recovered = False
-
-    for date, row in df.iterrows():
-        rsi = row["RSI"]
-        price = row["Close"]
-
-        # Optional legacy gate: require RSI to recover once after a buy
-        # before cooldown can repeat the current buy stage. Default matches
-        # the live bot: cooldown_days alone unlocks stage repetition.
-        if reset_requires_recovery and last_buy_date is not None and rsi >= recovery_rsi:
-            rsi_recovered = True
-
-        if position_shares > 0:
-            avg_price = position_cost / position_shares
-            pnl_pct = (price - avg_price) / avg_price * 100
-
-            pnl_exit = None
-            for levels, stage, reason, resolve, tag in (
-                (stop_loss_levels, sl_stage, "stop_loss",
-                 resolve_stop_loss_stage, "STOP"),
-                (take_profit_levels, tp_stage, "take_profit",
-                 resolve_take_profit_stage, "TAKE"),
-            ):
-                if not levels:
-                    continue
-                stage_idx, _ = resolve(pnl_pct, stage, levels)
-                if stage_idx is not None:
-                    pnl_exit = (levels, stage_idx, reason, tag)
-                    break
-
-            if pnl_exit is not None:
-                levels, stage_idx, reason, tag = pnl_exit
-                portion = levels[stage_idx][1]
-                shares_to_sell = int(position_shares * portion)
-                if shares_to_sell == 0 and position_shares > 0 and portion > 0:
-                    shares_to_sell = 1
-                capital += shares_to_sell * price
-                trades.append(Trade(
-                    symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
-                    buy_stage=buy_stage, portion=portion,
-                    shares=shares_to_sell,
-                    sell_date=date, sell_price=price, sell_reason=reason,
-                    pnl_pct=pnl_pct,
-                ))
-                if verbose:
-                    print(f"[{tag}{stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | PnL:{pnl_pct:+.1f}%")
-                position_cost -= avg_price * shares_to_sell
-                position_shares -= shares_to_sell
-                if reason == "stop_loss":
-                    sl_stage = stage_idx + 1
-                else:
-                    tp_stage = stage_idx + 1
-                if position_shares == 0:
-                    position_cost = 0.0
-                    buy_stage = 0
-                    sell_stage = 0
-                    tp_stage = 0
-                    sl_stage = 0
-                    last_sell_date = None
-                    last_exit_date = date
-                continue
-
-        if position_shares > 0:
-            sell_repeat_ready = (
-                last_sell_date is not None
-                and (date - last_sell_date).days >= cooldown_days
-            )
-            sell_stage_idx, _ = resolve_sell_stage(
-                rsi, sell_stage, sell_levels, sell_repeat_ready,
-            )
-
-            if sell_stage_idx is not None:
-                rsi_threshold, portion = sell_levels[sell_stage_idx]
-                shares_to_sell = int(position_shares * portion)
-                if shares_to_sell == 0 and position_shares > 0 and portion > 0:
-                    shares_to_sell = 1
-                if shares_to_sell > 0:
-                    sell_value = shares_to_sell * price
-                    capital += sell_value
-                    avg_price = position_cost / position_shares
-                    pnl_pct = (price - avg_price) / avg_price * 100
-                    trade = Trade(
-                        symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
-                        buy_stage=buy_stage, portion=portion, shares=shares_to_sell,
-                        sell_date=date, sell_price=price,
-                        sell_reason=f"sell_stage_{sell_stage_idx+1}", pnl_pct=pnl_pct,
-                    )
-                    trades.append(trade)
-                    if verbose:
-                        print(f"[SELL{sell_stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | PnL:{pnl_pct:+.1f}")
-                    position_cost -= avg_price * shares_to_sell
-                    position_shares -= shares_to_sell
-                    sell_stage = sell_stage_idx + 1
-                    last_sell_date = date
-                    if position_shares == 0:
-                        buy_stage = 0
-                        sell_stage = 0
-                        tp_stage = 0
-                        sl_stage = 0
-                        position_cost = 0.0
-                        last_sell_date = None
-                        last_exit_date = date
-
-        if (
-            reentry_cooldown_days
-            and position_shares == 0
-            and last_exit_date is not None
-            and (date - last_exit_date).days < reentry_cooldown_days
-        ):
-            continue
-
-        buy_repeat_ready = (
-            last_buy_date is not None
-            and (date - last_buy_date).days >= cooldown_days
-            and (not reset_requires_recovery or rsi_recovered)
-        )
-        buy_stage_idx, _ = resolve_buy_stage(
-            rsi, buy_stage, avg_down_levels, buy_repeat_ready,
-        )
-
-        if buy_stage_idx is not None:
-            rsi_threshold, portion = avg_down_levels[buy_stage_idx]
-            # Match live bot: buy_amount = (max_symbol_value − current_value) × portion
-            # Single-symbol backtest → max_symbol_value = initial_capital, mark-to-market.
-            current_value = position_shares * price
-            remaining_room = max(initial_capital - current_value, 0)
-            buy_amount = min(remaining_room * portion, capital)
-            shares_to_buy = int(buy_amount / price)
-            if shares_to_buy > 0 and capital >= shares_to_buy * price:
-                cost = shares_to_buy * price
-                capital -= cost
-                had_position = position_shares > 0
-                position_shares += shares_to_buy
-                position_cost += cost
-                buy_stage = buy_stage_idx + 1
-                if not had_position:
-                    sell_stage = 0
-                    last_exit_date = None
-                last_buy_date = date
-                rsi_recovered = False
-                buy_events.append({
-                    "date": date.strftime("%Y-%m-%d"),
-                    "price": float(price),
-                    "stage": buy_stage_idx + 1,
-                })
-                if verbose:
-                    print(f"[BUY{buy_stage_idx+1}] {date.strftime('%Y-%m-%d')} | {price:,.0f} | RSI:{rsi:.1f} | {portion*100:.0f}% | Shares:{shares_to_buy}")
-
-    if position_shares > 0:
-        last_price = df.iloc[-1]["Close"]
-        sell_value = position_shares * last_price
-        capital += sell_value
-        avg_price = position_cost / position_shares
-        pnl_pct = (last_price - avg_price) / avg_price * 100
-        trade = Trade(
-            symbol=symbol, buy_date=last_buy_date, buy_price=avg_price,
-            buy_stage=buy_stage, portion=1.0, shares=position_shares,
-            sell_date=df.index[-1], sell_price=last_price, sell_reason="end_of_period",
-            pnl_pct=pnl_pct,
-        )
-        trades.append(trade)
-        if verbose:
-            print(f"[CLOSE] {df.index[-1].strftime('%Y-%m-%d')} | {last_price:,.0f} | PnL:{pnl_pct:+.1f}%")
-
-    total_return = (capital - initial_capital) / initial_capital * 100
-    buy_hold_return = (df.iloc[-1]["Close"] - df.iloc[0]["Close"]) / df.iloc[0]["Close"] * 100
-    winning = [t for t in trades if t.pnl_pct and t.pnl_pct > 0]
-    win_rate = len(winning) / len(trades) * 100 if trades else 0
-
-    def _stage_from_reason(reason: str) -> int:
-        if reason and reason.startswith("sell_stage_"):
-            return int(reason.split("_")[-1])
-        return 0  # stop_loss / take_profit / end_of_period — frontend reads `reason`
-
-    sell_trades_payload = [
-        {
-            "date": t.sell_date.strftime("%Y-%m-%d"),
-            "price": float(t.sell_price),
-            "reason": t.sell_reason,
-            "stage": _stage_from_reason(t.sell_reason),
-        }
-        for t in trades if t.sell_date is not None
-    ]
-
-    return {
-        "symbol": symbol,
-        "total_return_pct": round(total_return, 4),
-        "buy_hold_return_pct": round(buy_hold_return, 4),
-        "num_trades": len(trades),
-        "num_buys": len(buy_events),
-        "num_sells": len(sell_trades_payload),
-        "win_rate_pct": round(win_rate, 2),
-        "final_capital": capital,
-        "trades": trades,
-        "prices": [round(float(p), 4) for p in df["Close"].tolist()],
-        "dates": df.index.strftime("%Y-%m-%d").tolist(),
-        "rsi_values": [round(float(r), 2) for r in df["RSI"].tolist()],
-        "buy_trades": buy_events,
-        "sell_trades": sell_trades_payload,
-    }
-
-
-def _empty_result(symbol: str, initial_capital: float) -> dict:
-    return {
-        "symbol": symbol,
-        "total_return_pct": 0.0,
-        "buy_hold_return_pct": 0.0,
-        "num_trades": 0,
-        "num_buys": 0,
-        "num_sells": 0,
-        "win_rate_pct": 0.0,
-        "final_capital": initial_capital,
-        "trades": [],
-        "prices": [],
-        "dates": [],
-        "rsi_values": [],
-        "buy_trades": [],
-        "sell_trades": [],
-    }
-
-
-async def load_price_history(
-    symbol: str,
-    market: str,
-    start_date: str,
-    end_date: str,
-    storage: "Storage",
-) -> tuple[pd.DataFrame, str]:
-    """Load OHLC daily history. KIS DB first, yfinance fallback (10s timeout).
-
-    Returns (df, data_source) where data_source ∈ {"kis_db", "yfinance", "none", "timeout"}.
-    """
-    start = datetime.fromisoformat(start_date)
-    end = datetime.fromisoformat(end_date)
-    mkt = Market.from_string(market)
-
-    db_bars = await storage.get_bars(
-        symbol=symbol, timeframe="1d", start=start, end=end, market=mkt,
+    """Run the RSI Mean Reversion simulation on a price DataFrame."""
+    return run_simulation(
+        df, symbol, RSIMeanReversionBacktest(params), initial_capital, verbose,
     )
-
-    expected_days = max((end - start).days * 5 // 7, 1)
-    if db_bars and len(db_bars) >= int(expected_days * 0.8):
-        df = pd.DataFrame(
-            [
-                {
-                    "Open": float(b.open),
-                    "High": float(b.high),
-                    "Low": float(b.low),
-                    "Close": float(b.close),
-                    "Volume": int(b.volume),
-                }
-                for b in db_bars
-            ],
-            index=pd.DatetimeIndex([b.timestamp for b in db_bars]),
-        )
-        return df, "kis_db"
-
-    yf_symbol = get_yfinance_symbol(symbol, market)
-    try:
-        df = await asyncio.wait_for(
-            asyncio.to_thread(
-                yf.download, yf_symbol, start=start_date, end=end_date, progress=False,
-            ),
-            timeout=10.0,
-        )
-    except asyncio.TimeoutError:
-        return pd.DataFrame(), "timeout"
-
-    if df.empty:
-        return df, "none"
-    if isinstance(df.columns, pd.MultiIndex):
-        df.columns = df.columns.get_level_values(0)
-    return df, "yfinance"
 
 
 def backtest_symbol(
@@ -428,23 +277,16 @@ async def backtest_symbol_async(
     storage: "Storage",
     initial_capital: float = 10_000_000,
 ) -> tuple[Optional[dict], Optional[str]]:
-    """Web async entry. KIS DB first, yfinance fallback. Quiet (no prints).
-
-    Returns (result, error_code) where exactly one is non-None.
-    error_code ∈ {"ticker_not_found", "data_source_timeout"} on failure.
-    """
-    df, source = await load_price_history(symbol, market, start_date, end_date, storage)
-    if source == "none":
-        return None, "ticker_not_found"
-    if source == "timeout":
-        return None, "data_source_timeout"
-    result = _run_simulation(df, symbol, params, initial_capital, verbose=False)
-    result["market"] = market
-    result["data_source"] = source
-    return result, None
+    """Web async entry for the RSI strategy (thin wrapper over the engine)."""
+    return await run_symbol_async(
+        symbol, market, start_date, end_date,
+        RSIMeanReversionBacktest(params), storage, initial_capital,
+    )
 
 
 def main():
+    from datetime import datetime
+
     start_date = datetime(2020, 1, 1)
     end_date = datetime(2023, 1, 1)
 

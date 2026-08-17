@@ -198,18 +198,22 @@ class PricePoint(BaseModel):
 
 
 class BacktestRequest(BaseModel):
-    """RSI Mean Reversion backtest parameters."""
+    """Backtest parameters. The RSI fields are ignored when strategy='ha',
+    which takes none — the flip rule has nothing to tune."""
+    strategy: str = Field("rsi", pattern="^(rsi|ha)$")
     symbol: str = Field(..., min_length=1, max_length=20)
     market: str = "krx"
     start_date: str  # "YYYY-MM-DD"
     end_date: str    # "YYYY-MM-DD"
-    rsi_period: int = Field(14, ge=5, le=30)
-    rsi_method: str = Field("wilder", pattern="^(wilder|cutler)$")
-    stop_loss: float = Field(-10.0, ge=-100.0, le=-1.0)
-    take_profit: float | None = Field(None, ge=1.0, le=1000.0)
-    cooldown_days: int = Field(1, ge=1, le=30)
+    # Range-checked below, only when strategy == "rsi" — a Field-level bound
+    # would reject HA requests for values HA never reads.
+    rsi_period: int = 14
+    rsi_method: str = "wilder"
+    stop_loss: float = -10.0
+    take_profit: float | None = None
+    cooldown_days: int = 1
     reset_requires_recovery: bool = False
-    recovery_rsi: float = Field(50.0, ge=0.0, le=100.0)
+    recovery_rsi: float = 50.0
     initial_capital: float = Field(10_000_000, gt=0, le=1e12)
     # [[rsi_threshold, portion], ...] — 3 stages each
     buy_levels: list[list[float]] = [[30, 0.5], [25, 0.3], [20, 0.2]]
@@ -226,6 +230,23 @@ class BacktestRequest(BaseModel):
             raise ValueError("date_range_invalid: end_date must be after start_date")
         if (end - start).days > 365 * 5:
             raise ValueError("date_range_invalid: range exceeds 5 years")
+        if self.strategy != "rsi":
+            # Everything below is an RSI setting. A strategy that does not
+            # read them must not be rejected for their shape — the HA flip
+            # rule has nothing to tune.
+            return self
+        if not (5 <= self.rsi_period <= 30):
+            raise ValueError("rsi_period must be between 5 and 30")
+        if self.rsi_method not in ("wilder", "cutler"):
+            raise ValueError("rsi_method must be 'wilder' or 'cutler'")
+        if not (-100.0 <= self.stop_loss <= -1.0):
+            raise ValueError("stop_loss must be between -100 and -1")
+        if self.take_profit is not None and not (1.0 <= self.take_profit <= 1000.0):
+            raise ValueError("take_profit must be between 1 and 1000")
+        if not (1 <= self.cooldown_days <= 30):
+            raise ValueError("cooldown_days must be between 1 and 30")
+        if not (0.0 <= self.recovery_rsi <= 100.0):
+            raise ValueError("recovery_rsi must be between 0 and 100")
         for name, levels in (("buy_levels", self.buy_levels), ("sell_levels", self.sell_levels)):
             if not levels:
                 raise ValueError(f"level_invalid: {name} cannot be empty")
@@ -1849,30 +1870,23 @@ def create_app() -> FastAPI:
         body: BacktestRequest,
         _: None = Depends(require_auth),
     ):
-        """Run RSI Mean Reversion backtest. KIS DB first, yfinance fallback."""
-        from scripts.backtest_rsi import backtest_symbol_async
+        """Run a backtest. KIS DB first, yfinance fallback."""
+        from scripts.backtest_engine import run_symbol_async
+        from scripts.backtest_registry import build_from_request
 
         storage = await _get_web_storage()
         if storage is None:
             return JSONResponse({"error": "internal_error"}, status_code=500)
 
         try:
-            result, err = await backtest_symbol_async(
+            # Each strategy pulls the fields it actually reads.
+            strategy = build_from_request(body)
+            result, err = await run_symbol_async(
                 symbol=body.symbol,
                 market=body.market,
                 start_date=body.start_date,
                 end_date=body.end_date,
-                params={
-                    "rsi_period": body.rsi_period,
-                    "rsi_method": body.rsi_method,
-                    "stop_loss": body.stop_loss,
-                    "take_profit": body.take_profit,
-                    "cooldown_days": body.cooldown_days,
-                    "reset_requires_recovery": body.reset_requires_recovery,
-                    "recovery_rsi": body.recovery_rsi,
-                    "avg_down_levels": body.buy_levels,
-                    "sell_levels": body.sell_levels,
-                },
+                strategy=strategy,
                 storage=storage,
                 initial_capital=body.initial_capital,
             )

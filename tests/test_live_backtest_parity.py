@@ -273,9 +273,11 @@ def test_the_defaults_disagree_when_params_are_omitted():
     """
     import inspect
 
-    from scripts.backtest_rsi import _run_simulation as sim
+    from scripts.backtest_rsi import RSIMeanReversionBacktest
 
     live_src = inspect.getsource(rsi_mod.RSIMeanReversionStrategy.calculate_signal)
     assert "(70, 0.3)" in live_src and "(75, 0.4)" in live_src
 
-    assert "[[65, 0.3], [70, 0.3], [75, 0.4]]" in inspect.getsource(sim)
+    assert "[[65, 0.3], [70, 0.3], [75, 0.4]]" in inspect.getsource(
+        RSIMeanReversionBacktest
+    )

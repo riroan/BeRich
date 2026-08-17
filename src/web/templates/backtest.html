@@ -4,6 +4,7 @@
 
 {% block head_extra %}
     <script src="/static/lightweight-charts.js"></script>
+    <script src="/static/ha.js?v={{ asset_v('ha.js') }}"></script>
     <style>
         .bt-form { display: grid; gap: 16px; }
         .bt-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; align-items: end; }
@@ -34,6 +35,9 @@
             color: var(--text); font-size: 13px;
         }
         .bt-check input { width: 16px; height: 16px; accent-color: var(--blue); }
+        /* Beats the display rules below — a plain [hidden] loses to any
+           author `display`, which is why .bt-levels-grid stayed visible. */
+        [hidden] { display: none !important; }
         .bt-levels-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
         .bt-level-card { display: grid; gap: 8px; }
         .bt-stage-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12px; }
@@ -122,6 +126,10 @@
         .bt-rsi-chart {
             border-top: 1px solid var(--border);
         }
+        /* Sits in the chart header next to <h2>Chart</h2>, same as the symbol
+           page's timeframe toggle. */
+        .bt-combined-chart-panel .symbol-chart-header { margin-bottom: 10px; }
+        .bt-combined-chart-panel .symbol-chart-header h2 { margin: 0; }
         .bt-chart-label {
             position: absolute;
             top: 8px;
@@ -474,14 +482,18 @@
 
 {% block content %}
         <header class="page-mobile-title"><h1>Backtest</h1></header>
-        <div class="section-title">
-            <span>Backtest — RSI Mean Reversion</span>
+        <div class="section-title bt-title-row">
+            <span>Backtest — <span id="bt-strategy-label">RSI Mean Reversion</span></span>
+            <div class="chart-tf-toggle" role="group" aria-label="Backtest strategy">
+                <button type="button" class="chart-tf-btn active" data-strategy="rsi" aria-pressed="true">RSI</button>
+                <button type="button" class="chart-tf-btn" data-strategy="ha" aria-pressed="false" title="하이킨아시 전환 매매" aria-label="하이킨아시">HA</button>
+            </div>
         </div>
 
         <section>
             <div class="panel bt-panel">
                 <form id="bt-form" class="bt-form" onsubmit="return false;">
-                    <div class="bt-preset-card">
+                    <div class="bt-preset-card" data-rsi-only>
                     <div class="bt-row bt-preset-row">
                         <div class="bt-field">
                             <label for="bt-strategy-preset">Load Saved Strategy</label>
@@ -520,7 +532,7 @@
                     </div>
                     </div>
 
-                    <div class="bt-params-card">
+                    <div class="bt-params-card" data-rsi-only>
                     <div class="bt-section-h">Parameters</div>
                     <div class="bt-slider-row">
                         <label>RSI Period</label>
@@ -546,7 +558,7 @@
                     </div>
                     </div>
 
-                    <div class="bt-recovery-card">
+                    <div class="bt-recovery-card" data-rsi-only>
                     <div class="bt-toggle-row">
                         <label class="bt-check">
                             <input type="checkbox" id="bt-reset-recovery">
@@ -559,7 +571,7 @@
                     </div>
                     </div>
 
-                    <div class="bt-levels-grid">
+                    <div class="bt-levels-grid" data-rsi-only>
                         <div class="bt-level-card bt-buy-card">
                             <div class="bt-section-h bt-buy-title">Buy · RSI ≤</div>
                             <div class="bt-stage-row">
@@ -643,7 +655,13 @@
 
             <div class="chart-section bt-combined-chart-section">
                 <div class="panel bt-combined-chart-panel">
-                    <h2>Chart</h2>
+                    <div class="symbol-chart-header">
+                        <h2>Chart</h2>
+                        <div class="chart-tf-toggle bt-chart-toggle" role="group" aria-label="Price chart style">
+                            <button type="button" class="chart-tf-btn active" data-chart="line" aria-pressed="true">Line</button>
+                            <button type="button" class="chart-tf-btn" data-chart="ha" aria-pressed="false" title="하이킨아시 캔들" aria-label="하이킨아시">HA</button>
+                        </div>
+                    </div>
                     <div class="bt-chart-stack">
                         <div class="bt-chart-block bt-price-chart">
                             <div class="bt-chart-label">Price</div>
@@ -773,10 +791,13 @@
                 bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
                 oversold: '#10b981', overbought: '#ef4444',
                 buyMarker: '#10b981', sellMarker: '#ef4444', stopMarker: '#dc2626',
+                // Candle bodies — same green/red as the symbol chart. `up` is
+                // the price LINE's blue, which would read wrong on a candle.
+                candleUp: '#10b981', candleDown: '#ef4444',
             };
 
             let priceChart = null, rsiChart = null;
-            let priceSeries = null, rsiSeries = null;
+            let priceSeries = null, haSeries = null, rsiSeries = null;
             let oversoldLine = null, overboughtLine = null;
 
             function chartWidth(container) {
@@ -819,6 +840,13 @@
                     timeScale: { visible: false, timeVisible: false, secondsVisible: false, borderColor: colors.grid },
                 });
                 priceSeries = priceChart.addLineSeries({ color: colors.up, lineWidth: 2 });
+                // Candle series for the HA view. Only one of the two holds
+                // data at a time; trade markers move with it.
+                haSeries = priceChart.addCandlestickSeries({
+                    upColor: colors.candleUp, downColor: colors.candleDown,
+                    borderVisible: false,
+                    wickUpColor: colors.candleUp, wickDownColor: colors.candleDown,
+                });
 
                 const rsiContainer = document.getElementById('bt-rsi-chart');
                 rsiChart = LightweightCharts.createChart(rsiContainer, {
@@ -858,20 +886,53 @@
                 window.addEventListener('resize', resizeCharts);
             }
 
+            // Active backtest strategy. HA takes no parameters — the RSI
+            // fields still ride along in the request and the server ignores
+            // them, so switching back keeps whatever was tuned.
+            let strategy = 'rsi';
+
+            function setStrategy(key) {
+                if (key === strategy) return;
+                strategy = key;
+                document.querySelectorAll('[data-strategy]').forEach(btn => {
+                    const active = btn.dataset.strategy === key;
+                    btn.classList.toggle('active', active);
+                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                document.getElementById('bt-strategy-label').textContent =
+                    key === 'ha' ? 'Heikin-Ashi Flip' : 'RSI Mean Reversion';
+                // Every RSI-only block carries data-rsi-only, so a new one is
+                // hidden by marking it up — not by editing this list.
+                document.querySelectorAll('[data-rsi-only]').forEach(el => {
+                    el.hidden = key !== 'rsi';
+                });
+            }
+
+            document.querySelectorAll('[data-strategy]').forEach(btn => {
+                btn.addEventListener('click', () => setStrategy(btn.dataset.strategy));
+            });
+
             function buildRequest() {
                 const num = id => parseFloat(document.getElementById(id).value);
-                return {
+                const common = {
+                    strategy,
                     symbol: document.getElementById('bt-symbol').value.trim(),
                     market: document.getElementById('bt-market').value,
                     start_date: asApiDate(document.getElementById('bt-start'), false),
                     end_date: asApiDate(document.getElementById('bt-end'), true),
+                    initial_capital: parseCapital(),
+                };
+                // HA is the pure flip rule — it reads no settings, so none
+                // are sent and none are validated.
+                if (strategy !== 'rsi') return common;
+                return {
+                    ...common,
                     rsi_period: parseInt(document.getElementById('bt-rsi-period').value, 10),
                     rsi_method: document.getElementById('bt-rsi-method').value,
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
                     reset_requires_recovery: document.getElementById('bt-reset-recovery').checked,
                     recovery_rsi: num('bt-recovery-rsi'),
-                    initial_capital: parseCapital(),
                     buy_levels: [
                         [num('bt-buy-rsi-1'), num('bt-buy-p-1') / 100],
                         [num('bt-buy-rsi-2'), num('bt-buy-p-2') / 100],
@@ -911,6 +972,62 @@
 
             function pnlClass(n) { return n >= 0 ? 'positive' : 'negative'; }
 
+            // Price chart style: 'line' (close) or 'ha' (Heikin-Ashi candles).
+            // Independent of which strategy was simulated — you can view an
+            // RSI backtest on HA candles and vice versa.
+            let chartStyle = 'line';
+            let lastResult = null;
+            let tradeMarkers = [];
+
+            function activeSeries() {
+                return chartStyle === 'ha' ? haSeries : priceSeries;
+            }
+
+            function drawPrice(result) {
+                lastResult = result;
+                const ohlc = result.ohlc || [];
+                // No OHLC (close-only data) means no candles to build.
+                const canHA = ohlc.length === result.dates.length && ohlc.length > 0;
+                document.querySelector('.bt-chart-toggle').hidden = !canHA;
+                if (chartStyle === 'ha' && !canHA) {
+                    setChartStyle('line');   // re-enters drawPrice, so stop here
+                    return;
+                }
+
+                if (chartStyle === 'ha') {
+                    priceSeries.setData([]);
+                    priceSeries.setMarkers([]);
+                    haSeries.setData(toHeikinAshi(result.dates.map((d, i) => ({
+                        time: d,
+                        open: ohlc[i][0], high: ohlc[i][1],
+                        low: ohlc[i][2], close: ohlc[i][3],
+                    }))));
+                } else {
+                    haSeries.setData([]);
+                    haSeries.setMarkers([]);
+                    priceSeries.setData(
+                        result.dates.map((d, i) => ({ time: d, value: result.prices[i] })),
+                    );
+                }
+                activeSeries().setMarkers(tradeMarkers);
+            }
+
+            function setChartStyle(key) {
+                if (key === chartStyle) return;
+                chartStyle = key;
+                document.querySelectorAll('[data-chart]').forEach(btn => {
+                    const active = btn.dataset.chart === key;
+                    btn.classList.toggle('active', active);
+                    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+                });
+                // Redraw from the last result — no re-run needed.
+                if (lastResult) drawPrice(lastResult);
+            }
+
+            document.querySelectorAll('[data-chart]').forEach(btn => {
+                btn.addEventListener('click', () => setChartStyle(btn.dataset.chart));
+            });
+
             function renderResults(result) {
                 const tot = document.getElementById('bt-total');
                 tot.textContent = fmtPct(result.total_return_pct);
@@ -939,15 +1056,17 @@
                     ensureCharts();
                     resizeCharts();
 
-                    // Price line
-                    const priceData = result.dates.map((d, i) => ({ time: d, value: result.prices[i] }));
-                    priceSeries.setData(priceData);
-
-                    // Markers — must be sorted ASC by time
+                    // Markers — must be sorted ASC by time. Built before the
+                    // price draw so drawPrice() attaches them to whichever
+                    // series is active.
                     const markers = [
+                        // Stage number only when the strategy actually ladders
+                        // (RSI). HA is all-in/all-out, so "BUY1"/"SELL0" would
+                        // be noise.
                         ...result.buy_trades.map(t => ({
                             time: t.date, position: 'belowBar', color: colors.buyMarker,
-                            shape: 'arrowUp', text: 'BUY' + t.stage,
+                            shape: 'arrowUp',
+                            text: strategy === 'rsi' ? 'BUY' + t.stage : 'BUY',
                         })),
                         ...result.sell_trades.map(t => ({
                             time: t.date,
@@ -956,13 +1075,21 @@
                             shape: 'arrowDown',
                             text: t.reason === 'stop_loss' ? 'STOP'
                                   : t.reason === 'end_of_period' ? 'CLOSE'
-                                  : 'SELL' + t.stage,
+                                  : strategy === 'rsi' ? 'SELL' + t.stage : 'SELL',
                         })),
                     ].sort((a, b) => a.time.localeCompare(b.time));
-                    priceSeries.setMarkers(markers);
+                    tradeMarkers = markers;
+                    drawPrice(result);
 
-                    // RSI line + 30/70 reference
-                    const rsiData = result.dates.map((d, i) => ({ time: d, value: result.rsi_values[i] }));
+                    // Indicator panel — RSI line + 35/65 reference. A strategy
+                    // with no oscillator (HA) returns an empty series, and the
+                    // panel is hidden rather than left blank.
+                    // null = not warmed up yet on that bar; skip those points
+                    // rather than feeding the series a gap it cannot plot.
+                    const rsiData = (result.rsi_values || [])
+                        .map((v, i) => ({ time: result.dates[i], value: v }))
+                        .filter(p => p.value !== null && p.value !== undefined);
+                    document.querySelector('.bt-rsi-chart').hidden = rsiData.length === 0;
                     rsiSeries.setData(rsiData);
                     if (rsiData.length >= 2) {
                         oversoldLine.setData([
