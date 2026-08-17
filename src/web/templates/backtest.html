@@ -792,13 +792,14 @@
                 bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
                 oversold: '#10b981', overbought: '#ef4444',
                 buyMarker: '#10b981', sellMarker: '#ef4444', stopMarker: '#dc2626',
+                sma: '#f59e0b',
                 // Candle bodies — same green/red as the symbol chart. `up` is
                 // the price LINE's blue, which would read wrong on a candle.
                 candleUp: '#10b981', candleDown: '#ef4444',
             };
 
             let priceChart = null, rsiChart = null;
-            let priceSeries = null, haSeries = null, rsiSeries = null;
+            let priceSeries = null, haSeries = null, smaSeries = null, rsiSeries = null;
             let oversoldLine = null, overboughtLine = null;
 
             function chartWidth(container) {
@@ -847,6 +848,13 @@
                     upColor: colors.candleUp, downColor: colors.candleDown,
                     borderVisible: false,
                     wickUpColor: colors.candleUp, wickDownColor: colors.candleDown,
+                });
+                // 200 SMA of the real close, drawn over whichever style is
+                // active — in the HA view that is the point, since the HA
+                // candles are averaged and the SMA is not.
+                smaSeries = priceChart.addLineSeries({
+                    color: colors.sma, lineWidth: 1,
+                    priceLineVisible: false, lastValueVisible: false,
                 });
 
                 const rsiContainer = document.getElementById('bt-rsi-chart');
@@ -994,6 +1002,19 @@
                 return chartStyle === 'ha' ? haSeries : priceSeries;
             }
 
+            // Running-sum SMA. Emits nothing for the first period-1 bars, so a
+            // range shorter than 200 trading days draws no line at all.
+            function smaPoints(dates, prices, period) {
+                const pts = [];
+                let sum = 0;
+                for (let i = 0; i < prices.length; i++) {
+                    sum += prices[i];
+                    if (i >= period) sum -= prices[i - period];
+                    if (i >= period - 1) pts.push({ time: dates[i], value: sum / period });
+                }
+                return pts;
+            }
+
             function drawPrice(result) {
                 lastResult = result;
                 const ohlc = result.ohlc || [];
@@ -1020,6 +1041,7 @@
                         result.dates.map((d, i) => ({ time: d, value: result.prices[i] })),
                     );
                 }
+                smaSeries.setData(smaPoints(result.dates, result.prices, 200));
                 activeSeries().setMarkers(tradeMarkers);
             }
 
