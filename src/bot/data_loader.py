@@ -134,9 +134,12 @@ class DataLoaderMixin:
         positions = self.dashboard.positions
 
         for strategy in self.strategy_engine.get_strategies():
+            # Gate on what EVERY strategy has, not on the RSI ladder's
+            # attributes — a strategy without stages (HA) still needs its
+            # position mirror back, and skipping it is exactly the
+            # "buying with no way out" case described above.
             if not (
-                hasattr(strategy, "_buy_stages")
-                and hasattr(strategy, "_sell_stages")
+                hasattr(strategy, "_positions")
                 and hasattr(strategy, "symbols")
             ):
                 continue
@@ -166,8 +169,9 @@ class DataLoaderMixin:
                         str(position.avg_price),
                     )
 
-                strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
-                strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)
+                if hasattr(strategy, "_buy_stages"):
+                    strategy._buy_stages[symbol] = max(int(position.buy_stage), 1)
+                    strategy._sell_stages[symbol] = max(int(position.sell_stage), 0)
                 if hasattr(strategy, "_tp_stages"):
                     strategy._tp_stages[symbol] = max(
                         int(getattr(position, "tp_stage", 0)), 0,

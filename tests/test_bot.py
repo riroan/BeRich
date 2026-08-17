@@ -378,6 +378,39 @@ class TestDashboardSyncMixin:
         assert mock_strategy._positions["AAPL"] == 1
         assert mock_strategy._entry_prices["AAPL"] == Decimal("95")
 
+    def test_restore_reaches_a_strategy_without_rsi_stage_counters(
+        self, bot_with_dashboard,
+    ):
+        """A ladder-less strategy (HA) still needs its position mirror back.
+
+        The restore used to require _buy_stages/_sell_stages, so a strategy
+        without them kept an empty position after a hot reload: every exit
+        is gated on position > 0 while the buy path is not, leaving it able
+        to buy on top of a position it could never sell.
+        """
+        from src.strategy.builtin.heikin_ashi_flip import HeikinAshiFlipStrategy
+
+        bot = bot_with_dashboard
+        db_position = MagicMock()
+        db_position.market = "NASDAQ"
+        db_position.quantity = 7
+        db_position.avg_price = Decimal("95")
+        bot.dashboard.positions = {"AAPL": db_position}
+
+        strategy = HeikinAshiFlipStrategy(
+            symbols=["AAPL"], market=Market.NASDAQ,
+        )
+        assert not hasattr(strategy, "_buy_stages")   # no ladder, by design
+        assert strategy.get_position("AAPL") == 0     # fresh instance
+
+        mock_engine = MagicMock()
+        mock_engine.get_strategies.return_value = [strategy]
+        bot.strategy_engine = mock_engine
+
+        bot.restore_strategy_state_from_positions()
+
+        assert strategy.get_position("AAPL") == 7
+
     @pytest.mark.asyncio
     async def test_update_dashboard_status(self, bot_with_dashboard):
         """Test dashboard status update"""
