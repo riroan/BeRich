@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="BeRich Dashboard")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
-    parser.add_argument("--port", type=int, default=8080, help="Port to bind")
+    parser.add_argument("--port", type=int, default=9095, help="Port to bind")
     parser.add_argument("--mock", action="store_true", help="Use mock data")
     args = parser.parse_args()
 

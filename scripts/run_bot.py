@@ -48,8 +48,8 @@ async def main():
     parser.add_argument(
         "--web-port",
         type=int,
-        default=8080,
-        help="Web dashboard port (default: 8080)",
+        default=9095,
+        help="Web dashboard port (default: 9095)",
     )
     args = parser.parse_args()
 
