@@ -562,6 +562,31 @@ class DashboardState:
                     update={"rsi": self.rsi_values[symbol]},
                 )
 
+        # Same story for price, and for the same reason: the tick path is the
+        # single source of truth for it (see the note in
+        # dashboard_sync._update_market_positions about not mixing the balance
+        # API's evaluation price into price_rsi). The page render rebuilds
+        # price/PnL from the latest price_rsi row, while the bot's position
+        # sweep carries the KIS balance API's evaluation price — which lags.
+        # Both fed this dict, so the WebSocket pushed the lagging number over
+        # the freshly rendered one and the P&L-sorted table reshuffled ~60s
+        # after every refresh.
+        for symbol, position in positions.items():
+            tick = self.rsi_prices.get(symbol, {}).get("price")
+            if tick is None or position.avg_price <= 0:
+                continue
+            tick = float(tick)
+            if tick == position.current_price:
+                continue
+            pnl_pct = (tick - position.avg_price) / position.avg_price * 100
+            positions[symbol] = position.model_copy(update={
+                "current_price": tick,
+                "pnl": (tick - position.avg_price) * position.quantity,
+                "pnl_pct": pnl_pct,
+                # Derived from pnl_pct, so it has to move with it.
+                "stop_loss_distance": pnl_pct - position.stop_loss_pct,
+            })
+
         if market is None:
             self.positions = positions
         else:
