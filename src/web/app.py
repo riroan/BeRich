@@ -369,6 +369,10 @@ class DashboardState:
 
         # Signal candidates
         self.signal_candidates: list[SignalCandidate] = []
+        # symbol -> {"buy_1", "buy_2", "sell_1"}: the live RSI strategy's
+        # ladder levels, pushed by the bot. Empty until the bot syncs, so
+        # update_signal_candidates() falls back to the code defaults.
+        self.rsi_thresholds: dict[str, dict[str, float]] = {}
 
         # System status
         self.system_status: SystemStatus = SystemStatus()
@@ -642,6 +646,37 @@ class DashboardState:
             self.positions[symbol].rsi = rsi
         self.last_update = datetime.now()
 
+    def set_rsi_thresholds(self, strategy_states: dict):
+        """Cache each symbol's RSI ladder levels from the bot's strategy sync.
+
+        Covers every symbol a strategy watches, not just held ones — buy
+        candidates are mostly symbols with no position yet.
+        """
+        self.rsi_thresholds = {
+            symbol: {
+                k: state[k]
+                for k in ("buy_1", "buy_2", "sell_1", "sell_2")
+                if state.get(k) is not None
+            }
+            for symbol, state in strategy_states.items()
+        }
+
+    def rsi_levels(self, symbol: str) -> tuple[float, float, float, float]:
+        """(buy_1, buy_2, sell_1, sell_2) for a symbol.
+
+        Single source for both the candidate lists and the RSI colouring, so
+        a symbol cannot be listed as a candidate without being coloured. The
+        defaults match the bands that were hardcoded before the ladder became
+        configurable — they apply until the bot syncs.
+        """
+        levels = self.rsi_thresholds.get(symbol, {})
+        return (
+            levels.get("buy_1", 30.0),
+            levels.get("buy_2", 25.0),
+            levels.get("sell_1", 70.0),
+            levels.get("sell_2", 75.0),
+        )
+
     def add_price_point(
         self,
         symbol: str,
@@ -773,13 +808,15 @@ class DashboardState:
             market = position.market if position else "Unknown"
             current_price = position.current_price if position else 0
 
+            buy_1, buy_2, sell_1, _ = self.rsi_levels(symbol)
+
             # Buy candidates by oversold severity. Bands are mutually
-            # exclusive so a symbol appears at most once: RSI <= 30 used to
-            # match BOTH the <=35 and <=30 branches, and the render filter
-            # (`"buy" in signal_type`) caught both → duplicate rows in the
-            # Buy Candidate list. Deep oversold (<=30) takes precedence.
-            if rsi <= 30:
-                threshold = 25
+            # exclusive so a symbol appears at most once: RSI <= buy_1 used to
+            # match BOTH the <=buy_1+5 and <=buy_1 branches, and the render
+            # filter (`"buy" in signal_type`) caught both → duplicate rows in
+            # the Buy Candidate list. Deep oversold takes precedence.
+            if rsi <= buy_1:
+                threshold = buy_2
                 distance = rsi - threshold
                 candidates.append(SignalCandidate(
                     symbol=symbol,
@@ -791,8 +828,8 @@ class DashboardState:
                     current_price=current_price,
                     reason=f"RSI {rsi:.1f} deep oversold candidate",
                 ))
-            elif rsi <= 35:
-                threshold = 30
+            elif rsi <= buy_1 + 5:
+                threshold = buy_1
                 distance = rsi - threshold
                 candidates.append(SignalCandidate(
                     symbol=symbol,
@@ -805,9 +842,9 @@ class DashboardState:
                     reason=f"RSI {rsi:.1f} approaching oversold",
                 ))
 
-            # Sell candidates: RSI approaching 70
-            if rsi >= 65 and position and position.quantity > 0:
-                threshold = 70
+            # Sell candidates: RSI approaching the first sell rung
+            if rsi >= sell_1 - 5 and position and position.quantity > 0:
+                threshold = sell_1
                 distance = rsi - threshold
                 candidates.append(SignalCandidate(
                     symbol=symbol,
@@ -1122,6 +1159,26 @@ def _avg_rsi() -> float | None:
 
 
 templates.env.globals["avg_rsi"] = _avg_rsi
+
+
+def _rsi_class(symbol: str, rsi: float | None) -> str:
+    """CSS class for an RSI readout, on the same bands as the candidate lists.
+
+    warning = the symbol is a buy/sell candidate; danger = it is already past
+    the first rung and heading for the second. Registered as a Jinja global
+    for the same reason as avg_rsi().
+    """
+    if rsi is None:
+        return ""
+    buy_1, buy_2, sell_1, sell_2 = dashboard_state.rsi_levels(symbol)
+    if rsi <= buy_2 or rsi >= sell_2:
+        return "rsi-danger"
+    if rsi <= buy_1 + 5 or rsi >= sell_1 - 5:
+        return "rsi-warning"
+    return "rsi-neutral"
+
+
+templates.env.globals["rsi_class"] = _rsi_class
 
 # Session storage (in-memory)
 valid_sessions: dict[str, datetime] = {}

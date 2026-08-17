@@ -90,7 +90,7 @@
                             <td data-label="Symbol" class="full-width"><a href="/symbol/{{ pos.symbol }}" class="sym-badge">{{ pos.symbol }}</a></td>
                             <td data-label="Price">{% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.current_price) }}{% else %}${{ "{:,.2f}".format(pos.current_price) }}{% endif %}</td>
                             <td data-label="P&L" class="{{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</td>
-                            <td data-label="RSI" class="{% if pos.rsi is not none %}{% if pos.rsi <= 24 or pos.rsi >= 76 %}rsi-danger{% elif pos.rsi <= 35 or pos.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(pos.rsi) if pos.rsi is not none else '-' }}</td>
+                            <td data-label="RSI" class="{{ rsi_class(pos.symbol, pos.rsi) }}">{{ "{:.1f}".format(pos.rsi) if pos.rsi is not none else '-' }}</td>
                             <td data-label="Stage">
                                 <div class="stage-stack">
                                     <div class="stage-line">
@@ -144,7 +144,7 @@
                             <div class="rsi-symbol">{{ symbol }}</div>
                             <div class="rsi-price">{% if data.price %}{% if data.market == 'KRX' %}{{ "{:,.0f}".format(data.price) }}{% else %}${{ "{:,.2f}".format(data.price) }}{% endif %}{% else %}-{% endif %}</div>
                         </div>
-                        <span class="rsi-value {% if data.rsi <= 24 or data.rsi >= 76 %}rsi-danger{% elif data.rsi <= 35 or data.rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}">{{ "{:.1f}".format(data.rsi) }}</span>
+                        <span class="rsi-value {{ rsi_class(symbol, data.rsi) }}">{{ "{:.1f}".format(data.rsi) }}</span>
                     </a>
                     {% else %}
                     <p class="empty">No RSI data</p>

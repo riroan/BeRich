@@ -23,6 +23,7 @@ class DashboardSyncMixin:
         """Update dashboard with current positions"""
         try:
             strategy_states = self._get_strategy_states()
+            self.dashboard.set_rsi_thresholds(strategy_states)
 
             # Skip KRX entirely when running US-only — fetching KRX
             # positions/balance every tick is pure wasted API there.
@@ -91,8 +92,24 @@ class DashboardSyncMixin:
                         strategy.params.get("stop_loss", -10),
                     )
                 _sl_pct = _sl_levels[0][0] if _sl_levels else -1000.0
+                _buy_levels = strategy.params.get(
+                    "avg_down_levels", [(30, 0.5), (25, 0.3), (20, 0.2)]
+                )
+                _sell_levels = strategy.params.get(
+                    "sell_levels", [(70, 0.3), (75, 0.4), (80, 0.5)]
+                )
                 for symbol in strategy.symbols:
                     strategy_states[symbol] = {
+                        # First rungs of each ladder — the dashboard's buy/sell
+                        # candidate bands sit ±5 RSI around them.
+                        "buy_1": _buy_levels[0][0] if _buy_levels else None,
+                        "buy_2": (
+                            _buy_levels[1][0] if len(_buy_levels) > 1 else None
+                        ),
+                        "sell_1": _sell_levels[0][0] if _sell_levels else None,
+                        "sell_2": (
+                            _sell_levels[1][0] if len(_sell_levels) > 1 else None
+                        ),
                         "buy_stage": strategy._buy_stages.get(symbol, 0),
                         "sell_stage": strategy._sell_stages.get(symbol, 0),
                         "tp_stage": getattr(
@@ -101,16 +118,8 @@ class DashboardSyncMixin:
                         "sl_stage": getattr(
                             strategy, "_sl_stages", {},
                         ).get(symbol, 0),
-                        "max_buy_stages": len(
-                            strategy.params.get(
-                                "avg_down_levels", [(30, 0.5), (25, 0.3), (20, 0.2)]
-                            )
-                        ),
-                        "max_sell_stages": len(
-                            strategy.params.get(
-                                "sell_levels", [(70, 0.3), (75, 0.4), (80, 0.5)]
-                            )
-                        ),
+                        "max_buy_stages": len(_buy_levels),
+                        "max_sell_stages": len(_sell_levels),
                         "stage_cooldown_days": int(
                             strategy.params.get("cooldown_days", 1)
                         ),

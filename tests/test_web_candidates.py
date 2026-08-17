@@ -1,6 +1,6 @@
 """Tests for dashboard signal-candidate generation (Buy Candidate list)."""
 
-from src.web.app import DashboardState
+from src.web.app import DashboardState, _rsi_class
 
 
 def _buy_candidates(state):
@@ -52,6 +52,69 @@ class TestBuyCandidateDedup:
 
         assert len(symbols) == len(set(symbols))  # no duplicates
         assert "QQQ" not in symbols  # not oversold → not a buy candidate
+
+
+class TestConfiguredRSILadder:
+    """Bands follow the symbol's own ladder: buy_1 + 5 and sell_1 - 5."""
+
+    LEVELS = {"buy_1": 35.0, "buy_2": 30.0, "sell_1": 80.0, "sell_2": 85.0}
+
+    def _state(self, rsi_values, held=()):
+        state = DashboardState()
+        state.rsi_values = dict(rsi_values)
+        state.rsi_thresholds = {s: dict(self.LEVELS) for s in rsi_values}
+        # One call — it replaces the whole position dict, not merges.
+        state.replace_positions_from_records([
+            {
+                "symbol": symbol, "market": "nasdaq", "quantity": 1,
+                "avg_price": 100, "current_price": 100, "pnl": 0,
+                "pnl_pct": 0, "rsi": rsi_values[symbol],
+            }
+            for symbol in held
+        ])
+        return state
+
+    def test_buy_band_follows_buy_stage_1_plus_5(self):
+        # buy_1 = 35 → candidate up to 40, not the old hardcoded 35
+        state = self._state({"AAPL": 39.0, "MSFT": 41.0})
+        symbols = [c.symbol for c in _buy_candidates(state)]
+        assert symbols == ["AAPL"]
+
+    def test_deep_band_follows_buy_stage_1(self):
+        state = self._state({"AAPL": 34.0})
+        buys = _buy_candidates(state)
+        assert buys[0].signal_type == "buy_candidate_2"
+        assert buys[0].threshold == 30.0  # next rung, not a hardcoded 25
+
+    def test_sell_band_follows_sell_stage_1_minus_5(self):
+        # sell_1 = 80 → candidate from 75, so the old 65 no longer qualifies
+        state = self._state({"AAPL": 76.0, "MSFT": 66.0}, held=("AAPL", "MSFT"))
+        state.update_signal_candidates()
+        sells = [c for c in state.signal_candidates if c.signal_type == "sell_candidate"]
+        assert [c.symbol for c in sells] == ["AAPL"]
+        assert sells[0].threshold == 80.0
+
+    def test_colour_agrees_with_candidate_listing(self, monkeypatch):
+        """A symbol is coloured iff it is listed — checked over every RSI.
+
+        Held symbols only: a sell candidate additionally requires a position,
+        so an unheld overbought symbol is coloured without being listed.
+        """
+        import src.web.app as web_app
+
+        rsi_values = {f"S{r}": float(r) for r in range(1, 100)}
+        state = self._state(rsi_values, held=tuple(rsi_values))
+        monkeypatch.setattr(web_app, "dashboard_state", state)
+        state.update_signal_candidates()
+
+        listed = {c.symbol for c in state.signal_candidates
+                  if c.signal_type != "stop_loss_alert"}
+        coloured = {s for s, r in rsi_values.items()
+                    if _rsi_class(s, r) in ("rsi-warning", "rsi-danger")}
+        assert listed == coloured
+        # Sanity: the bands are the configured ones, not the old constants.
+        assert "S40" in listed and "S41" not in listed   # buy_1 + 5
+        assert "S75" in listed and "S74" not in listed   # sell_1 - 5
 
 
 class TestDashboardPositionRecords:
