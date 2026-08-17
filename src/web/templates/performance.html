@@ -150,6 +150,48 @@
                 </div>
             </section>
 
+            <!-- Capital Gains Tax (해외주식 양도소득세) -->
+            <section class="perf-panel">
+                <div class="section-title">Capital Gains Tax<span class="info-dot" tabindex="0" role="button" aria-label="계산식 설명" data-tip="해외주식 양도소득세 (국내주식은 일반투자자 비과세)
+① 실현손익 = Σ(매도 손익 × 체결일 환율)
+② 과세표준 = max(① − 2,500,000원, 0)
+③ 세액 = ② × 22% (양도세 20% + 지방소득세 2%)
+손실은 이익과 상계, 이월공제 없음
+표시 금액은 ③을 FX Rate로 나눈 달러 환산값">?</span></div>
+                <div class="table-wrap">
+                    <table class="center-table mobile-cards">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                                <th>Realized P&L</th>
+                                <th>FX Rate</th>
+                                <th>Est. Tax</th>
+                                <th>Deduction Left</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in tax_years %}
+                            <tr>
+                                <td data-label="Year">{{ t.year }}</td>
+                                {% if t.tax is none %}
+                                <td data-label="Realized P&L" class="dim" colspan="4">환율 조회 실패</td>
+                                {% else %}
+                                <td data-label="Realized P&L" class="{{ 'positive' if t.realized_pnl_usd > 0 else ('negative' if t.realized_pnl_usd < 0 else '') }}">{{ t.realized_pnl_usd|usd_signed }}</td>
+                                <td data-label="FX Rate" class="dim">{{ "{:,.2f}".format(t.fx_rate) }}</td>
+                                <td data-label="Est. Tax" class="{{ 'negative' if t.tax_usd > 0 else 'dim' }}">${{ "{:,.2f}".format(t.tax_usd) }}</td>
+                                <td data-label="Deduction Left" class="{{ 'positive' if t.deduction_left_usd > 0 else 'dim' }}">${{ "{:,.2f}".format(t.deduction_left_usd) }}</td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="dim" style="font-size:11px;margin-top:8px;">
+                    Tax is assessed in KRW (₩2,500,000 annual deduction, 22%) and shown here converted back at FX Rate —
+                    that year's fill-weighted USD/KRW from yfinance (KRW=X), applied per sell date.
+                </div>
+            </section>
+
             <!-- Equity Curve Chart -->
             <section class="perf-panel perf-chart-card">
                 <div class="perf-chart-header">

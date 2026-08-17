@@ -520,7 +520,47 @@ document.addEventListener('DOMContentLoaded', () => {
     initChartTheme();
     initRSISort();
     initPositionsSort();
+    initTooltips();
 });
+
+// Custom tooltip for [data-tip] elements — hover on desktop, tap on mobile.
+// Shared by every page; .tip-box lives in style.css.
+function initTooltips() {
+    const box = document.createElement('div');
+    box.className = 'tip-box';
+    document.body.appendChild(box);
+    let openEl = null;
+
+    function show(el) {
+        const text = el.dataset.tip;
+        box.textContent = text;
+        // Multi-line tips (a formula, say) need the line breaks kept; the
+        // default nowrap would run them into one line.
+        box.style.whiteSpace = text.includes('\n') ? 'pre-line' : '';
+        const r = el.getBoundingClientRect();
+        box.style.left = Math.round(r.left + r.width / 2) + 'px';
+        box.style.top = Math.round(r.top) + 'px';
+        box.style.transform = 'translate(-50%, calc(-100% - 8px))';
+        box.classList.add('visible');
+        openEl = el;
+    }
+    function hide() {
+        box.classList.remove('visible');
+        openEl = null;
+    }
+
+    document.querySelectorAll('[data-tip]').forEach(el => {
+        el.addEventListener('mouseenter', () => show(el));
+        el.addEventListener('mouseleave', hide);
+        el.addEventListener('focus', () => show(el));
+        el.addEventListener('blur', hide);
+        el.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openEl === el ? hide() : show(el);
+        });
+    });
+    document.addEventListener('click', hide);
+}
 
 function initSortControls(selectId, dirId, storageKey, apply) {
     const select = document.getElementById(selectId);

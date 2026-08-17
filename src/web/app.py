@@ -23,6 +23,8 @@ import logging
 import json
 import re
 
+from src.analytics.tax import capital_gains_tax_by_year, usdkrw_rates
+
 logger = logging.getLogger(__name__)
 
 # Base directory for templates and static files
@@ -1442,6 +1444,8 @@ def create_app() -> FastAPI:
         # Recalculate performance metrics
         dashboard_state.calculate_performance()
 
+        fx = await usdkrw_rates(dashboard_state.fills)
+
         context = {
             "request": request,
             "active_page": "performance",
@@ -1451,6 +1455,7 @@ def create_app() -> FastAPI:
             ),
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
+            "tax_years": capital_gains_tax_by_year(dashboard_state.fills, fx),
             "balance_usd": float(dashboard_state.balance_usd),
             "pnl_usd": float(dashboard_state.pnl_usd),
             "bot_status": dashboard_state.bot_status,
@@ -2064,6 +2069,53 @@ def create_app() -> FastAPI:
             dashboard_state.add_trade_log(result="success", **trade)
 
         return {"seeded": len(sample_trades)}
+
+    @app.post("/api/debug/seed-tax-fills")
+    async def seed_tax_fills():
+        """Write sample sell fills so the Capital Gains Tax table has rows.
+
+        Unlike seed-trades these go to the DB, because /performance reloads
+        fills from storage on every request and would drop in-memory ones.
+        They carry a SEED- order_id so they can be taken out again:
+        DELETE FROM fills WHERE order_id LIKE 'SEED-TAX-%';
+        """
+        if os.getenv("DEBUG") != "true":
+            raise HTTPException(status_code=404, detail="Not found")
+
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(status_code=503, detail="Storage unavailable")
+
+        from src.core.types import Fill, Market, OrderSide
+
+        year = datetime.now().year
+        # (symbol, market, years back, pnl) — one year under the deduction,
+        # one over it, one a net loss, plus a KRX row the tax calc drops.
+        samples = [
+            ("AAPL", Market.NASDAQ, 0, "1500.00"),
+            ("TSLA", Market.NASDAQ, 0, "-300.00"),
+            ("NVDA", Market.NASDAQ, 1, "5000.00"),
+            ("MSFT", Market.NASDAQ, 1, "-500.00"),
+            ("005930", Market.KRX, 1, "9999.00"),
+            ("GOOG", Market.NASDAQ, 2, "-800.00"),
+        ]
+        try:
+            for i, (symbol, market, years_back, pnl) in enumerate(samples):
+                await storage.save_fill(Fill(
+                    order_id=f"SEED-TAX-{i}",
+                    symbol=symbol,
+                    market=market,
+                    side=OrderSide.SELL,
+                    quantity=1,
+                    price=Decimal("100"),
+                    commission=Decimal("0"),
+                    pnl=Decimal(pnl),
+                    timestamp=datetime(year - years_back, 6, 1, 12, 0),
+                ))
+        finally:
+            await storage.close()
+
+        return {"seeded": len(samples)}
 
     # ==================== Symbol Management Routes ====================
 

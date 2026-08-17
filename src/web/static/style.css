@@ -575,6 +575,16 @@ body {
 }
 .tip-box.visible { opacity: 1; transform: translateY(0); }
 
+/* "?" badge that opens a [data-tip] explanation */
+.info-dot {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 15px; height: 15px; margin-left: 6px;
+    border: 1px solid var(--dim); border-radius: 50%;
+    color: var(--dim); font-size: 10px; font-weight: 600;
+    cursor: help; vertical-align: middle; user-select: none;
+}
+.info-dot:hover, .info-dot:focus { color: var(--text); border-color: var(--text); }
+
 .alloc-pct {
     font-size: 14px; font-weight: 700; color: var(--text);
     font-variant-numeric: tabular-nums;
