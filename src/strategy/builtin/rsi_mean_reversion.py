@@ -262,7 +262,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
         current_buy_stage = self._buy_stages.get(symbol, 0)
         current_sell_stage = self._sell_stages.get(symbol, 0)
 
-        buy_repeat_ready = False
+        # No last-buy time means the position came from a broker sync, not
+        # from a fill this bot saw. The stage counter is still restored (and
+        # floored to 1), so a cooldown that can never be measured would pin
+        # the ladder above rung 1 forever — the rung the user retunes. An
+        # unmeasurable cooldown counts as elapsed. Stage 0 is unaffected:
+        # _resolve_stage only reads repeat_ready when current_stage > 0.
+        buy_repeat_ready = True
         if symbol in self._last_buy_time:
             time_since_last_buy = datetime.now() - self._last_buy_time[symbol]
             buy_repeat_ready = time_since_last_buy >= timedelta(days=cooldown_days)

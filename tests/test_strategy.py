@@ -262,6 +262,39 @@ class TestRSIMeanReversionStrategy:
             assert signal.signal_type == SignalType.ENTRY_LONG
 
     @pytest.mark.asyncio
+    async def test_broker_synced_position_can_restart_at_buy_stage_one(
+        self, strategy,
+    ):
+        """A restored position with no known last-buy time still resets to BUY1.
+
+        Production 2026-08-25: SOXL sat at buy_stage 1 with last_buy_date
+        NULL, so _last_buy_time was never restored, buy_repeat_ready was
+        False forever, and the ladder could never fall back to rung 1 —
+        RSI 37.8 was judged against rung 2 (35) instead of the rung 1 (40)
+        the user had just configured. Only a fill could have unstuck it,
+        and no fill could happen.
+        """
+        bars = self._bars(lambda i: 90.0 - i * 0.1)
+
+        strategy.initialize({"AAPL": bars})
+        df = strategy.get_daily_dataframe("AAPL")
+        # Between rung 2 (25) and rung 1 (30): only a ladder reset fires here.
+        strategy._calculate_rsi = MagicMock(
+            return_value=pd.Series([28.0] * len(df), index=df.index)
+        )
+        strategy._positions["AAPL"] = 4
+        # Near the last close, so the -10% stop loss does not pre-empt the buy.
+        strategy._entry_prices["AAPL"] = Decimal("85")
+        strategy._buy_stages["AAPL"] = 1
+        assert "AAPL" not in strategy._last_buy_time
+
+        signal = await strategy.calculate_signal("AAPL")
+
+        assert signal is not None
+        assert signal.signal_type == SignalType.ENTRY_LONG
+        assert signal.metadata["reason"] == "avg_down_stage_1"
+
+    @pytest.mark.asyncio
     async def test_calculate_signal_sell(self, strategy):
         """Test sell signal generation"""
         # Create bars that result in high RSI
