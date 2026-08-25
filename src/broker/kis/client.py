@@ -239,8 +239,6 @@ class KISBroker:
             return {
                 "total_eval": Decimal(output2.get("tot_evlu_amt", "0") or "0"),
                 "cash": Decimal(output2.get("dnca_tot_amt", "0") or "0"),
-                "stocks_eval": Decimal(output2.get("scts_evlu_amt", "0") or "0"),
-                "profit_loss": Decimal(output2.get("evlu_pfls_smtl_amt", "0") or "0"),
             }
 
     async def _get_overseas_balance(self) -> dict:
@@ -294,18 +292,14 @@ class KISBroker:
                         )
                         break
 
-            # Stock eval + P/L come from the output3 summary, NOT a per-row
-            # output1 sum: CTRP6504R's output1 does not carry evlu_amt /
-            # evlu_pfls_amt, so the old loop always produced 0 and the
-            # dashboard's Invested/P&L were pinned at $0 every tick. The
-            # authoritative USD totals are evlu_amt_smtl / evlu_pfls_amt_smtl.
+            # Stock eval comes from the output3 summary, NOT a per-row output1
+            # sum: CTRP6504R's output1 does not carry evlu_amt, so the old loop
+            # always produced 0 and the dashboard's Invested was pinned at $0
+            # every tick. The authoritative USD total is evlu_amt_smtl.
             summary = output3[0] if isinstance(output3, list) and output3 else output3
             if not isinstance(summary, dict):
                 summary = {}
             stock_eval = Decimal(summary.get("evlu_amt_smtl", "0") or "0")
-            total_profit_loss = Decimal(
-                summary.get("evlu_pfls_amt_smtl", "0") or "0"
-            )
 
             logger.info(f"Account balance - USD cash: {usd_cash:,.2f}, stocks: {stock_eval:,.2f}")
 
@@ -316,8 +310,6 @@ class KISBroker:
             return {
                 "total_eval": usd_cash + stock_eval + unsettled,
                 "cash": usd_cash,
-                "stocks_eval": stock_eval,
-                "profit_loss": total_profit_loss,
                 "unsettled": unsettled,
             }
 

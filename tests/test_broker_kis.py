@@ -323,16 +323,16 @@ class TestGetOverseasPositionsFilter:
 
 
 class TestGetOverseasBalanceUsesSummary:
-    """Regression: dashboard Invested/P&L stuck at $0 every tick.
+    """Regression: dashboard Invested stuck at $0 every tick.
 
-    KIS present-balance (CTRP6504R) output1 does NOT carry
-    evlu_amt / evlu_pfls_amt, so summing output1 gave stock_eval=0
-    and profit_loss=0 forever. The authoritative USD totals live in
-    output3 (evlu_amt_smtl / evlu_pfls_amt_smtl).
+    KIS present-balance (CTRP6504R) output1 does NOT carry evlu_amt, so
+    summing output1 gave stock_eval=0 forever. The authoritative USD total
+    lives in output3 (evlu_amt_smtl). It reaches the caller inside
+    total_eval, which is cash + stock_eval + unsettled.
     """
 
     @pytest.mark.asyncio
-    async def test_stock_eval_and_pnl_come_from_output3(self):
+    async def test_stock_eval_comes_from_output3(self):
         broker = _make_broker(hts_id="")
         broker._auth.get_headers = MagicMock(return_value={})
         # Payload mirrors a real logged response: output1 rows lack
@@ -360,10 +360,9 @@ class TestGetOverseasBalanceUsesSummary:
         bal = await broker._get_overseas_balance()
 
         assert bal["cash"] == Decimal("4352.390000")
-        assert bal["stocks_eval"] == Decimal("491")
-        assert bal["profit_loss"] == Decimal("6")
         assert bal["total_eval"] == Decimal("4843.390000")
-        # Dashboard derives INVESTED = total_eval - cash
+        # Dashboard derives INVESTED = total_eval - cash, so a missed
+        # evlu_amt_smtl shows up here as 0.
         assert bal["total_eval"] - bal["cash"] == Decimal("491")
 
     @pytest.mark.asyncio
@@ -382,9 +381,8 @@ class TestGetOverseasBalanceUsesSummary:
 
         bal = await broker._get_overseas_balance()
 
-        assert bal["stocks_eval"] == Decimal("250")
-        assert bal["profit_loss"] == Decimal("-12")
         assert bal["total_eval"] == Decimal("1250")
+        assert bal["total_eval"] - bal["cash"] == Decimal("250")
 
 
 class TestQueryOverseasFillPriceFallback:

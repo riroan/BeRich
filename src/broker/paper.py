@@ -285,21 +285,9 @@ class PaperBroker:
 
         total_eval = cash + position_value
 
-        # Calculate P&L
-        cost_basis = Decimal("0")
-        for symbol, pos in self._positions.items():
-            if is_usd and pos["market"] not in usd_markets:
-                continue
-            if not is_usd and pos["market"] != Market.KRX:
-                continue
-            cost_basis += pos["avg_price"] * pos["quantity"]
-        profit_loss = position_value - cost_basis
-
         return {
             "total_eval": total_eval,
             "cash": cash,
-            "stocks_eval": position_value,
-            "profit_loss": profit_loss,
         }
 
     async def cancel_order(

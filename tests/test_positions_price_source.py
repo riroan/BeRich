@@ -111,18 +111,38 @@ def test_pnl_usd_is_the_sum_of_the_rows_it_heads():
     )
 
 
-def test_pnl_usd_leaves_out_krw_holdings():
-    state = DashboardState()
-    krw = _balance_record("005930", 76500.0)
-    krw["market"] = "KRX"
+def _krw_record(symbol="005930", current_price=76500.0):
+    record = _balance_record(symbol, current_price)
+    record["market"] = "KRX"
+    record["avg_price"] = 75000.0
+    record["pnl"] = (current_price - 75000.0) * 10
+    return record
 
-    state.replace_positions_from_records([_balance_record("RAM", 13.20), krw])
+
+def test_the_two_currencies_do_not_leak_into_each_other():
+    state = DashboardState()
+
+    state.replace_positions_from_records([
+        _balance_record("RAM", 13.20), _krw_record(),
+    ])
 
     assert float(state.pnl_usd) == pytest.approx((13.20 - 10.89) * 10)
+    assert float(state.pnl_krw) == pytest.approx((76500 - 75000) * 10)
 
 
-def test_pnl_usd_is_zero_with_no_positions():
-    assert DashboardState().pnl_usd == Decimal("0")
+def test_pnl_krw_rounds_to_whole_won():
+    """The won has no subunit, so cents would be a made-up precision."""
+    state = DashboardState()
+
+    state.replace_positions_from_records([_krw_record("005930", 76500.37)])
+
+    assert state.pnl_krw == state.pnl_krw.to_integral_value()
+
+
+def test_both_are_zero_with_no_positions():
+    state = DashboardState()
+    assert state.pnl_usd == Decimal("0")
+    assert state.pnl_krw == Decimal("0")
 
 
 def test_a_zero_avg_price_is_left_alone():

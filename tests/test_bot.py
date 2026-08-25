@@ -86,7 +86,6 @@ class TestTradingBot:
             mock_broker.get_account_balance = AsyncMock(return_value={
                 "total_eval": Decimal("1000000"),
                 "cash": Decimal("500000"),
-                "profit_loss": Decimal("10000"),
             })
             mock_create_broker.return_value = mock_broker
 

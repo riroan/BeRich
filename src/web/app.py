@@ -350,8 +350,8 @@ class DashboardState:
         self.balance_usd: Decimal = Decimal("0")
         self.cash_krw: Decimal = Decimal("0")
         self.cash_usd: Decimal = Decimal("0")
-        self.pnl_krw: Decimal = Decimal("0")
-        # pnl_usd is derived from the position rows — see the property below.
+        # pnl_krw and pnl_usd are derived from the position rows — see the
+        # properties below.
         self.daily_pnl: Decimal = Decimal("0")
         self.total_pnl: Decimal = Decimal("0")
 
@@ -430,9 +430,8 @@ class DashboardState:
         self.trading_paused: bool = False
         self.debug_freeze: bool = False
 
-    @property
-    def pnl_usd(self) -> Decimal:
-        """Unrealized P&L on the USD holdings, summed from the position rows.
+    def _unrealized_pnl(self, krx: bool) -> Decimal:
+        """Unrealized P&L summed from the position rows of one currency.
 
         Deliberately not the balance API's ``profit_loss``. That number is
         priced off the API's own evaluation price, which lags, while the
@@ -442,20 +441,30 @@ class DashboardState:
         Summing the rows keeps them equal by construction.
 
         It also gives standalone web mode a real number: nothing calls the
-        balance API there, so the stored field this replaces was always 0.
+        balance API there, so the stored fields this replaces were always 0.
         """
-        total = sum(
+        return sum(
             (
                 Decimal(str(position.pnl))
                 for position in self.positions.values()
-                if position.market.upper() != "KRX"
+                if (position.market.upper() == "KRX") is krx
             ),
             Decimal("0"),
         )
+
+    @property
+    def pnl_usd(self) -> Decimal:
+        """Unrealized P&L on the USD holdings. See _unrealized_pnl."""
         # Each row's pnl is a float, so the sum carries its noise (+$340.00
         # arrived as 340.00000000000057). Templates round it away, the JSON
         # APIs do not — and this is money.
-        return total.quantize(Decimal("0.01"))
+        return self._unrealized_pnl(krx=False).quantize(Decimal("0.01"))
+
+    @property
+    def pnl_krw(self) -> Decimal:
+        """Unrealized P&L on the KRW holdings. See _unrealized_pnl."""
+        # The won has no subunit, so it rounds to whole, not to cents.
+        return self._unrealized_pnl(krx=True).quantize(Decimal("1"))
 
     def update_position(
         self,

@@ -300,7 +300,6 @@ class YFinanceBroker:
         relevant_markets = USD_MARKETS if cash_key == "usd" else {Market.KRX}
         cash = self._cash[cash_key]
         position_value = Decimal("0")
-        cost_basis = Decimal("0")
 
         for symbol, pos in self._positions.items():
             if pos["market"] not in relevant_markets:
@@ -310,15 +309,11 @@ class YFinanceBroker:
             except Exception:
                 price = pos["avg_price"]
             position_value += price * pos["quantity"]
-            cost_basis += pos["avg_price"] * pos["quantity"]
 
-        profit_loss = position_value - cost_basis
         total_eval = cash + position_value
         return {
             "total_eval": total_eval,
             "cash": cash,
-            "stocks_eval": position_value,
-            "profit_loss": profit_loss,
             "total_usd": total_eval if cash_key == "usd" else Decimal("0"),
             "total_krw": total_eval if cash_key == "krw" else Decimal("0"),
         }

@@ -19,8 +19,6 @@ async def test_yfinance_mode_does_not_require_kis_credentials(monkeypatch, tmp_p
         return {
             "total_eval": Decimal("10000"),
             "cash": Decimal("10000"),
-            "stocks_eval": Decimal("0"),
-            "profit_loss": Decimal("0"),
         }
 
     monkeypatch.setattr(YFinanceBroker, "get_account_balance", fake_get_account_balance)

@@ -221,16 +221,16 @@ class DashboardSyncMixin:
         assert self.broker is not None
         balance = await self.broker.get_account_balance(market)
         logger.debug(f"{market.value} balance response: {balance}")
+        # Only the numbers the broker alone can know are carried over. P&L is
+        # not among them: dashboard.pnl_krw/pnl_usd are derived from the
+        # position rows so a header and the table under it cannot disagree.
+        # See DashboardState._unrealized_pnl.
         if market == Market.KRX:
             self.dashboard.balance_krw = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_krw = balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_krw = balance.get("profit_loss", Decimal("0"))
         else:
             self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
-            # profit_loss is deliberately not carried over: dashboard.pnl_usd
-            # is derived from the position rows so the header and the table
-            # cannot disagree. See DashboardState.pnl_usd.
             self._unsettled_usd = balance.get("unsettled", Decimal("0"))
         return balance
 
