@@ -105,7 +105,8 @@ def setup_mock_data():
     state.cash_krw = Decimal("15000000")
     state.cash_usd = Decimal("3500.25")
     state.pnl_krw = Decimal("1250000")
-    state.pnl_usd = Decimal("-125.30")
+    # pnl_usd derives from the mock AAPL position (+340.00) instead of a
+    # hardcoded number that contradicted the positions table below it.
     state.daily_pnl = Decimal("1250000")
     state.total_pnl = Decimal("5430000")
 

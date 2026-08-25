@@ -228,7 +228,9 @@ class DashboardSyncMixin:
         else:
             self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
-            self.dashboard.pnl_usd = balance.get("profit_loss", Decimal("0"))
+            # profit_loss is deliberately not carried over: dashboard.pnl_usd
+            # is derived from the position rows so the header and the table
+            # cannot disagree. See DashboardState.pnl_usd.
             self._unsettled_usd = balance.get("unsettled", Decimal("0"))
         return balance
 

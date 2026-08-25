@@ -15,6 +15,9 @@ $144.95/+20.9%, dropping SPYU from 3rd place to 1st.
 from __future__ import annotations
 
 import os
+from decimal import Decimal
+
+import pytest
 
 os.environ.setdefault("DASHBOARD_PASSWORD", "test")
 
@@ -85,6 +88,41 @@ def test_a_symbol_the_tick_never_saw_keeps_the_broker_price():
     state.replace_positions_from_records([_balance_record("NVDA", 190.0)])
 
     assert state.positions["NVDA"].current_price == 190.0
+
+
+def test_pnl_usd_is_the_sum_of_the_rows_it_heads():
+    """The header used to come from the balance API while the rows came from
+    the tick, so the summary card and the table under it disagreed."""
+    state = DashboardState()
+    ticks = {"RAM": 14.02, "SOXL": 148.24}
+    for symbol, price in ticks.items():
+        state.update_rsi(symbol, 50.0, price=price, market="NASDAQ")
+
+    state.replace_positions_from_records([
+        _balance_record("RAM", 13.20),
+        _balance_record("SOXL", 144.95),
+    ])
+
+    rows = sum(p.pnl for p in state.positions.values())
+    assert float(state.pnl_usd) == pytest.approx(rows)
+    # Priced off the tick, not the lagging balance price it was handed.
+    assert float(state.pnl_usd) == pytest.approx(
+        (14.02 - 10.89) * 10 + (148.24 - 10.89) * 10
+    )
+
+
+def test_pnl_usd_leaves_out_krw_holdings():
+    state = DashboardState()
+    krw = _balance_record("005930", 76500.0)
+    krw["market"] = "KRX"
+
+    state.replace_positions_from_records([_balance_record("RAM", 13.20), krw])
+
+    assert float(state.pnl_usd) == pytest.approx((13.20 - 10.89) * 10)
+
+
+def test_pnl_usd_is_zero_with_no_positions():
+    assert DashboardState().pnl_usd == Decimal("0")
 
 
 def test_a_zero_avg_price_is_left_alone():

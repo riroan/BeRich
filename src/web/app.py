@@ -351,7 +351,7 @@ class DashboardState:
         self.cash_krw: Decimal = Decimal("0")
         self.cash_usd: Decimal = Decimal("0")
         self.pnl_krw: Decimal = Decimal("0")
-        self.pnl_usd: Decimal = Decimal("0")
+        # pnl_usd is derived from the position rows — see the property below.
         self.daily_pnl: Decimal = Decimal("0")
         self.total_pnl: Decimal = Decimal("0")
 
@@ -429,6 +429,33 @@ class DashboardState:
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
         self.debug_freeze: bool = False
+
+    @property
+    def pnl_usd(self) -> Decimal:
+        """Unrealized P&L on the USD holdings, summed from the position rows.
+
+        Deliberately not the balance API's ``profit_loss``. That number is
+        priced off the API's own evaluation price, which lags, while the
+        Positions table right below it is priced off the tick (see the note
+        in replace_positions_from_records about why the tick wins). Header
+        and rows were computing the same quantity two ways and disagreeing.
+        Summing the rows keeps them equal by construction.
+
+        It also gives standalone web mode a real number: nothing calls the
+        balance API there, so the stored field this replaces was always 0.
+        """
+        total = sum(
+            (
+                Decimal(str(position.pnl))
+                for position in self.positions.values()
+                if position.market.upper() != "KRX"
+            ),
+            Decimal("0"),
+        )
+        # Each row's pnl is a float, so the sum carries its noise (+$340.00
+        # arrived as 340.00000000000057). Templates round it away, the JSON
+        # APIs do not — and this is money.
+        return total.quantize(Decimal("0.01"))
 
     def update_position(
         self,
