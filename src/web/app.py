@@ -2911,12 +2911,11 @@ def create_app() -> FastAPI:
             closes = {}
             if storage:
                 try:
-                    for sym in symbols:
-                        rows = await storage.get_daily_ohlc_rsi(sym, limit=60)
-                        if rows:
-                            closes[sym] = pd.Series(
-                                {r["day"]: r["close"] for r in rows}
-                            )
+                    daily = await storage.get_daily_close_rsi(symbols, limit=60)
+                    for sym, rows in daily.items():
+                        closes[sym] = pd.Series(
+                            {r["day"]: r["close"] for r in rows}
+                        )
                 finally:
                     await storage.close()
 
@@ -3002,9 +3001,9 @@ def create_app() -> FastAPI:
                             seen.add(sym)
                             symbols.append(sym)
 
-                for sym in symbols:
-                    # Same 60-day window the correlation preview uses.
-                    rows = await storage.get_daily_ohlc_rsi(sym, limit=60)
+                # Same 60-day window the correlation preview uses.
+                by_symbol = await storage.get_daily_close_rsi(symbols, limit=60)
+                for rows in by_symbol.values():
                     for row in rows:
                         daily.setdefault(row["day"], []).append(row["rsi"])
             finally:

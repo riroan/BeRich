@@ -1,4 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, Numeric, Text, Enum as SQLEnum, Index
+from sqlalchemy import (
+    Column, Integer, String, Date, DateTime, Numeric, Text,
+    Enum as SQLEnum, Index,
+)
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -132,6 +135,26 @@ class PriceRSIModel(Base):
     __table_args__ = (
         Index("idx_price_rsi_symbol_timestamp", "symbol", "timestamp"),
     )
+
+
+class DailyCloseRSIModel(Base):
+    """That day's last tick, one row per symbol per day.
+
+    price_rsi stores ~1,000 ticks per symbol per day. Folding those into
+    daily points at render time cost 16s on the RSI-trend page and grew
+    with the table — and `date(timestamp)` keeps the grouping off the
+    index, so no amount of query tuning got it under ~6s. Every day but
+    today is immutable, so the tick path writes the fold once here and the
+    pages read it back already folded.
+    """
+
+    __tablename__ = "daily_close_rsi"
+
+    symbol = Column(String(20), primary_key=True)
+    day = Column(Date, primary_key=True)
+    close = Column(Numeric(20, 8), nullable=False)
+    rsi = Column(Numeric(10, 4))
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 
 class EquitySnapshot(Base):

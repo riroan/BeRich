@@ -10,7 +10,7 @@ import logging
 from src.core.types import Bar, Order, Fill, Market, OrderStatus
 from .models import (
     Base, BarModel, OrderModel, FillModel,
-    CurrentPositionModel, PriceRSIModel, EquitySnapshot,
+    CurrentPositionModel, PriceRSIModel, DailyCloseRSIModel, EquitySnapshot,
     StrategyParams,
     StrategyConfigModel, BotStateModel, CashFlow,
 )
@@ -457,15 +457,38 @@ class Storage:
         rsi: float | None = None,
     ) -> None:
         """Save price and RSI data"""
+        now = datetime.now()
+        rsi_dec = Decimal(str(rsi)) if rsi is not None else None
         async with self.async_session() as session:
             record = PriceRSIModel(
                 symbol=symbol,
                 market=market,
                 price=price,
-                rsi=Decimal(str(rsi)) if rsi is not None else None,
-                timestamp=datetime.now(),
+                rsi=rsi_dec,
+                timestamp=now,
             )
             session.add(record)
+            # Fold today's candle as it forms. merge() is a SELECT plus an
+            # INSERT-or-UPDATE on the (symbol, day) primary key — dialect
+            # agnostic, unlike ON DUPLICATE KEY UPDATE, and negligible next
+            # to the insert above. Every later tick overwrites the row, so
+            # what survives the day is its last tick (see DailyCloseRSIModel).
+            #
+            # Ticks without an RSI are skipped rather than folded: a restart
+            # mid-session leaves get_current_rsi() returning None until the
+            # strategy is warm, and overwriting the day with a NULL rsi
+            # would drop the whole day from the pages, which read only rows
+            # that have one. The day keeps its last RSI-bearing tick, the
+            # same rule the backfill applies.
+            if rsi_dec is not None:
+                await session.merge(
+                    DailyCloseRSIModel(
+                        symbol=symbol,
+                        day=now.date(),
+                        close=price,
+                        rsi=rsi_dec,
+                    )
+                )
             await session.commit()
 
     async def get_price_rsi_history(
@@ -570,6 +593,47 @@ class Storage:
                 "rsi": float(row["rsi"]),
             })
         return out
+
+    async def get_daily_close_rsi(
+        self, symbols: list[str], limit: int = 60,
+    ) -> dict[str, list[dict]]:
+        """Daily close/RSI for many symbols at once, newest ``limit`` days.
+
+        The batched counterpart to get_daily_ohlc_rsi, reading the folded
+        daily_close_rsi rows instead of re-folding raw ticks. Days whose
+        last tick had no RSI are dropped, the same rule get_daily_ohlc_rsi
+        applies, so close and rsi stay index-aligned.
+
+        Returns {symbol: [{"day", "close", "rsi"}, ...]} in chronological
+        order. Symbols with no rows are absent.
+        """
+        if not symbols:
+            return {}
+
+        async with self.async_session() as session:
+            result = await session.execute(
+                select(DailyCloseRSIModel)
+                .where(
+                    DailyCloseRSIModel.symbol.in_(symbols),
+                    DailyCloseRSIModel.rsi.isnot(None),
+                )
+                .order_by(
+                    DailyCloseRSIModel.symbol, DailyCloseRSIModel.day,
+                )
+            )
+            rows = result.scalars().all()
+
+        out: dict[str, list[dict]] = {}
+        for row in rows:
+            out.setdefault(row.symbol, []).append({
+                "day": row.day.isoformat(),
+                "close": float(row.close),
+                "rsi": float(row.rsi),
+            })
+        # One table scan beats a per-symbol LIMIT, and the table holds one
+        # row per symbol-day (a few thousand), so trimming here is cheaper
+        # than the window function it would otherwise take.
+        return {sym: days[-limit:] for sym, days in out.items()}
 
     async def get_all_symbols_with_history(self) -> list[str]:
         """Get all symbols that have price/RSI history"""

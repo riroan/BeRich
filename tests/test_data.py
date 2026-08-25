@@ -358,6 +358,84 @@ class TestFillReasonPersistence:
         assert fills[0].reason is None
 
 
+class TestDailyCloseRSI:
+    """The folded daily summary the RSI-trend and correlation pages read."""
+
+    @pytest.mark.asyncio
+    async def test_ticks_fold_to_one_row_per_symbol_day(
+        self, storage: Storage,
+    ):
+        """Repeated ticks overwrite the day's row; the last one wins."""
+        for price, rsi in ((100, 55.0), (101, 56.0), (99, 41.5)):
+            await storage.save_price_rsi(
+                symbol="AAPL", market=Market.NASDAQ,
+                price=Decimal(str(price)), rsi=rsi,
+            )
+
+        daily = await storage.get_daily_close_rsi(["AAPL"])
+
+        assert len(daily["AAPL"]) == 1
+        assert daily["AAPL"][0]["close"] == 99.0
+        assert daily["AAPL"][0]["rsi"] == 41.5
+
+    @pytest.mark.asyncio
+    async def test_batches_symbols_and_skips_missing_ones(
+        self, storage: Storage,
+    ):
+        """One call covers every symbol; absent ones are simply not keys."""
+        await storage.save_price_rsi(
+            symbol="AAPL", market=Market.NASDAQ,
+            price=Decimal("100"), rsi=30.0,
+        )
+        await storage.save_price_rsi(
+            symbol="MSFT", market=Market.NASDAQ,
+            price=Decimal("200"), rsi=70.0,
+        )
+
+        daily = await storage.get_daily_close_rsi(["AAPL", "MSFT", "NVDA"])
+
+        assert set(daily) == {"AAPL", "MSFT"}
+        assert daily["MSFT"][0]["close"] == 200.0
+
+    @pytest.mark.asyncio
+    async def test_day_without_rsi_is_dropped(self, storage: Storage):
+        """Same rule get_daily_ohlc_rsi applies: no closing RSI, no row."""
+        await storage.save_price_rsi(
+            symbol="AAPL", market=Market.NASDAQ,
+            price=Decimal("100"), rsi=None,
+        )
+
+        assert await storage.get_daily_close_rsi(["AAPL"]) == {}
+
+    @pytest.mark.asyncio
+    async def test_rsi_less_tick_does_not_erase_the_day(
+        self, storage: Storage,
+    ):
+        """A restart mid-session must not blank out the day already folded.
+
+        get_current_rsi() returns None until the strategy is warm, so the
+        first ticks after a restart carry no RSI. Folding them would null
+        the row and drop the whole day from the pages.
+        """
+        await storage.save_price_rsi(
+            symbol="AAPL", market=Market.NASDAQ,
+            price=Decimal("100"), rsi=44.0,
+        )
+        await storage.save_price_rsi(
+            symbol="AAPL", market=Market.NASDAQ,
+            price=Decimal("103"), rsi=None,
+        )
+
+        daily = await storage.get_daily_close_rsi(["AAPL"])
+
+        assert daily["AAPL"][0]["rsi"] == 44.0
+        assert daily["AAPL"][0]["close"] == 100.0
+
+    @pytest.mark.asyncio
+    async def test_empty_symbol_list_skips_the_query(self, storage: Storage):
+        assert await storage.get_daily_close_rsi([]) == {}
+
+
 class TestEquitySnapshots:
     """Equity snapshot persistence."""
 
