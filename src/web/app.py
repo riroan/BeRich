@@ -1216,6 +1216,31 @@ def _rsi_class(symbol: str, rsi: float | None) -> str:
 
 templates.env.globals["rsi_class"] = _rsi_class
 
+
+def _near_buy(symbol: str, rsi: float | None) -> bool:
+    """True while RSI sits within 5 of the symbol's first buy rung.
+
+    Same band that puts a symbol in the Buy Candidates list, so the RSI
+    Monitor cannot highlight something the candidate list ignores.
+    """
+    if rsi is None:
+        return False
+    buy_1, _, _, _ = dashboard_state.rsi_levels(symbol)
+    return rsi <= buy_1 + 5
+
+
+def _near_sell(symbol: str, rsi: float | None) -> bool:
+    """The sell-side mirror of near_buy(): within 5 of the first sell rung."""
+    if rsi is None:
+        return False
+    _, _, sell_1, _ = dashboard_state.rsi_levels(symbol)
+    return rsi >= sell_1 - 5
+
+
+templates.env.globals["near_buy"] = _near_buy
+templates.env.globals["near_sell"] = _near_sell
+
+
 # Session storage (in-memory)
 valid_sessions: dict[str, datetime] = {}
 
@@ -3633,6 +3658,7 @@ def get_dashboard_snapshot() -> dict:
         "positions": [p.model_dump() for p in dashboard_state.positions.values()],
         "rsi_values": dict(dashboard_state.rsi_values),
         "rsi_prices": dict(dashboard_state.rsi_prices),
+        "rsi_thresholds": dict(dashboard_state.rsi_thresholds),
         "recent_signals": dashboard_state.recent_signals[:10],
         "recent_orders": dashboard_state.recent_orders[:10],
         "bot_status": dashboard_state.bot_status.model_dump() if dashboard_state.bot_status else None,

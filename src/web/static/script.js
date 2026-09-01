@@ -77,7 +77,7 @@ class DashboardWebSocket {
 
         // Update RSI grid
         if (data.rsi_values) {
-            this.updateRSIGrid(data.rsi_values, data.rsi_prices || {});
+            this.updateRSIGrid(data.rsi_values, data.rsi_prices || {}, data.rsi_thresholds || {});
         }
 
         // Update status bar
@@ -260,7 +260,7 @@ class DashboardWebSocket {
         items.forEach(item => container.appendChild(item));
     }
 
-    updateRSIGrid(rsiValues, rsiPrices) {
+    updateRSIGrid(rsiValues, rsiPrices, rsiThresholds = {}) {
         const grid = document.querySelector('.rsi-grid');
         if (!grid) return;
 
@@ -270,6 +270,13 @@ class DashboardWebSocket {
             return;
         }
 
+        // Positions table is refreshed just before this, so its rows are the
+        // current holdings.
+        const held = new Set(
+            Array.from(document.querySelectorAll('#positions-table .position-row'))
+                .map(row => row.dataset.symbol)
+        );
+
         grid.innerHTML = symbols.map(symbol => {
             const rsi = rsiValues[symbol];
             const priceInfo = rsiPrices[symbol] || {};
@@ -277,9 +284,14 @@ class DashboardWebSocket {
             const market = priceInfo.market;
             const escapedSymbol = this.escapeHTML(symbol);
             const href = `/symbol/${encodeURIComponent(symbol)}`;
+            // Same bands as the server's near_buy()/near_sell(): within 5 of
+            // the first rung. 30/70 are the ladder defaults until the bot syncs.
+            const levels = rsiThresholds[symbol] || {};
+            const nearBuy = rsi != null && rsi <= (levels.buy_1 ?? 30) + 5;
+            const nearSell = rsi != null && rsi >= (levels.sell_1 ?? 70) - 5;
 
             return `
-                <a class="rsi-item" href="${href}"
+                <a class="rsi-item ${held.has(symbol) ? 'held' : ''} ${nearBuy ? 'near-buy' : ''}${nearSell ? 'near-sell' : ''}" href="${href}"
                    data-symbol="${escapedSymbol}" data-rsi="${rsi}" data-price="${price != null ? price : ''}"
                    aria-label="Open ${escapedSymbol} chart">
                     <div class="rsi-left">

@@ -789,7 +789,20 @@ tr:hover { background: rgba(59,130,246,0.04); }
     cursor: pointer;
     transition: background .2s;
 }
+.rsi-item.held {
+    background: rgba(59,130,246,0.12);
+    box-shadow: inset 3px 0 0 var(--blue);
+}
+/* Within 5 of the first buy/sell rung — the candidate bands. Colours the
+   number by which side it is nearing; .rsi-warning/-danger stay untouched
+   because the header badge and symbol pages share them. */
+.rsi-item.near-buy .rsi-value { color: var(--emerald) !important; }
+.rsi-item.near-sell .rsi-value { color: var(--red) !important; }
+/* Past the second rung — same hue, brighter. */
+.rsi-item.near-buy .rsi-value.rsi-danger { color: #6ee7b7 !important; }
+.rsi-item.near-sell .rsi-value.rsi-danger { color: #fca5a5 !important; }
 .rsi-item:hover { background: var(--card); }
+.rsi-item.held:hover { background: rgba(59,130,246,0.2); }
 .rsi-item:focus-visible {
     background: var(--card);
 }
@@ -2258,9 +2271,10 @@ select option { background: var(--surface); color: var(--text); }
         min-width: 0;
         margin-top: 2px;
     }
-    /* Heatmap tint by RSI zone (matches value text semantics) */
-    .rsi-item:has(.rsi-danger) { background: rgba(239,68,68,.10); }
-    .rsi-item:has(.rsi-warning) { background: rgba(245,158,11,.10); }
+    /* Heatmap tint by RSI zone (matches value text semantics). Held tiles keep
+       their blue — this block sits after .rsi-item.held and ties on specificity. */
+    .rsi-item:not(.held):has(.rsi-danger) { background: rgba(239,68,68,.10); }
+    .rsi-item:not(.held):has(.rsi-warning) { background: rgba(245,158,11,.10); }
 
     /* System status */
     .sys-grid-row {

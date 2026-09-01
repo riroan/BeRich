@@ -1,6 +1,6 @@
 """Tests for dashboard signal-candidate generation (Buy Candidate list)."""
 
-from src.web.app import DashboardState, _rsi_class
+from src.web.app import DashboardState, _near_buy, _near_sell, _rsi_class
 
 
 def _buy_candidates(state):
@@ -115,6 +115,49 @@ class TestConfiguredRSILadder:
         # Sanity: the bands are the configured ones, not the old constants.
         assert "S40" in listed and "S41" not in listed   # buy_1 + 5
         assert "S75" in listed and "S74" not in listed   # sell_1 - 5
+
+    def test_near_buy_matches_the_buy_candidate_band(self, monkeypatch):
+        """The RSI Monitor colouring and the candidate lists share their bands."""
+        import src.web.app as web_app
+
+        rsi_values = {f"S{r}": float(r) for r in range(1, 100)}
+        state = self._state(rsi_values, held=tuple(rsi_values))
+        monkeypatch.setattr(web_app, "dashboard_state", state)
+        state.update_signal_candidates()
+
+        listed = {c.symbol for c in state.signal_candidates
+                  if "buy" in c.signal_type}
+        highlighted = {s for s, r in rsi_values.items() if _near_buy(s, r)}
+        assert listed == highlighted
+        assert _near_buy("S40", 40.0)        # buy_1 + 5
+        assert not _near_buy("S41", 41.0)
+        assert not _near_buy("S40", None)
+
+    def test_near_sell_matches_the_sell_candidate_band(self, monkeypatch):
+        import src.web.app as web_app
+
+        rsi_values = {f"S{r}": float(r) for r in range(1, 100)}
+        state = self._state(rsi_values, held=tuple(rsi_values))
+        monkeypatch.setattr(web_app, "dashboard_state", state)
+        state.update_signal_candidates()
+
+        listed = {c.symbol for c in state.signal_candidates
+                  if c.signal_type == "sell_candidate"}
+        highlighted = {s for s, r in rsi_values.items() if _near_sell(s, r)}
+        assert listed == highlighted
+        assert _near_sell("S75", 75.0)       # sell_1 - 5
+        assert not _near_sell("S74", 74.0)
+        assert not _near_sell("S75", None)
+
+    def test_the_two_bands_never_overlap(self, monkeypatch):
+        """A tile must not claim both directions — the number has one colour."""
+        import src.web.app as web_app
+
+        monkeypatch.setattr(web_app, "dashboard_state", self._state({"S": 1.0}))
+        assert not any(
+            _near_buy("S", r / 2) and _near_sell("S", r / 2)
+            for r in range(0, 201)
+        )
 
 
 class TestDashboardPositionRecords:

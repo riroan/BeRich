@@ -136,8 +136,9 @@
                     </span>
                 </div>
                 <div class="rsi-grid">
+                    {% set held = positions | map(attribute='symbol') | list %}
                     {% for symbol, data in rsi_with_prices.items() %}
-                    <a class="rsi-item" href="/symbol/{{ symbol }}"
+                    <a class="rsi-item {{ 'held' if symbol in held }} {{ 'near-buy' if near_buy(symbol, data.rsi) }}{{ 'near-sell' if near_sell(symbol, data.rsi) }}" href="/symbol/{{ symbol }}"
                        data-symbol="{{ symbol }}" data-rsi="{{ data.rsi }}" data-price="{{ data.price if data.price is not none else '' }}"
                        aria-label="Open {{ symbol }} chart">
                         <div class="rsi-left">
