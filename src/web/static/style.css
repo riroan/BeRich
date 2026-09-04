@@ -499,6 +499,8 @@ body {
     width: 60px; text-align: right; padding: 6px 8px; font-size: 13px;
 }
 .sym-controls .pct { font-size: 12px; color: var(--dim); margin-left: -6px; }
+.sym-shares { font-size: 11px; color: var(--dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sym-shares.warn { color: var(--amber); font-weight: 600; }
 .sym-strategy {
     width: 120px; padding: 6px 8px; font-size: 13px;
     background: var(--bg); color: var(--text);

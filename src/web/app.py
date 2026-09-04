@@ -2374,6 +2374,17 @@ def create_app() -> FastAPI:
                     for cfg in configs
                 ]
                 for cfg in configs:
+                    # Stage-1 buy portion, so the page can show how many
+                    # shares a weight actually buys. Strategies without an
+                    # averaging-down ladder (Heikin Ashi) buy the full room.
+                    levels = cfg.get("params", {}).get("avg_down_levels")
+                    if not levels:
+                        levels = (
+                            [[0, 0.5]]
+                            if "MeanReversion" in cfg.get("class_path", "")
+                            else [[0, 1.0]]
+                        )
+                    buy_portion = float(levels[0][1])
                     for s in cfg.get("symbols", []):
                         sym = (
                             s["symbol"]
@@ -2399,6 +2410,10 @@ def create_app() -> FastAPI:
                             "strategy_name": cfg["name"],
                             "enabled": cfg["enabled"] and sym_enabled,
                             "max_weight": mw,
+                            "buy_portion": buy_portion,
+                            "price": dashboard_state.rsi_prices.get(
+                                sym, {},
+                            ).get("price"),
                             "created_at": cfg.get(
                                 "created_at",
                             ),
@@ -2419,6 +2434,8 @@ def create_app() -> FastAPI:
             "markets": ["krx", "nasdaq", "nyse", "amex"],
             "strategies": strategies,
             "pnl_usd": float(dashboard_state.pnl_usd),
+            "balance_krw": float(dashboard_state.balance_krw),
+            "balance_usd": float(dashboard_state.balance_usd),
         }
         return templates.TemplateResponse(
             request=request,
