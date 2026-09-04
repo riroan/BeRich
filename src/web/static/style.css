@@ -2034,10 +2034,18 @@ select option { background: var(--surface); color: var(--text); }
     /* Trades 6a: compact summary strip replaces the desktop cards */
     .trade-summary-strip {
         display: flex;
+        flex-wrap: wrap;
         background: var(--surface);
         border-radius: 14px;
         padding: 12px 6px;
         box-shadow: var(--shadow);
+    }
+    .trade-summary-strip .tss-pnl {
+        flex: 0 0 100%;
+        border-left: 0;
+        border-top: 1px solid var(--border);
+        margin-top: 10px;
+        padding-top: 10px;
     }
     .trades-card {
         background: transparent;

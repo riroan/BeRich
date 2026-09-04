@@ -13,7 +13,7 @@
             <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">Total</div></div>
             <div class="tss-item"><div class="tss-num positive">{{ buy_count }}</div><div class="tss-label">Buy</div></div>
             <div class="tss-item"><div class="tss-num negative">{{ sell_count }}</div><div class="tss-label">Sell</div></div>
-            <div class="tss-item"><div class="tss-num {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div><div class="tss-label">Total P&amp;L</div></div>
+            <div class="tss-item tss-pnl"><div class="tss-num {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div><div class="tss-label">Total P&amp;L</div></div>
         </div>
 
         <!-- Summary Cards — desktop (>768px) -->
