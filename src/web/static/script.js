@@ -129,6 +129,13 @@ class DashboardWebSocket {
             usdPnl.className = `value small ${data.pnl_usd >= 0 ? 'positive' : 'negative'}`;
         }
 
+        const usdPnlPct = document.getElementById('pnl-usd-pct');
+        if (usdPnlPct && data.pnl_usd !== undefined && data.balance_usd) {
+            const pct = data.pnl_usd / data.balance_usd * 100;
+            usdPnlPct.textContent = `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`;
+            usdPnlPct.className = data.pnl_usd >= 0 ? 'positive' : 'negative';
+        }
+
         const stickyUsdPnl = document.getElementById('sticky-pnl-usd');
         if (stickyUsdPnl && data.pnl_usd !== undefined) {
             stickyUsdPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);

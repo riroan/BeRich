@@ -39,7 +39,7 @@
             <div class="card">
                 <div class="label">P&L</div>
                 <div class="value small {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd">{{ pnl_usd|usd_signed(2, true) }}</div>
-                <div class="delta dim">{{ position_count }} positions</div>
+                <div class="delta"><span class="{{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</span><span class="dim"> · {{ position_count }} positions</span></div>
             </div>
         </div>
 
