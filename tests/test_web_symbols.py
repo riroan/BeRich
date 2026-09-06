@@ -44,7 +44,7 @@ def test_row_lookups_disambiguate_by_symbol():
     # Every .sym-row lookup must key on data-symbol, not data-id alone,
     # otherwise it resolves to the first row in a multi-symbol group.
     assert '.sym-row[data-id="${id}"]`' not in html
-    assert html.count('[data-id="${id}"][data-symbol="${symbol}"]') == 3
+    assert html.count('[data-id="${id}"][data-symbol="${symbol}"]') == 4
 
 
 def test_row_strategy_select_offers_every_strategy():

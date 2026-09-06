@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+
+{% block title %}Sectors - BeRich Dashboard{% endblock %}
+
+{% block content %}
+        <header class="page-mobile-title"><h1>Sectors</h1></header>
+
+        <section class="symbols-section">
+            <div class="panel">
+                <h2>Sector Breakdown</h2>
+                <p style="font-size:13px; color:var(--dim); margin:-4px 0 16px;">
+                    모니터링 {{ symbol_count }}종목을 저장된 섹터로 묶었어요.
+                    <b>계획</b>은 각 종목 max_weight의 섹터별 점유율(캡 합계 기준이라 계좌 비중이 아니라 <i>배분 의도</i>),
+                    <b>실제</b>는 그 섹터가 지금 차지한 평가금액 비중이에요.
+                    {% if unassigned %}<br><span style="color:var(--amber);">섹터 미지정 {{ unassigned }}종목 — <a href="/symbols" style="color:var(--amber);">Symbols에서 입력</a>하면 여기 반영돼요.</span>{% endif %}
+                </p>
+
+                {% if not sectors %}
+                <p style="color:var(--dim);">등록된 종목이 없어요.</p>
+                {% else %}
+                {% set invested = sectors|sum(attribute='actual_pct') %}
+                <div class="sector-charts">
+                    <figure class="sector-chart">
+                        <canvas id="plannedPie" width="200" height="200" role="img"
+                                aria-label="계획 배분: {% for s in sectors %}{{ s.sector }} {{ "{:.1f}".format(s.planned_pct) }}%{{ ", " if not loop.last }}{% endfor %}"></canvas>
+                        <figcaption>계획 <span>배분 의도</span></figcaption>
+                    </figure>
+                    <figure class="sector-chart">
+                        <canvas id="actualPie" width="200" height="200" role="img"
+                                aria-label="실제 비중: {% for s in sectors %}{{ s.sector }} {{ "{:.1f}".format(s.actual_pct) }}%{{ ", " if not loop.last }}{% endfor %}, 미투자 {{ "{:.1f}".format(100 - invested) }}%"></canvas>
+                        <figcaption>실제 <span>계좌 비중</span></figcaption>
+                    </figure>
+                </div>
+
+                <div class="sector-list">
+                    {% for s in sectors %}
+                    <div class="sector-row{{ ' is-unassigned' if s.sector == '미지정' else '' }}">
+                        <div class="sector-head">
+                            <span class="sector-dot" data-i="{{ loop.index0 }}"></span>
+                            <span class="sector-name">{{ s.sector }}</span>
+                            <span class="sector-count">{{ s.symbols|length }}</span>
+                            {% if s.trades %}
+                            <span class="sector-pnl {{ 'positive' if s.realized_pnl >= 0 else 'negative' }}">
+                                {{ "{:+,.2f}".format(s.realized_pnl) }} <span class="sector-trades">{{ s.trades }}건</span>
+                            </span>
+                            {% else %}
+                            <span class="sector-pnl dim">체결 없음</span>
+                            {% endif %}
+                        </div>
+                        <div class="sector-nums">
+                            <span>계획 <b>{{ "{:.1f}".format(s.planned_pct) }}%</b></span>
+                            <span>실제 <b>{{ "{:.1f}".format(s.actual_pct) }}%</b></span>
+                        </div>
+                        <div class="sector-syms">
+                            {% for sym in s.symbols %}<a href="/symbol/{{ sym }}" class="sym-badge">{{ sym }}</a>{% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+        </section>
+{% endblock %}
+
+{% block scripts %}
+    {% if sectors %}
+    <script>
+        // Same palette as the Portfolio allocation donut, so a sector keeps
+        // one color across both charts and the legend dots below.
+        const PALETTE = [
+            '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6',
+            '#06b6d4', '#f97316', '#ec4899', '#14b8a6', '#a855f7',
+            '#0ea5e9', '#84cc16', '#e11d48', '#6366f1', '#d946ef',
+        ];
+        const SECTORS = [
+            {% for s in sectors %}
+            {name: {{ s.sector | tojson }}, planned: {{ s.planned_pct }}, actual: {{ s.actual_pct }}, color: PALETTE[{{ loop.index0 }} % PALETTE.length]},
+            {% endfor %}
+        ];
+
+        document.querySelectorAll('.sector-dot').forEach(el => {
+            el.style.background = PALETTE[el.dataset.i % PALETTE.length];
+        });
+
+        const LIGHT = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+
+        function drawDonut(id, slices, topLabel, bottomLabel) {
+            const canvas = document.getElementById(id);
+            const ctx = canvas.getContext('2d');
+            const cx = canvas.width / 2, cy = canvas.height / 2;
+            const outer = Math.min(cx, cy) - 6, inner = outer * 0.62;
+            const total = slices.reduce((sum, s) => sum + s.value, 0);
+            if (total <= 0) return;
+
+            let angle = -Math.PI / 2;
+            for (const s of slices) {
+                if (s.value <= 0) continue;
+                const sweep = (s.value / total) * 2 * Math.PI;
+                ctx.beginPath();
+                ctx.arc(cx, cy, outer, angle, angle + sweep);
+                ctx.arc(cx, cy, inner, angle + sweep, angle, true);
+                ctx.closePath();
+                ctx.fillStyle = s.color;
+                ctx.fill();
+                angle += sweep;
+            }
+
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle = LIGHT ? '#0f172a' : '#f8fafc';
+            ctx.font = 'bold 20px Inter, sans-serif';
+            ctx.fillText(topLabel, cx, cy - 6);
+            ctx.fillStyle = '#64748b';
+            ctx.font = '11px Inter, sans-serif';
+            ctx.fillText(bottomLabel, cx, cy + 14);
+        }
+
+        drawDonut(
+            'plannedPie',
+            SECTORS.map(s => ({value: s.planned, color: s.color})),
+            '{{ symbol_count }}', '종목',
+        );
+
+        // Uninvested cash fills the rest of the actual ring — without it a
+        // 3.6% sector would render as the whole account.
+        const invested = {{ sectors|sum(attribute='actual_pct') }};
+        drawDonut(
+            'actualPie',
+            SECTORS.map(s => ({value: s.actual, color: s.color}))
+                   .concat([{value: Math.max(0, 100 - invested), color: '#475569'}]),
+            invested.toFixed(1) + '%', '투자됨',
+        );
+    </script>
+    {% endif %}
+{% endblock %}

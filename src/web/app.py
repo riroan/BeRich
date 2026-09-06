@@ -1237,6 +1237,77 @@ def _near_sell(symbol: str, rsi: float | None) -> bool:
     return rsi >= sell_1 - 5
 
 
+# The 11 GICS sectors. Kept in GICS order rather than sorted, so the list
+# reads the way sector tables normally do.
+SECTOR_CHOICES = (
+    "정보기술",
+    "커뮤니케이션 서비스",
+    "경기소비재",
+    "필수소비재",
+    "에너지",
+    "금융",
+    "헬스케어",
+    "산업재",
+    "소재",
+    "부동산",
+    "유틸리티",
+)
+
+
+def aggregate_by_sector(
+    symbols: list[dict],
+    positions: list[dict],
+    fills: list[dict],
+    total_value: float,
+) -> list[dict]:
+    """Group monitored symbols by sector, with both weight readings.
+
+    planned_pct is each sector's share of the summed max_weight caps, not a
+    share of the account — the caps deliberately over-subscribe (17 symbols
+    at 20% each is 340%), so only the normalized shape is comparable against
+    actual_pct, which is real market value over account equity.
+
+    Symbols with no sector stored land in "미지정" rather than being
+    dropped, so the page shows what still needs filling in.
+    """
+    held = {p["symbol"]: p["quantity"] * p["current_price"] for p in positions}
+    realized: dict[str, float] = {}
+    trades: dict[str, int] = {}
+    for f in fills:
+        if f.get("pnl") is None:
+            continue
+        realized[f["symbol"]] = realized.get(f["symbol"], 0.0) + f["pnl"]
+        trades[f["symbol"]] = trades.get(f["symbol"], 0) + 1
+
+    buckets: dict[str, dict] = {}
+    for s in symbols:
+        sector = (s.get("sector") or "").strip() or "미지정"
+        b = buckets.setdefault(sector, {
+            "sector": sector, "symbols": [], "cap_sum": 0.0,
+            "value": 0.0, "realized_pnl": 0.0, "trades": 0,
+        })
+        b["symbols"].append(s["symbol"])
+        b["cap_sum"] += s.get("max_weight", 20.0)
+        b["value"] += held.get(s["symbol"], 0.0)
+        b["realized_pnl"] += realized.get(s["symbol"], 0.0)
+        b["trades"] += trades.get(s["symbol"], 0)
+
+    total_caps = sum(b["cap_sum"] for b in buckets.values())
+    rows = []
+    for b in buckets.values():
+        b["planned_pct"] = (
+            b["cap_sum"] / total_caps * 100 if total_caps > 0 else 0.0
+        )
+        b["actual_pct"] = (
+            b["value"] / total_value * 100 if total_value > 0 else 0.0
+        )
+        rows.append(b)
+
+    # 미지정 sinks to the bottom; it is a to-do, not a real sector.
+    rows.sort(key=lambda r: (r["sector"] == "미지정", -r["planned_pct"]))
+    return rows
+
+
 templates.env.globals["near_buy"] = _near_buy
 templates.env.globals["near_sell"] = _near_sell
 
@@ -2242,6 +2313,7 @@ def create_app() -> FastAPI:
         market: str
         strategy_name: str
         max_weight: float = 20.0
+        sector: str = ""
 
     async def _get_web_storage():
         """Get a storage instance for web requests (own event loop)"""
@@ -2407,6 +2479,10 @@ def create_app() -> FastAPI:
                             "id": cfg["id"],
                             "symbol": sym,
                             "market": sym_market,
+                            "sector": (
+                                s.get("sector") if isinstance(s, dict)
+                                else None
+                            ),
                             "strategy_name": cfg["name"],
                             "enabled": cfg["enabled"] and sym_enabled,
                             "max_weight": mw,
@@ -2433,6 +2509,13 @@ def create_app() -> FastAPI:
             "last_update": dashboard_state.last_update,
             "markets": ["krx", "nasdaq", "nyse", "amex"],
             "strategies": strategies,
+            # GICS order first; any stored value that predates the list is
+            # appended rather than dropped, so opening the page and saving
+            # cannot silently rewrite it.
+            "sector_choices": list(SECTOR_CHOICES) + sorted(
+                {s["sector"] for s in symbols if s["sector"]}
+                - set(SECTOR_CHOICES)
+            ),
             "pnl_usd": float(dashboard_state.pnl_usd),
             "balance_krw": float(dashboard_state.balance_krw),
             "balance_usd": float(dashboard_state.balance_usd),
@@ -2604,11 +2687,17 @@ def create_app() -> FastAPI:
             if symbol_upper in existing:
                 return {"symbol": symbol_upper, "duplicate": True}
 
-            symbols_list.append({
+            entry = {
                 "symbol": symbol_upper,
                 "market": body.market.lower(),
                 "max_weight": body.max_weight,
-            })
+            }
+            # An unset sector stays absent rather than stored as "", so
+            # "never classified" and "cleared on purpose" look the same to
+            # the breakdown page — both read as 미지정.
+            if body.sector.strip():
+                entry["sector"] = body.sector.strip()[:40]
+            symbols_list.append(entry)
             await storage.update_strategy_config(
                 body.strategy_name, symbols=symbols_list,
             )
@@ -2836,6 +2925,57 @@ def create_app() -> FastAPI:
         finally:
             await storage.close()
 
+    class SectorUpdate(BaseModel):
+        sector: str
+
+    @app.post("/api/symbols/{config_id}/sector")
+    async def update_symbol_sector(
+        config_id: int, body: SectorUpdate, symbol: str,
+    ):
+        """Update the stored sector for a symbol within a strategy config"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+
+        sector = body.sector.strip()[:40]
+
+        try:
+            config = await storage.get_strategy_config_by_id(config_id)
+            if not config:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+
+            symbol_upper = symbol.upper()
+            new_symbols = []
+            found = False
+            for s in config["symbols"]:
+                sym = s["symbol"] if isinstance(s, dict) else s
+                if sym == symbol_upper:
+                    found = True
+                    entry = s if isinstance(s, dict) else {"symbol": sym}
+                    if sector:
+                        entry["sector"] = sector
+                    else:
+                        entry.pop("sector", None)
+                    new_symbols.append(entry)
+                else:
+                    new_symbols.append(s)
+
+            if not found:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+
+            await storage.update_strategy_config(
+                config["name"], symbols=new_symbols,
+            )
+            return {"symbol": symbol_upper, "sector": sector}
+        finally:
+            await storage.close()
+
     # ==================== Portfolio Routes ====================
 
     @app.get("/portfolio", response_class=HTMLResponse)
@@ -2958,6 +3098,73 @@ def create_app() -> FastAPI:
             "cash_weight": round(cash_weight, 2),
             "positions": portfolio,
         }
+
+    @app.get("/portfolio/sectors", response_class=HTMLResponse)
+    async def portfolio_sectors_page(request: Request):
+        """Sector breakdown of the monitored symbols"""
+        if not verify_session(request):
+            return RedirectResponse(url="/login", status_code=302)
+
+        # Every registered symbol, not just the enabled ones — a disabled
+        # symbol can still hold a position, and dropping it would leave that
+        # market value out of every sector.
+        symbols: list[dict] = []
+        storage = await _get_web_storage()
+        if storage:
+            try:
+                for cfg in await storage.get_all_strategy_configs():
+                    for s in cfg.get("symbols", []):
+                        if isinstance(s, dict):
+                            symbols.append({
+                                "symbol": s["symbol"],
+                                "max_weight": s.get("max_weight", 20.0),
+                                "sector": s.get("sector"),
+                            })
+                        else:
+                            symbols.append({
+                                "symbol": s, "max_weight": 20.0,
+                                "sector": None,
+                            })
+            finally:
+                await storage.close()
+
+        await _load_fills_for_web()
+        positions = await _get_current_positions_for_web()
+        total_value = float(dashboard_state.balance_usd)
+
+        sectors = aggregate_by_sector(
+            symbols=symbols,
+            positions=[
+                {
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "current_price": p.current_price,
+                }
+                for p in positions
+            ],
+            fills=dashboard_state.fills,
+            total_value=total_value,
+        )
+
+        context = {
+            "request": request,
+            "active_page": "portfolio",
+            "sectors": sectors,
+            "symbol_count": len(symbols),
+            "unassigned": sum(
+                1 for s in symbols if not (s.get("sector") or "").strip()
+            ),
+            "total_value": total_value,
+            "bot_status": dashboard_state.bot_status,
+            "trading_paused": dashboard_state.trading_paused,
+            "last_update": dashboard_state.last_update,
+            "pnl_usd": float(dashboard_state.pnl_usd),
+        }
+        return templates.TemplateResponse(
+            request=request,
+            name="portfolio_sectors.html",
+            context=context,
+        )
 
     @app.get("/portfolio/correlation", response_class=HTMLResponse)
     async def portfolio_correlation_page(request: Request):

@@ -32,6 +32,15 @@
                     </select>
                 </div>
                 <div class="form-field">
+                    <label for="sector-input">Sector</label>
+                    <select id="sector-input">
+                        <option value="">— 미지정 —</option>
+                        {% for sec in sector_choices %}
+                        <option value="{{ sec }}">{{ sec }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="form-field">
                     <label for="weight-input">Max Weight (%)</label>
                     <input type="number" id="weight-input" value="20" min="1" max="100" step="0.1" inputmode="decimal">
                 </div>
@@ -61,6 +70,12 @@
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
+                    <select class="sym-sector{{ ' is-unset' if not s.sector else '' }}" aria-label="{{ s.symbol }} sector" onchange="updateSector({{ s.id }}, '{{ s.symbol }}', this.value)">
+                        <option value="" {{ 'selected' if not s.sector else '' }}>— 미지정 —</option>
+                        {% for sec in sector_choices %}
+                        <option value="{{ sec }}" {{ 'selected' if sec == s.sector else '' }}>{{ sec }}</option>
+                        {% endfor %}
+                    </select>
                     <select class="sym-strategy" aria-label="{{ s.symbol }} strategy" onchange="moveSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                         {% for opt in strategies %}
                         <option value="{{ opt.name }}" {{ 'selected' if opt.name == s.strategy_name else '' }}>{{ opt.name }}</option>
@@ -137,6 +152,7 @@
             const symbol = input.value.trim().toUpperCase();
             const market = document.getElementById('market-select').value;
             const strategyName = document.getElementById('strategy-select').value;
+            const sector = document.getElementById('sector-input').value.trim();
             const weightInput = document.getElementById('weight-input');
             const maxWeight = parseFloat(weightInput.value);
             if (!symbol) {
@@ -158,7 +174,7 @@
                 const resp = await fetch('/api/symbols', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({symbol, market, strategy_name: strategyName, max_weight: maxWeight}),
+                    body: JSON.stringify({symbol, market, strategy_name: strategyName, max_weight: maxWeight, sector}),
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
@@ -215,6 +231,20 @@
                 });
                 if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
                 else setSymbolStatus(`${symbol} weight updated.`, 'success');
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+        }
+
+        async function updateSector(id, symbol, sector) {
+            const el = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"] .sym-sector`);
+            if (el) el.classList.toggle('is-unset', !sector);
+            try {
+                const resp = await fetch(`/api/symbols/${id}/sector?symbol=${encodeURIComponent(symbol)}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({sector}),
+                });
+                if (!resp.ok) setSymbolStatus('Failed to update sector.', 'error');
+                else setSymbolStatus(`${symbol} sector updated.`, 'success');
             } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
