@@ -349,6 +349,17 @@
             wickDownColor: colors.down,
         });
 
+        {% if position %}
+        // My average cost, dashed. On both series since only one holds data.
+        [priceSeries, dailySeries].forEach(s => s.createPriceLine({
+            price: {{ position.avg_price }},
+            color: '#f59e0b',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+        }));
+        {% endif %}
+
         // Create RSI chart
         const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
             layout: {
