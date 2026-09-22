@@ -204,19 +204,16 @@
         const PENDING = {label: 'Pending', value: {{ pending_weight }}, color: '#94a3b8'};
         if (PENDING.value > 0) BY_SYMBOL.push(PENDING);
 
-        // Sector rows arrive ordered by planned weight, and that order is kept
-        // rather than re-sorted by actual: most sectors hold nothing yet, so
-        // sorting by actual would scramble the planned reading for no gain.
+        // Same shape as the symbol view: largest first, Cash/Pending pinned last
         const BY_SECTOR = [
             {% for s in sectors %}
-            {label: {{ s.sector | tojson }}, value: {{ s.actual_pct }}, planned: {{ s.planned_pct }},
-             pnl: {{ s.realized_pnl }}, trades: {{ s.trades }}, color: colors[{{ loop.index0 }} % colors.length]},
+            {label: {{ s.sector | tojson }}, value: {{ s.actual_pct }}, color: colors[{{ loop.index0 }} % colors.length]},
             {% endfor %}
         ];
+        BY_SECTOR.sort((a, b) => b.value - a.value);
         BY_SECTOR.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
         if (PENDING.value > 0) BY_SECTOR.push(PENDING);
 
-        let mode = 'symbol';
         let data = BY_SYMBOL;
 
         // Center default: invested amount (4a)
@@ -353,37 +350,22 @@
         });
 
         function buildLegend() {
-            // Symbol mode hides empty rows; sector mode keeps them, because a
-            // sector planned at 20% and held at 0% is the point of the view.
             legendEl.innerHTML = data
                 .map((d, index) => ({ ...d, index }))
-                .filter(d => mode === 'sector' || d.value > 0)
-                .map(d => {
-                    const empty = d.value <= 0 ? ' is-empty' : '';
-                    // In sector mode both columns are always emitted, empty
-                    // when the row has no value: a missing span collapses the
-                    // reserved width and knocks that row's percentage out of
-                    // line with the others (Cash has neither).
-                    const plan = mode !== 'sector' ? '' :
-                        `<span class="alloc-plan">${d.planned === undefined ? '' : '계획 ' + d.planned.toFixed(1) + '%'}</span>`;
-                    const pnl = mode !== 'sector' ? '' :
-                        `<span class="alloc-pnl ${d.pnl >= 0 ? 'positive' : 'negative'}">${!d.trades ? '' : (d.pnl >= 0 ? '+' : '') + d.pnl.toFixed(2)}</span>`;
-                    return `
-                    <button type="button" class="alloc-item${empty}" data-index="${d.index}" aria-pressed="${d.index === selectedIdx ? 'true' : 'false'}">
+                .filter(d => d.value > 0)
+                .map(d => `
+                    <button type="button" class="alloc-item" data-index="${d.index}" aria-pressed="${d.index === selectedIdx ? 'true' : 'false'}">
                         <span class="alloc-dot" style="background:${d.color}"></span>
                         <span class="alloc-name">${d.label}</span>
-                        ${plan}
-                        ${pnl}
                         <span class="alloc-pct">${d.value.toFixed(1)}%</span>
-                    </button>`;
-                }).join('');
+                    </button>
+                `).join('');
             legendEl.querySelectorAll('.alloc-item').forEach(item => {
                 item.addEventListener('click', () => selectSlice(Number(item.dataset.index)));
             });
         }
 
         function setMode(next) {
-            mode = next;
             data = next === 'sector' ? BY_SECTOR : BY_SYMBOL;
             // Re-pick the largest slice: the old index points into the other set.
             selectedIdx = data.reduce((best, item, idx) => {
