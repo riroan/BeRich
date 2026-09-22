@@ -1,4 +1,4 @@
-"""Sector aggregation behind /portfolio/sectors."""
+"""Sector aggregation behind the Portfolio allocation donut."""
 
 from src.web.app import aggregate_by_sector
 

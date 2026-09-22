@@ -51,7 +51,18 @@
 
         <!-- Chart Section -->
         <div class="card portfolio-allocation-card">
-            <div class="section-title">Allocation<span style="font-size:13px; font-weight:500; color:var(--dim);"><a href="/portfolio/sectors" style="color:inherit;">섹터 보기</a> · <a href="/portfolio/correlation" style="color:inherit;">상관관계 보기 →</a></span></div>
+            <div class="section-title">Allocation
+                <span class="alloc-head-right">
+                    <span class="alloc-toggle" role="group" aria-label="Allocation grouping">
+                        <button type="button" class="alloc-mode active" data-mode="symbol" aria-pressed="true">종목</button>
+                        <button type="button" class="alloc-mode" data-mode="sector" aria-pressed="false">섹터</button>
+                    </span>
+                    <a href="/portfolio/correlation" class="alloc-head-link">상관관계 &rarr;</a>
+                </span>
+            </div>
+            {% if unassigned %}
+            <p class="alloc-note" hidden>섹터 미지정 {{ unassigned }}종목 — <a href="/symbols">Symbols에서 입력</a>하면 여기 반영돼요.</p>
+            {% endif %}
             <div class="alloc-wrap">
                 <canvas id="pieChart" width="240" height="240" tabindex="0" role="img" aria-label="Portfolio allocation chart"></canvas>
                 <div class="alloc-legend" id="allocLegend"></div>
@@ -179,7 +190,7 @@
             '#22d3ee', '#facc15', '#fb923c', '#34d399', '#c084fc',
         ];
 
-        const data = [
+        const BY_SYMBOL = [
             {% for pos in portfolio %}
             {label: {{ pos.symbol | tojson }}, value: {{ pos.weight }}, color: colors[{{ loop.index0 }} % colors.length]},
             {% endfor %}
@@ -187,11 +198,26 @@
         // Holdings ordered by weight, largest first; Cash is kept out of the
         // sort and pinned at the end. Colors are assigned by original index
         // above so each symbol keeps the same color as its Holdings card.
-        data.sort((a, b) => b.value - a.value);
-        data.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
+        BY_SYMBOL.sort((a, b) => b.value - a.value);
+        BY_SYMBOL.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
         // Unsettled sale proceeds. A net-buy (negative) figure has no slice.
         const PENDING = {label: 'Pending', value: {{ pending_weight }}, color: '#94a3b8'};
-        if (PENDING.value > 0) data.push(PENDING);
+        if (PENDING.value > 0) BY_SYMBOL.push(PENDING);
+
+        // Sector rows arrive ordered by planned weight, and that order is kept
+        // rather than re-sorted by actual: most sectors hold nothing yet, so
+        // sorting by actual would scramble the planned reading for no gain.
+        const BY_SECTOR = [
+            {% for s in sectors %}
+            {label: {{ s.sector | tojson }}, value: {{ s.actual_pct }}, planned: {{ s.planned_pct }},
+             pnl: {{ s.realized_pnl }}, trades: {{ s.trades }}, color: colors[{{ loop.index0 }} % colors.length]},
+            {% endfor %}
+        ];
+        BY_SECTOR.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
+        if (PENDING.value > 0) BY_SECTOR.push(PENDING);
+
+        let mode = 'symbol';
+        let data = BY_SYMBOL;
 
         // Center default: invested amount (4a)
         const investedValue = {{ invested_total }};
@@ -327,20 +353,61 @@
         });
 
         function buildLegend() {
+            // Symbol mode hides empty rows; sector mode keeps them, because a
+            // sector planned at 20% and held at 0% is the point of the view.
             legendEl.innerHTML = data
                 .map((d, index) => ({ ...d, index }))
-                .filter(d => d.value > 0)
-                .map(d => `
-                    <button type="button" class="alloc-item" data-index="${d.index}" aria-pressed="${d.index === selectedIdx ? 'true' : 'false'}">
+                .filter(d => mode === 'sector' || d.value > 0)
+                .map(d => {
+                    const empty = d.value <= 0 ? ' is-empty' : '';
+                    // In sector mode both columns are always emitted, empty
+                    // when the row has no value: a missing span collapses the
+                    // reserved width and knocks that row's percentage out of
+                    // line with the others (Cash has neither).
+                    const plan = mode !== 'sector' ? '' :
+                        `<span class="alloc-plan">${d.planned === undefined ? '' : '계획 ' + d.planned.toFixed(1) + '%'}</span>`;
+                    const pnl = mode !== 'sector' ? '' :
+                        `<span class="alloc-pnl ${d.pnl >= 0 ? 'positive' : 'negative'}">${!d.trades ? '' : (d.pnl >= 0 ? '+' : '') + d.pnl.toFixed(2)}</span>`;
+                    return `
+                    <button type="button" class="alloc-item${empty}" data-index="${d.index}" aria-pressed="${d.index === selectedIdx ? 'true' : 'false'}">
                         <span class="alloc-dot" style="background:${d.color}"></span>
                         <span class="alloc-name">${d.label}</span>
+                        ${plan}
+                        ${pnl}
                         <span class="alloc-pct">${d.value.toFixed(1)}%</span>
-                    </button>
-                `).join('');
+                    </button>`;
+                }).join('');
             legendEl.querySelectorAll('.alloc-item').forEach(item => {
                 item.addEventListener('click', () => selectSlice(Number(item.dataset.index)));
             });
         }
+
+        function setMode(next) {
+            mode = next;
+            data = next === 'sector' ? BY_SECTOR : BY_SYMBOL;
+            // Re-pick the largest slice: the old index points into the other set.
+            selectedIdx = data.reduce((best, item, idx) => {
+                if (item.value <= 0) return best;
+                return best < 0 || item.value > data[best].value ? idx : best;
+            }, -1);
+            document.querySelectorAll('.alloc-mode').forEach(b => {
+                const on = b.dataset.mode === next;
+                b.classList.toggle('active', on);
+                b.setAttribute('aria-pressed', on ? 'true' : 'false');
+            });
+            legendEl.classList.toggle('by-sector', next === 'sector');
+            const note = document.querySelector('.alloc-note');
+            if (note) note.hidden = next !== 'sector';
+            try { localStorage.setItem('allocMode', next); } catch (e) { /* private mode */ }
+            drawDonut();
+            buildLegend();
+            updateLegend();
+            updateSelectionLabel();
+        }
+
+        document.querySelectorAll('.alloc-mode').forEach(b => {
+            b.addEventListener('click', () => setMode(b.dataset.mode));
+        });
 
         function updateLegend() {
             legendEl.querySelectorAll('.alloc-item').forEach(item => {
@@ -354,6 +421,10 @@
         buildLegend();
         updateLegend();
         updateSelectionLabel();
+
+        let savedMode = null;
+        try { savedMode = localStorage.getItem('allocMode'); } catch (e) { /* private mode */ }
+        if (savedMode === 'sector' && BY_SECTOR.length > 1) setMode('sector');
 
         // Holdings sort (same control as the dashboard: select + direction toggle)
         (function () {

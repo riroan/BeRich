@@ -2986,8 +2986,11 @@ def create_app() -> FastAPI:
         if not verify_session(request):
             return RedirectResponse(url="/login", status_code=302)
 
-        # Get symbol weights from strategy_configs
+        # Get symbol weights from strategy_configs. The same pass collects
+        # every monitored symbol's sector, so the allocation donut can regroup
+        # by sector without a second read.
         symbol_weights = {}
+        monitored: list[dict] = []
         storage = await _get_web_storage()
         if storage:
             try:
@@ -3000,10 +3003,16 @@ def create_app() -> FastAPI:
                             symbol_weights[s["symbol"]] = (
                                 s.get("max_weight", 20.0)
                             )
+                            monitored.append({
+                                "symbol": s["symbol"],
+                                "max_weight": s.get("max_weight", 20.0),
+                                "sector": s.get("sector"),
+                            })
             finally:
                 await storage.close()
 
         # Build portfolio data from positions
+        await _load_fills_for_web()
         positions = await _get_current_positions_for_web()
         total_value = float(dashboard_state.balance_usd)
 
@@ -3038,10 +3047,28 @@ def create_app() -> FastAPI:
             (pending_total / total_value * 100) if total_value > 0 else 0
         )
 
+        sectors = aggregate_by_sector(
+            symbols=monitored,
+            positions=[
+                {
+                    "symbol": p.symbol,
+                    "quantity": p.quantity,
+                    "current_price": p.current_price,
+                }
+                for p in positions
+            ],
+            fills=dashboard_state.fills,
+            total_value=total_value,
+        )
+
         context = {
             "request": request,
             "active_page": "portfolio",
             "portfolio": portfolio,
+            "sectors": sectors,
+            "unassigned": sum(
+                1 for s in monitored if not (s.get("sector") or "").strip()
+            ),
             "total_value": total_value,
             "cash_total": cash_total,
             "cash_weight": cash_weight,
@@ -3109,73 +3136,6 @@ def create_app() -> FastAPI:
             "cash_weight": round(cash_weight, 2),
             "positions": portfolio,
         }
-
-    @app.get("/portfolio/sectors", response_class=HTMLResponse)
-    async def portfolio_sectors_page(request: Request):
-        """Sector breakdown of the monitored symbols"""
-        if not verify_session(request):
-            return RedirectResponse(url="/login", status_code=302)
-
-        # Every registered symbol, not just the enabled ones — a disabled
-        # symbol can still hold a position, and dropping it would leave that
-        # market value out of every sector.
-        symbols: list[dict] = []
-        storage = await _get_web_storage()
-        if storage:
-            try:
-                for cfg in await storage.get_all_strategy_configs():
-                    for s in cfg.get("symbols", []):
-                        if isinstance(s, dict):
-                            symbols.append({
-                                "symbol": s["symbol"],
-                                "max_weight": s.get("max_weight", 20.0),
-                                "sector": s.get("sector"),
-                            })
-                        else:
-                            symbols.append({
-                                "symbol": s, "max_weight": 20.0,
-                                "sector": None,
-                            })
-            finally:
-                await storage.close()
-
-        await _load_fills_for_web()
-        positions = await _get_current_positions_for_web()
-        total_value = float(dashboard_state.balance_usd)
-
-        sectors = aggregate_by_sector(
-            symbols=symbols,
-            positions=[
-                {
-                    "symbol": p.symbol,
-                    "quantity": p.quantity,
-                    "current_price": p.current_price,
-                }
-                for p in positions
-            ],
-            fills=dashboard_state.fills,
-            total_value=total_value,
-        )
-
-        context = {
-            "request": request,
-            "active_page": "portfolio",
-            "sectors": sectors,
-            "symbol_count": len(symbols),
-            "unassigned": sum(
-                1 for s in symbols if not (s.get("sector") or "").strip()
-            ),
-            "total_value": total_value,
-            "bot_status": dashboard_state.bot_status,
-            "trading_paused": dashboard_state.trading_paused,
-            "last_update": dashboard_state.last_update,
-            "pnl_usd": float(dashboard_state.pnl_usd),
-        }
-        return templates.TemplateResponse(
-            request=request,
-            name="portfolio_sectors.html",
-            context=context,
-        )
 
     @app.get("/portfolio/correlation", response_class=HTMLResponse)
     async def portfolio_correlation_page(request: Request):

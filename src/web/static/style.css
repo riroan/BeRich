@@ -3525,41 +3525,37 @@ select option { background: var(--surface); color: var(--text); }
     }
 }
 
-/* ===================== Sector breakdown (/portfolio/sectors) ===================== */
-.sector-list { display: flex; flex-direction: column; gap: 18px; }
-.sector-row { padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.sector-row:last-child { border-bottom: none; padding-bottom: 0; }
-.sector-row.is-unassigned { opacity: .7; }
-.sector-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.sector-name { font-size: 14px; font-weight: 600; }
-.sector-count {
-    font-size: 11px; color: var(--dim); background: var(--bg);
-    border-radius: 10px; padding: 1px 7px;
+/* ===================== Allocation grouping toggle ===================== */
+.alloc-head-right {
+    display: flex; align-items: center; gap: 12px; margin-left: auto;
 }
-.sector-pnl {
-    margin-left: auto; font-size: 13px; font-weight: 600;
-    font-variant-numeric: tabular-nums;
+.alloc-head-link { font-size: 13px; font-weight: 500; color: var(--dim); }
+.alloc-toggle {
+    display: inline-flex; background: var(--bg);
+    border: 1px solid var(--border); border-radius: 8px; padding: 2px;
 }
-.sector-pnl.dim { color: var(--dim); font-weight: 400; font-size: 12px; }
-.sector-trades { font-size: 11px; color: var(--dim); font-weight: 400; }
-.sector-charts {
-    display: flex; justify-content: center; gap: 28px;
-    flex-wrap: wrap; margin: 0 0 24px;
+.alloc-mode {
+    border: none; background: none; color: var(--dim);
+    font-family: inherit; font-size: 12px; font-weight: 600;
+    padding: 4px 12px; border-radius: 6px; cursor: pointer;
 }
-.sector-chart { margin: 0; text-align: center; }
-.sector-chart figcaption {
-    margin-top: 6px; font-size: 13px; font-weight: 600;
+.alloc-mode.active { background: var(--card); color: var(--text); }
+.alloc-note {
+    font-size: 12px; color: var(--amber); margin: -4px 0 12px;
 }
-.sector-chart figcaption span {
-    display: block; font-size: 11px; font-weight: 400; color: var(--dim);
+.alloc-note a { color: var(--amber); text-decoration: underline; }
+/* A sector with no position stays listed so its plan is visible. */
+.alloc-item.is-empty { opacity: .55; }
+/* Both columns are reserved rather than sized to content: only some rows
+   have a P&L, and letting them size would shift the percentage on those
+   rows out of line with the rest. Widths fit the longest value each can
+   hold ("계획 100.0%" 65px, "-12345.67" 60px at 11px). */
+.alloc-plan, .alloc-pnl {
+    font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap;
+    flex-shrink: 0; text-align: right;
 }
-.sector-dot {
-    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
-}
-.sector-nums { display: flex; gap: 14px; font-size: 12px; color: var(--dim); }
-.sector-nums b {
-    color: var(--text); font-weight: 600;
-    font-variant-numeric: tabular-nums;
-}
-.sector-syms { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 10px; }
-.sector-syms .sym-badge { font-size: 11px; }
+.alloc-plan { color: var(--dim); width: 66px; }
+.alloc-pnl { font-weight: 600; width: 62px; }
+/* Sector names are words, not tickers, so the name column widens in that
+   mode ("커뮤니케이션 서비스" is 113px at 14px). */
+.alloc-legend.by-sector .alloc-name { width: 116px; white-space: nowrap; }
