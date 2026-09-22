@@ -323,6 +323,8 @@ def test_performance_page_computes_metrics_from_db_equity(tmp_path):
     assert response.status_code == 200
     # $2000 in, worth $2100 — not the naive +110% off the opening $1000
     assert "+5.00%" in response.text
+    # The equity chart's principal line steps from the ledger it's handed
+    assert '"flow_type": "adjustment", "timestamp": "2026-07-02T15:00:00"' in response.text
 
 
 def test_performance_page_loads_fills_from_db(tmp_path):

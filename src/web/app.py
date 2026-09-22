@@ -1644,6 +1644,7 @@ def create_app() -> FastAPI:
             "principal_usd": sum(
                 f["amount_usd"] for f in dashboard_state.cash_flows
             ),
+            "cash_flows": dashboard_state.cash_flows,
             "trade_logs": [log.model_dump() for log in dashboard_state.trade_logs],
             "fills": dashboard_state.fills,
             "tax_years": capital_gains_tax_by_year(dashboard_state.fills, fx),

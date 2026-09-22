@@ -265,6 +265,41 @@
                 wickDownColor: colors.down,
             });
 
+            // Principal: running total of the cash-flow ledger, stepping at
+            // each deposit. Sampled on the equity bars' own times so it never
+            // stretches the time axis; a bar with no principal yet stays blank
+            // instead of dragging the price scale down to 0.
+            const CASH_FLOWS = {{ cash_flows|tojson }};
+            const principalSeries = chart.addLineSeries({
+                color: '#94a3b8',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                lineType: LightweightCharts.LineType.WithSteps,
+                priceLineVisible: false,
+                crosshairMarkerVisible: false,
+            });
+            function principalOn(bars, timeOf) {
+                // 'initial' is the starting principal, already in the equity
+                // history: it holds from the first bar whenever it was
+                // registered. Deposits count from their own time.
+                let total = CASH_FLOWS
+                    .filter(f => f.flow_type === 'initial')
+                    .reduce((sum, f) => sum + f.amount_usd, 0);
+                const deposits = CASH_FLOWS
+                    .filter(f => f.flow_type !== 'initial')
+                    .map(f => ({ t: timeOf(f.timestamp), amount: f.amount_usd }));
+                let i = 0;
+                return bars.map(b => {
+                    while (i < deposits.length && deposits[i].t <= b.time) total += deposits[i++].amount;
+                    return total > 0 ? { time: b.time, value: total } : { time: b.time };
+                });
+            }
+            function setPrincipal() {
+                principalSeries.setData(equityTf === 'daily'
+                    ? principalOn(dailyCandles, ts => ts.slice(0, 10))
+                    : principalOn(usdData, parseKST));
+            }
+
             let usdData = [];
             let dailyCandles = [];
             let dailyCandlesLoaded = false;
@@ -331,6 +366,7 @@
                 if (daily) await ensureDailyLoaded();
                 usdSeries.setData(daily ? [] : usdData);
                 candleSeries.setData(daily ? dailyCandles : []);
+                setPrincipal();
                 chart.timeScale().fitContent();
                 document.querySelectorAll('.equity-tf-btn').forEach(b => {
                     const active = b.dataset.tf === equityTf;
@@ -377,7 +413,10 @@
                     oldestCursor = data[0].timestamp;
                     const newPoints = data.map(pointToBar).filter(p => p.value > 0);
                     usdData = mergeSorted(usdData, newPoints);
-                    if (equityTf === 'tick') usdSeries.setData(usdData);
+                    if (equityTf === 'tick') {
+                        usdSeries.setData(usdData);
+                        setPrincipal();
+                    }
                 } catch (err) {
                     console.error('Failed to load more equity history:', err);
                 } finally {
