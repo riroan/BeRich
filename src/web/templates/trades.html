@@ -107,9 +107,13 @@
                 <a class="trade-card-m" href="/symbol/{{ log.symbol }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}" aria-label="{{ log.symbol }} trade">
                     <div class="tcm-head">
                         <span class="sym-badge">{{ log.symbol }}</span>
-                        <span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span>
-                        <span class="signal-tag {{ tagcls }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
-                        <span class="tcm-time" title="{{ log.timestamp }}">{{ trade_time_mobile }}</span>
+                        <div class="tcm-meta">
+                            <div class="tcm-tags">
+                                <span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span>
+                                <span class="signal-tag {{ tagcls }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
+                            </div>
+                            <span class="tcm-time" title="{{ log.timestamp }}">{{ trade_time_mobile }}</span>
+                        </div>
                     </div>
                     <div class="tcm-body">
                         <div class="tcm-metrics">
