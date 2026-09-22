@@ -803,8 +803,6 @@ class DashboardState:
             pnl_pct=pnl_pct,
         )
         self.trade_logs.insert(0, log)
-        # Keep only last 100 logs
-        self.trade_logs = self.trade_logs[:100]
 
         # Also add to trade points for chart markers
         if symbol not in self.trade_points:
