@@ -59,3 +59,6 @@ htmlcov/
 .pytest_cache/
 .mypy_cache/
 .gstack/
+
+# Claude Code local settings (contains credentials)
+.claude/
