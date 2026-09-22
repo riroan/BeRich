@@ -65,6 +65,8 @@
                 <a href="/symbol/{{ s.symbol }}" class="sym-badge">{{ s.symbol }}</a>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <span class="sym-off-badge">OFF</span>
+                <button type="button" class="sym-edit-btn" onclick="toggleEdit(this)" aria-pressed="false" aria-label="Edit {{ s.symbol }}">&#9998; 편집</button>
+                <fieldset class="sym-fields" disabled>
                 <label class="toggle sym-toggle">
                     <input type="checkbox" {{ 'checked' if s.enabled else '' }} aria-label="Enable {{ s.symbol }}" onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                     <span class="slider"></span>
@@ -88,6 +90,7 @@
                     <span class="sym-shares" aria-live="polite"></span>
                     <button class="btn-danger" onclick="removeSymbol({{ s.id }}, '{{ s.symbol }}')" aria-label="Delete {{ s.symbol }}">&#x2715;</button>
                 </div>
+                </fieldset>
             </div>
             {% endfor %}
         </div>
@@ -209,6 +212,16 @@
             input.value = v.toFixed(1);
             refreshShares(input);
             updateWeight(id, symbol, input.value);
+        }
+
+        // Each row is locked behind its own fieldset so a stray tap can't move a
+        // symbol or nudge a weight; that row's own button is the only way in.
+        function toggleEdit(btn) {
+            const list = btn.closest('.sym-row').querySelector('.sym-fields');
+            list.disabled = !list.disabled;
+            btn.textContent = list.disabled ? '\u270E 편집' : '\u2713 완료';
+            btn.classList.toggle('editing', !list.disabled);
+            btn.setAttribute('aria-pressed', String(!list.disabled));
         }
 
         function openAddSheet() {

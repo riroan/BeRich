@@ -525,6 +525,22 @@ body {
 .sym-sector:hover, .sym-sector:focus { border-color: var(--blue); }
 .sym-sector.is-unset { border-style: dashed; color: var(--dim); }
 
+/* Edit lock: each row's controls are a disabled fieldset until the user opts
+   in on that row. display:contents keeps them direct flex children of .sym-row. */
+.sym-fields { display: contents; }
+.sym-fields[disabled] .sym-controls,
+.sym-fields[disabled] .sym-toggle { opacity: .45; }
+.sym-edit-btn {
+    padding: 5px 11px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    line-height: 1; cursor: pointer; font-family: inherit; transition: all .2s;
+    background: var(--surface); color: var(--dim); border: 1px solid var(--border);
+    flex-shrink: 0;
+}
+.sym-edit-btn:hover { color: var(--text); }
+.sym-edit-btn.editing {
+    background: rgba(59,130,246,0.15); color: var(--blue); border-color: transparent;
+}
+
 /* Symbols 5a — these appear only on mobile (cards, steppers, FAB, bottom sheet) */
 .sym-off-badge,
 .step-btn,
@@ -2367,6 +2383,9 @@ select option { background: var(--surface); color: var(--text); }
         background: var(--bg); color: var(--text-muted);
     }
     .sym-row:not(.is-off) .sym-off-badge { display: none; }
+
+    /* The card is already var(--surface), so the button needs the darker fill */
+    .sym-edit-btn { background: var(--bg); border-color: transparent; }
 
     /* Toggle pinned to the right of the header row */
     .sym-toggle { margin-left: auto; width: 44px; height: 24px; }
