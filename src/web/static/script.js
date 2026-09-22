@@ -153,6 +153,19 @@ class DashboardWebSocket {
             heroCash.textContent = this.formatUSD(data.cash_usd);
         }
 
+        // Unsettled (T+1) proceeds under Cash; the hero falls back to cash %
+        if (data.unsettled_usd !== undefined) {
+            const pending = data.unsettled_usd
+                ? `${this.formatUSD(data.unsettled_usd, true)} pending` : '';
+            const cashPending = document.getElementById('cash-usd-pending');
+            if (cashPending) cashPending.textContent = pending;
+            const heroCashSub = document.getElementById('hero-cash-sub');
+            if (heroCashSub && data.balance_usd) {
+                heroCashSub.textContent = pending
+                    || `${(data.cash_usd / data.balance_usd * 100).toFixed(0)}%`;
+            }
+        }
+
         const heroPnl = document.getElementById('hero-pnl');
         if (heroPnl && data.pnl_usd !== undefined) {
             heroPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);

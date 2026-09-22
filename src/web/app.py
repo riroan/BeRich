@@ -350,6 +350,9 @@ class DashboardState:
         self.balance_usd: Decimal = Decimal("0")
         self.cash_krw: Decimal = Decimal("0")
         self.cash_usd: Decimal = Decimal("0")
+        # Sale proceeds minus buy cost not yet settled (T+1). Part of
+        # balance_usd, not yet part of cash_usd.
+        self.unsettled_usd: Decimal = Decimal("0")
         # pnl_krw and pnl_usd are derived from the position rows — see the
         # properties below.
         self.daily_pnl: Decimal = Decimal("0")
@@ -1552,6 +1555,7 @@ def create_app() -> FastAPI:
             "balance_usd": float(dashboard_state.balance_usd),
             "cash_krw": float(dashboard_state.cash_krw),
             "cash_usd": float(dashboard_state.cash_usd),
+            "unsettled_usd": float(dashboard_state.unsettled_usd),
             "cash_ratio_krw": cash_ratio_krw,
             "cash_ratio_usd": cash_ratio_usd,
             "pnl_krw": float(dashboard_state.pnl_krw),
@@ -3028,6 +3032,11 @@ def create_app() -> FastAPI:
             (cash_total / total_value * 100)
             if total_value > 0 else 100
         )
+        # Unsettled proceeds are in total_value but neither cash nor a holding
+        pending_total = float(dashboard_state.unsettled_usd)
+        pending_weight = (
+            (pending_total / total_value * 100) if total_value > 0 else 0
+        )
 
         context = {
             "request": request,
@@ -3036,6 +3045,10 @@ def create_app() -> FastAPI:
             "total_value": total_value,
             "cash_total": cash_total,
             "cash_weight": cash_weight,
+            "pending_total": pending_total,
+            "pending_weight": pending_weight,
+            "invested_total": total_value - cash_total - pending_total,
+            "invested_weight": 100 - cash_weight - pending_weight,
             "bot_status": dashboard_state.bot_status,
             "trading_paused": dashboard_state.trading_paused,
             "last_update": dashboard_state.last_update,
@@ -3875,6 +3888,7 @@ def get_dashboard_snapshot() -> dict:
         "balance_usd": float(dashboard_state.balance_usd),
         "cash_krw": float(dashboard_state.cash_krw),
         "cash_usd": float(dashboard_state.cash_usd),
+        "unsettled_usd": float(dashboard_state.unsettled_usd),
         "pnl_krw": float(dashboard_state.pnl_krw),
         "pnl_usd": float(dashboard_state.pnl_usd),
         "positions": [p.model_dump() for p in dashboard_state.positions.values()],

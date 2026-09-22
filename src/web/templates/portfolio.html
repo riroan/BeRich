@@ -11,13 +11,13 @@
             <div class="hero-stats">
                 <div class="hero-stat">
                     <div class="hero-stat-label">Invested</div>
-                    <div class="hero-stat-value">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
-                    <div class="hero-stat-sub">{{ "{:.1f}".format(100 - cash_weight) }}%</div>
+                    <div class="hero-stat-value">${{ "{:,.2f}".format(invested_total) }}</div>
+                    <div class="hero-stat-sub">{{ "{:.1f}".format(invested_weight) }}%</div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Cash</div>
                     <div class="hero-stat-value">${{ "{:,.2f}".format(cash_total) }}</div>
-                    <div class="hero-stat-sub">{{ "{:.1f}".format(cash_weight) }}%</div>
+                    <div class="hero-stat-sub">{% if pending_total %}{{ pending_total|usd_signed }} pending{% else %}{{ "{:.1f}".format(cash_weight) }}%{% endif %}</div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Positions</div>
@@ -37,10 +37,11 @@
                 <div class="label">Cash</div>
                 <div class="value small">${{ "{:,.2f}".format(cash_total) }}</div>
                 <div class="delta dim">{{ "{:.1f}".format(cash_weight) }}% of portfolio</div>
+                {% if pending_total %}<div class="delta dim">{{ pending_total|usd_signed }} pending</div>{% endif %}
             </div>
             <div class="card">
                 <div class="label">Invested</div>
-                <div class="value small">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
+                <div class="value small">${{ "{:,.2f}".format(invested_total) }}</div>
             </div>
             <div class="card">
                 <div class="label">Positions</div>
@@ -106,6 +107,19 @@
                             <td data-label="Limit">-</td>
                             <td data-label="P&L">-</td>
                         </tr>
+                        {% if pending_total %}
+                        <tr class="cash-row">
+                            <td data-label="Symbol" class="full-width symbol">Pending</td>
+                            <td data-label="Market">-</td>
+                            <td data-label="Qty">-</td>
+                            <td data-label="Avg Price">-</td>
+                            <td data-label="Current">-</td>
+                            <td data-label="Value">{{ pending_total|usd_signed }}</td>
+                            <td data-label="Weight">{{ "{:.1f}".format(pending_weight) }}%</td>
+                            <td data-label="Limit">-</td>
+                            <td data-label="P&L">-</td>
+                        </tr>
+                        {% endif %}
                     </tbody>
                 </table>
                 </div>
@@ -175,10 +189,13 @@
         // above so each symbol keeps the same color as its Holdings card.
         data.sort((a, b) => b.value - a.value);
         data.push({label: 'Cash', value: {{ cash_weight }}, color: '#475569'});
+        // Unsettled sale proceeds. A net-buy (negative) figure has no slice.
+        const PENDING = {label: 'Pending', value: {{ pending_weight }}, color: '#94a3b8'};
+        if (PENDING.value > 0) data.push(PENDING);
 
         // Center default: invested amount (4a)
-        const investedValue = {{ total_value - cash_total }};
-        const investedPct = {{ 100 - cash_weight }};
+        const investedValue = {{ invested_total }};
+        const investedPct = {{ invested_weight }};
 
         // Store slice angles for hit detection
         const slices = [];

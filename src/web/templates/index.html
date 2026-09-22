@@ -16,7 +16,7 @@
                 <div class="hero-stat">
                     <div class="hero-stat-label">Cash</div>
                     <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(cash_usd) }}</div>
-                    <div class="hero-stat-sub">{{ "{:.0f}%".format(cash_ratio_usd) }}</div>
+                    <div class="hero-stat-sub" id="hero-cash-sub">{% if unsettled_usd %}{{ unsettled_usd|usd_signed }} pending{% else %}{{ "{:.0f}%".format(cash_ratio_usd) }}{% endif %}</div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Positions</div>
@@ -35,6 +35,7 @@
             <div class="card">
                 <div class="label">Cash</div>
                 <div class="value small" id="cash-usd">${{ "{:,.2f}".format(cash_usd) }}</div>
+                <div class="delta dim" id="cash-usd-pending">{% if unsettled_usd %}{{ unsettled_usd|usd_signed }} pending{% endif %}</div>
             </div>
             <div class="card">
                 <div class="label">P&L</div>

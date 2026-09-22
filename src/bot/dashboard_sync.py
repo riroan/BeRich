@@ -231,7 +231,7 @@ class DashboardSyncMixin:
         else:
             self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
-            self._unsettled_usd = balance.get("unsettled", Decimal("0"))
+            self.dashboard.unsettled_usd = balance.get("unsettled", Decimal("0"))
         return balance
 
     async def _update_balances(
@@ -289,7 +289,7 @@ class DashboardSyncMixin:
         position_value_krw = self.dashboard.balance_krw - self.dashboard.cash_krw
         # balance_usd is execution basis, so back the unsettled leg out of the
         # position figure — otherwise pending sale proceeds show up as holdings.
-        settlement_adjustment_usd = getattr(self, "_unsettled_usd", Decimal("0"))
+        settlement_adjustment_usd = self.dashboard.unsettled_usd
         position_value_usd = (
             self.dashboard.balance_usd
             - self.dashboard.cash_usd

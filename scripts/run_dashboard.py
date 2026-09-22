@@ -104,6 +104,7 @@ def setup_mock_data():
     state.balance_usd = Decimal("12500.50")
     state.cash_krw = Decimal("15000000")
     state.cash_usd = Decimal("3500.25")
+    state.unsettled_usd = Decimal("412.30")  # T+1 sale proceeds
     # pnl_krw and pnl_usd derive from the mock positions (+150,000 KRW on
     # 005930, +$340.00 on AAPL) instead of hardcoded numbers that
     # contradicted the positions table below them.
