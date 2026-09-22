@@ -40,12 +40,20 @@
         <div class="card trades-card">
             <div class="section-title">All Trades <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
 
-            <div class="filter-bar">
-                <button class="filter-pill active" data-filter="all" aria-pressed="true">All {{ trade_logs|length }}</button>
-                <button class="filter-pill" data-filter="buy" aria-pressed="false">Buy</button>
-                <button class="filter-pill" data-filter="sell" aria-pressed="false">Sell</button>
-                <button class="filter-pill" data-filter="stop_loss" aria-pressed="false">Stop Loss</button>
-                <button class="filter-pill" data-filter="take_profit" aria-pressed="false">Take Profit</button>
+            <div class="trade-filters">
+                <select id="action-filter" class="sort-select" aria-label="Filter by action">
+                    <option value="all">All actions</option>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                    <option value="stop_loss">Stop Loss</option>
+                    <option value="take_profit">Take Profit</option>
+                </select>
+                <select id="symbol-filter" class="sort-select" aria-label="Filter by symbol">
+                    <option value="">All symbols</option>
+                    {% for sym in trade_logs|map(attribute='symbol')|unique|sort %}
+                    <option value="{{ sym }}">{{ sym }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <div class="table-wrap">
@@ -66,7 +74,7 @@
                 </thead>
                 <tbody id="trades-body">
                     {% for log in trade_logs %}
-                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}">
+                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}" data-symbol="{{ log.symbol }}" data-idx="{{ loop.index0 }}">
                         <td data-label="Time" class="full-width">{{ log.timestamp }}</td>
                         <td data-label="Symbol"><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
                         <td data-label="Market"><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
@@ -149,7 +157,10 @@
     <script>
         const ROWS_PER_PAGE = 20;
         let currentPage = 1;
-        let currentFilter = 'all';
+        const actionFilter = document.getElementById('action-filter');
+        const symbolFilter = document.getElementById('symbol-filter');
+        let currentFilter = actionFilter.value;
+        let currentSymbol = symbolFilter.value;
         const rows = Array.from(document.querySelectorAll('.trade-row'));
         const emptyFilterRow = document.getElementById('trades-empty-filter');
         const visibleCount = document.getElementById('visible-trade-count');
@@ -166,7 +177,8 @@
         }
 
         function getVisibleRows() {
-            return rows.filter(row => rowMatchesFilter(row, currentFilter));
+            return rows.filter(row => rowMatchesFilter(row, currentFilter)
+                && (!currentSymbol || row.dataset.symbol === currentSymbol));
         }
 
         function showPage(page) {
@@ -209,19 +221,13 @@
         }
 
         // Filter functionality
-        document.querySelectorAll('.filter-pill').forEach(btn => {
-            btn.addEventListener('click', function() {
-                currentFilter = this.dataset.filter;
-                document.querySelectorAll('.filter-pill').forEach(b => {
-                    b.classList.remove('active');
-                    b.setAttribute('aria-pressed', 'false');
-                });
-                this.classList.add('active');
-                this.setAttribute('aria-pressed', 'true');
-
-                currentPage = 1;
-                showPage(1);
-            });
+        actionFilter.addEventListener('change', () => {
+            currentFilter = actionFilter.value;
+            showPage(1);
+        });
+        symbolFilter.addEventListener('change', () => {
+            currentSymbol = symbolFilter.value;
+            showPage(1);
         });
 
         document.getElementById('pagination').addEventListener('click', event => {

@@ -174,7 +174,6 @@ body {
 .pause-btn.paused { background: rgba(239,68,68,0.15); color: var(--red); }
 .pause-btn:hover { opacity: 0.8; }
 .pause-btn:active,
-.filter-pill:active,
 .page-btn:active,
 .btn:active,
 .btn-add:active,
@@ -700,6 +699,7 @@ body {
     background-position: right 9px center;
 }
 .sort-select:hover, .sort-select:focus { border-color: var(--blue); }
+.trade-filters { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 16px; }
 .sort-select option { background: var(--surface); color: var(--text); }
 .sort-controls { display: flex; align-items: stretch; gap: 6px; }
 .sort-dir {
@@ -1222,30 +1222,6 @@ select option { background: var(--surface); color: var(--text); }
     font-size: 13px;
     text-align: center;
 }
-
-/* ===================== Filter Bar ===================== */
-.filter-bar {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-}
-.filter-pill {
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 12px;
-    font-weight: 600;
-    min-height: 32px;
-    border: 1px solid var(--card);
-    background: transparent;
-    color: var(--dim);
-    cursor: pointer;
-    font-family: inherit;
-    transition: all .2s;
-}
-.filter-pill:hover { border-color: var(--blue); color: var(--text); }
-.filter-pill.active { background: var(--blue); color: white; border-color: var(--blue); }
 
 /* Trades summary strip (6a, shown ≤768px) */
 .trade-summary-strip { display: none; }
@@ -2071,10 +2047,7 @@ select option { background: var(--surface); color: var(--text); }
         padding: 0;
     }
     .trades-card > .section-title { display: none; }
-    .trades-card .filter-bar {
-        margin: 0 0 8px;
-        padding: 0 2px 4px;
-    }
+    .trades-card .trade-filters { margin-bottom: 8px; }
 
     /* Trades 6a: hide the desktop table, show the dedicated mobile card list */
     .trades-card .table-wrap { display: none; }
@@ -2751,17 +2724,6 @@ select option { background: var(--surface); color: var(--text); }
         font-size: 12px;
         flex-shrink: 0;
     }
-
-    /* Filter bar: horizontal scroll */
-    .filter-bar {
-        overflow-x: auto;
-        flex-wrap: nowrap;
-        -webkit-overflow-scrolling: touch;
-        scrollbar-width: none;
-        padding-bottom: 4px;
-    }
-    .filter-bar::-webkit-scrollbar { display: none; }
-    .filter-pill { white-space: nowrap; min-height: 44px; font-size: 12px; padding: 0 14px; }
 
     /* Pagination */
     .pagination { gap: 2px; }
