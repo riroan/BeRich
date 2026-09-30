@@ -1,4 +1,4 @@
-"""Unsettled (T+1) sale proceeds show under Cash and stay out of Invested."""
+"""Unsettled (T+1) sale proceeds stay out of Invested."""
 
 from decimal import Decimal
 
@@ -32,10 +32,9 @@ def _get(path: str, unsettled: str) -> str:
     return response.text
 
 
-def test_dashboard_shows_pending_under_cash():
-    assert "+$1,134.73 pending" in _get("/", "1134.73")
-    html = _get("/", "0")
-    assert 'id="cash-usd-pending"></div>' in html
+def test_dashboard_cash_has_no_pending_label():
+    html = _get("/", "1134.73")
+    assert "+$1,134.73 pending" not in html
     assert 'id="hero-cash-sub">0%<' in html
 
 
@@ -44,4 +43,4 @@ def test_portfolio_invested_excludes_pending():
     # 9553.87 total - 47.14 cash - 1134.73 pending
     assert "$8,372.00" in html
     assert "$9,506.73" not in html
-    assert "+$1,134.73 pending" in html
+    assert "+$1,134.73 pending" not in html
