@@ -153,11 +153,6 @@ class DashboardWebSocket {
             heroCash.textContent = this.formatUSD(data.cash_usd);
         }
 
-        const heroCashSub = document.getElementById('hero-cash-sub');
-        if (heroCashSub && data.cash_usd !== undefined && data.balance_usd) {
-            heroCashSub.textContent = `${(data.cash_usd / data.balance_usd * 100).toFixed(0)}%`;
-        }
-
         const heroPnl = document.getElementById('hero-pnl');
         if (heroPnl && data.pnl_usd !== undefined) {
             heroPnl.textContent = this.formatUSD(data.pnl_usd, true, 2, true);
