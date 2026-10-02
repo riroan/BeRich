@@ -793,9 +793,9 @@
                 oversold: '#10b981', overbought: '#ef4444',
                 buyMarker: '#10b981', sellMarker: '#ef4444', stopMarker: '#dc2626',
                 sma: '#f59e0b',
-                // Candle bodies — same green/red as the symbol chart. `up` is
-                // the price LINE's blue, which would read wrong on a candle.
-                candleUp: '#10b981', candleDown: '#ef4444',
+                // Candle bodies — Korean convention (red up, blue down), same
+                // as the symbol chart. `up` is the price LINE's color.
+                candleUp: '#ef4444', candleDown: '#3b82f6',
             };
 
             let priceChart = null, rsiChart = null;

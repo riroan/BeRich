@@ -266,6 +266,9 @@
             grid: '#1e293b',
             up: '#10b981',
             down: '#ef4444',
+            // Candles follow the Korean convention: red up, blue down
+            candleUp: '#ef4444',
+            candleDown: '#3b82f6',
             rsi: '#3b82f6',
             oversold: '#10b981',
             overbought: '#ef4444',
@@ -342,11 +345,11 @@
         // Daily candlestick series (shown when the 일봉 timeframe is active).
         // Only one of priceSeries / dailySeries holds data at a time.
         const dailySeries = priceChart.addCandlestickSeries({
-            upColor: colors.up,
-            downColor: colors.down,
+            upColor: colors.candleUp,
+            downColor: colors.candleDown,
             borderVisible: false,
-            wickUpColor: colors.up,
-            wickDownColor: colors.down,
+            wickUpColor: colors.candleUp,
+            wickDownColor: colors.candleDown,
         });
 
         {% if position %}
