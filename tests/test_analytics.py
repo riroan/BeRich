@@ -206,6 +206,78 @@ class TestDrawdownAnalyzer:
         assert len(analysis.drawdown_history) == len(sample_equity_history)
         assert all("drawdown_pct" in p for p in analysis.drawdown_history)
 
+    @staticmethod
+    def _daily(values, start):
+        return [
+            {"timestamp": (start + timedelta(days=i)).isoformat(), "total_usd": v}
+            for i, v in enumerate(values)
+        ]
+
+    def test_mdd_is_deepest_percent_not_largest_dollar_drop(self):
+        # 100 -> 50 is -50%; 1000 -> 800 is the bigger dollar drop but -20%
+        history = self._daily([100, 50, 1000, 800], datetime(2026, 9, 1))
+        analysis = DrawdownAnalyzer(history).analyze("usd")
+
+        assert analysis.mdd_pct == pytest.approx(50.0)
+        assert analysis.mdd == Decimal("50")
+        assert analysis.mdd_start == datetime(2026, 9, 1)
+        assert analysis.mdd_recovered == datetime(2026, 9, 3)
+
+    def test_recovering_to_the_peak_ends_the_drawdown(self):
+        start = datetime.now() - timedelta(days=30)
+        history = self._daily([100, 90, 100], start)
+        analysis = DrawdownAnalyzer(history).analyze("usd")
+
+        assert analysis.current_drawdown_pct == 0.0
+        assert analysis.current_drawdown_duration_days == 0
+        assert analysis.max_drawdown_duration_days == 2  # peak to recovery
+
+    def test_ongoing_drawdown_counts_toward_max_duration(self):
+        start = datetime.now() - timedelta(days=21)
+        history = self._daily([100] + [90] * 21, start)
+        analysis = DrawdownAnalyzer(history).analyze("usd")
+
+        assert analysis.current_drawdown_duration_days == 21
+        assert analysis.max_drawdown_duration_days == 21
+
+    def test_withdrawal_is_not_a_drawdown_on_the_twr_index(self):
+        from src.web.app import flow_adjusted_series
+
+        start = datetime(2026, 9, 1)
+        history = self._daily([10000, 10000, 9000], start)
+        flows = [{
+            "flow_type": "adjustment",
+            "amount_usd": -1000,
+            "timestamp": (start + timedelta(days=2)).isoformat(),
+        }]
+        series, _ = flow_adjusted_series(history, flows)
+        analysis = DrawdownAnalyzer(series).analyze("usd")
+
+        assert analysis.mdd_pct == 0.0
+        assert analysis.current_drawdown_pct == 0.0
+        assert analysis.alert_triggered is False
+
+    def test_twr_drawdown_matches_performance_mdd_after_a_deposit(self):
+        from src.web.app import flow_adjusted_series
+
+        # $1,000 grows to $1,100, $9,000 is deposited, then the account
+        # loses 1% — a 1% drawdown, not the 10% raw equity would suggest
+        # if the deposit were treated as performance.
+        start = datetime(2026, 9, 1)
+        history = self._daily([1000, 1100, 10100, 9999], start)
+        flows = [{
+            "flow_type": "adjustment",
+            "amount_usd": 9000,
+            "timestamp": (start + timedelta(days=2)).isoformat(),
+        }]
+        series, _ = flow_adjusted_series(history, flows)
+        analysis = DrawdownAnalyzer(series).analyze("usd")
+
+        assert analysis.current_drawdown_pct == pytest.approx(1.0)
+        assert analysis.mdd_pct == pytest.approx(1.0)
+        # Dollars to win back, in current capital
+        assert float(analysis.current_drawdown) == pytest.approx(101.0)
+
 
 class TestTradeStatistics:
     """Test cases for TradeStatistics"""

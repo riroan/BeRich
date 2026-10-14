@@ -3643,6 +3643,7 @@ def create_app() -> FastAPI:
         from src.analytics import ReportGenerator, DrawdownAnalyzer, TradeStatistics
 
         await _load_fills_for_web()
+        await _load_equity_history_for_web()
         # Generate reports
         report_gen = ReportGenerator(
             fills=dashboard_state.fills,
@@ -3653,7 +3654,11 @@ def create_app() -> FastAPI:
         monthly_report = report_gen.generate_monthly_report()
 
         # Drawdown analysis
-        dd_analyzer = DrawdownAnalyzer(dashboard_state.equity_history)
+        # Deposit-neutral, like the Performance page's MDD
+        dd_series, _ = flow_adjusted_series(
+            dashboard_state.equity_history, dashboard_state.cash_flows
+        )
+        dd_analyzer = DrawdownAnalyzer(dd_series)
         drawdown = dd_analyzer.analyze("usd")
 
         # Trade statistics
@@ -3728,7 +3733,12 @@ def create_app() -> FastAPI:
         """Get drawdown analysis"""
         from src.analytics import DrawdownAnalyzer
 
-        analyzer = DrawdownAnalyzer(dashboard_state.equity_history)
+        await _load_fills_for_web()  # also loads cash_flows
+        await _load_equity_history_for_web()
+        history = dashboard_state.equity_history
+        if currency == "usd":
+            history, _ = flow_adjusted_series(history, dashboard_state.cash_flows)
+        analyzer = DrawdownAnalyzer(history)
         analysis = analyzer.analyze(currency)
 
         return {

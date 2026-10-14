@@ -83,23 +83,31 @@ class DrawdownAnalyzer:
         return point.get(f"total_{currency}", 0)
 
     def analyze(self, currency: str = "usd") -> DrawdownAnalysis:
-        """Perform complete drawdown analysis"""
+        """Perform complete drawdown analysis.
+
+        When USD points carry a ``twr_index`` (see the web layer's
+        ``flow_adjusted_series``), drawdown percentages and durations are
+        measured on that deposit-neutral index, so a withdrawal is not a
+        drawdown and a deposit is not a new peak. Dollar figures are then
+        expressed in the account's current capital: the amount the equity
+        would have to gain to get back to the index peak.
+        """
         analysis = DrawdownAnalysis()
 
         if not self.equity_history:
             return analysis
 
-        # Track peak and drawdowns
-        peak = Decimal("0")
+        peak = Decimal("0")  # peak of the drawdown basis
         peak_time = None
         mdd = Decimal("0")
         mdd_pct = 0.0
         mdd_start = None
         mdd_bottom_time = None
+        mdd_recovered = None
 
         drawdown_points = []
         drawdown_durations = []
-        current_dd_start = None
+        in_drawdown = False
 
         for point in self.equity_history:
             timestamp = point.get("timestamp")
@@ -114,37 +122,43 @@ class DrawdownAnalyzer:
             equity = Decimal(str(self._equity_value(point, currency) or 0))
             if equity <= 0:
                 continue
+            basis = equity
+            if currency == "usd" and point.get("twr_index"):
+                basis = Decimal(str(point["twr_index"]))
 
-            # Update peak
-            if equity > peak:
-                # If we were in drawdown, record duration
-                if current_dd_start and peak > 0:
-                    duration = (ts - current_dd_start).days
-                    drawdown_durations.append(duration)
-
-                peak = equity
+            # Reaching the old peak again (not only exceeding it) ends the
+            # drawdown episode, which runs from the peak to the recovery.
+            if basis >= peak:
+                if in_drawdown and peak_time is not None:
+                    drawdown_durations.append((ts - peak_time).days)
+                    if mdd_start == peak_time and mdd_recovered is None:
+                        mdd_recovered = ts
+                    in_drawdown = False
+                peak = basis
                 peak_time = ts
-                current_dd_start = None
 
-            # Calculate drawdown
-            drawdown = peak - equity
-            drawdown_pct = float(drawdown / peak * 100) if peak > 0 else 0.0
+            drawdown_pct = float((peak - basis) / peak * 100)
+            # Dollars needed to climb back to the peak
+            if basis is equity:
+                drawdown = peak - equity
+            else:
+                drawdown = equity * (peak / basis - 1)
+            if drawdown_pct > 0:
+                in_drawdown = True
 
-            # Track MDD
-            if drawdown > mdd:
+            # MDD is the deepest drawdown in percent, not the largest dollar
+            # drop, which favors whenever the account was biggest
+            if drawdown_pct > mdd_pct:
                 mdd = drawdown
                 mdd_pct = drawdown_pct
                 mdd_start = peak_time
                 mdd_bottom_time = ts
-
-            # Track current drawdown start
-            if drawdown > 0 and current_dd_start is None:
-                current_dd_start = ts
+                mdd_recovered = None
 
             drawdown_points.append(DrawdownPoint(
                 timestamp=ts,
                 equity=equity,
-                peak=peak,
+                peak=equity + drawdown,
                 drawdown=drawdown,
                 drawdown_pct=drawdown_pct,
             ))
@@ -163,19 +177,22 @@ class DrawdownAnalyzer:
         analysis.mdd_pct = mdd_pct
         analysis.mdd_start = mdd_start
         analysis.mdd_bottom = mdd_bottom_time
+        analysis.mdd_recovered = mdd_recovered
 
         # Calculate average drawdown
         dd_values = [p.drawdown_pct for p in drawdown_points if p.drawdown_pct > 0]
         if dd_values:
             analysis.avg_drawdown_pct = sum(dd_values) / len(dd_values)
 
-        # Max drawdown duration
+        # Current drawdown duration, counted from the peak
+        if in_drawdown and peak_time is not None:
+            now = datetime.now(peak_time.tzinfo)
+            analysis.current_drawdown_duration_days = (now - peak_time).days
+            drawdown_durations.append(analysis.current_drawdown_duration_days)
+
+        # Max drawdown duration, the ongoing episode included
         if drawdown_durations:
             analysis.max_drawdown_duration_days = max(drawdown_durations)
-
-        # Current drawdown duration
-        if current_dd_start:
-            analysis.current_drawdown_duration_days = (datetime.now() - current_dd_start).days
 
         # Convert to serializable format for history
         analysis.drawdown_history = [
