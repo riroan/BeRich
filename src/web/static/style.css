@@ -396,6 +396,7 @@ body {
 .wl-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; }
 .wl-fill.win { background: var(--emerald); }
 .wl-fill.loss { background: var(--red); }
+.wl-bar-none { background: var(--border); }
 .wl-labels {
     display: flex; justify-content: space-between; margin-top: 8px;
     font-size: 13px; font-weight: 600;
@@ -2050,7 +2051,8 @@ select option { background: var(--surface); color: var(--text); }
         padding: 12px 6px;
         box-shadow: var(--shadow);
     }
-    .trade-summary-strip .tss-pnl {
+    /* .tss-item + .tss-item adds a left divider; outrank it on the wrapped row */
+    .trade-summary-strip .tss-item.tss-pnl {
         flex: 0 0 100%;
         border-left: 0;
         border-top: 1px solid var(--border);

@@ -145,7 +145,8 @@
                     </div>
                 </a>
                 {% endfor %}
-                <div class="empty-state trades-empty-m" hidden>No trades match this filter</div>
+                {# showPage() never runs without trades, so the no-trades state is rendered here #}
+                <div class="empty-state trades-empty-m"{{ ' hidden' if trade_logs }}>{{ 'No trades match this filter' if trade_logs else 'No trades recorded' }}</div>
             </div>
 
             <!-- Pagination -->

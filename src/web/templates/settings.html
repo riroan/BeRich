@@ -208,6 +208,8 @@
                 padding: 12px;
                 box-shadow: none;
             }
+            /* Only the fixed + button is left inside; drop the empty card */
+            .settings-toolbar.is-empty { padding: 0; background: none; }
             .settings-toolbar .strategy-tabs { display: none; }
             .settings-select-wrap {
                 display: flex;
@@ -525,7 +527,7 @@
             <h1>Settings</h1>
         </div>
 
-        <div class="settings-toolbar">
+        <div class="settings-toolbar{{ '' if strategy_configs else ' is-empty' }}">
             <!-- Desktop: tabs -->
             <div class="strategy-tabs">
                 {% for cfg in strategy_configs %}

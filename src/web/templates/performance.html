@@ -30,7 +30,7 @@
         {% set mdd_class = 'negative' if performance.mdd > 3 else ('rsi-warning' if performance.mdd > 1 else 'positive') %}
         {% set sharpe_class = 'positive' if performance.sharpe_ratio >= 3 else ('negative' if performance.sharpe_ratio < 1 else '') %}
         {% set win_pct = (performance.winning_trades / performance.total_trades * 100) if performance.total_trades > 0 else 0 %}
-        {% set loss_pct = 100 - win_pct %}
+        {% set loss_pct = (100 - win_pct) if performance.total_trades > 0 else 0 %}
         {% set avg_loss_abs = -performance.avg_loss if performance.avg_loss < 0 else performance.avg_loss %}
         {% set worst_trade_abs = -performance.worst_trade if performance.worst_trade < 0 else performance.worst_trade %}
 
@@ -109,7 +109,7 @@
             <section class="perf-panel perf-win-card">
                 <div class="section-title">Win / Loss</div>
                 <div class="wl-bar-wrap">
-                    <div class="wl-bar" aria-hidden="true">
+                    <div class="wl-bar{{ ' wl-bar-none' if performance.total_trades == 0 }}" aria-hidden="true">
                         <div class="wl-fill win" style="width:{{ win_pct }}%"></div>
                         <div class="wl-fill loss" style="width:{{ loss_pct }}%"></div>
                     </div>
@@ -458,11 +458,15 @@
             });
 
             // Monthly Returns calculation
+            const monthlyContainer = document.getElementById('monthly-returns');
+            function monthlyEmpty(text) {
+                monthlyContainer.innerHTML = '<p class="empty" style="grid-column:1/-1;">' + text + '</p>';
+            }
             fetch('/api/equity-history')
                 .then(res => res.json())
                 .then(result => {
                     const data = result.data || [];
-                    if (data.length < 2) return;
+                    if (data.length < 2) return monthlyEmpty('Not enough data for monthly returns');
 
                     // Group by month — use the TWR index so deposits don't
                     // count as monthly gains
@@ -478,9 +482,9 @@
                     });
 
                     const keys = Object.keys(months).sort();
-                    if (keys.length < 2) return;
+                    if (keys.length < 2) return monthlyEmpty('Not enough data for monthly returns');
 
-                    const container = document.getElementById('monthly-returns');
+                    const container = monthlyContainer;
                     const monthlyCards = keys.map((key, i) => {
                         const vals = months[key];
                         const first = vals[0];
@@ -505,7 +509,8 @@
                             '<div class="monthly-card-return">' + sign + ret.toFixed(1) + '%</div>' +
                             '</div>';
                     }).join('');
-                });
+                })
+                .catch(() => monthlyEmpty('Failed to load monthly returns'));
         }
 
         // Principal (원금) editor — 입금액만 입력하면 기존 원금에 더해서 저장.
