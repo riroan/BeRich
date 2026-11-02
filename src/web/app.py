@@ -379,6 +379,10 @@ class DashboardState:
         self.balance_usd: Decimal = Decimal("0")
         self.cash_krw: Decimal = Decimal("0")
         self.cash_usd: Decimal = Decimal("0")
+        # USD an order can spend now (KIS 주문가능금액). cash_usd is the
+        # settlement-basis 예수금, which lags buys and sells until T+1. None
+        # when the broker can't report it; the dashboard then shows cash_usd.
+        self.buying_power_usd: Decimal | None = None
         # pnl_krw and pnl_usd are derived from the position rows — see the
         # properties below.
         self.daily_pnl: Decimal = Decimal("0")
@@ -1562,6 +1566,8 @@ def create_app() -> FastAPI:
         total_usd_value = float(dashboard_state.balance_usd)
         cash_ratio_krw = (float(dashboard_state.cash_krw) / total_krw_value * 100) if total_krw_value > 0 else 0
         cash_ratio_usd = (float(dashboard_state.cash_usd) / total_usd_value * 100) if total_usd_value > 0 else 0
+        buying_power_usd = _buying_power_usd()
+        buying_power_ratio_usd = (buying_power_usd / total_usd_value * 100) if total_usd_value > 0 else 0
 
         # Separate buy/sell candidates
         buy_candidates = [c for c in dashboard_state.signal_candidates if "buy" in c.signal_type]
@@ -1583,6 +1589,8 @@ def create_app() -> FastAPI:
             "cash_usd": float(dashboard_state.cash_usd),
             "cash_ratio_krw": cash_ratio_krw,
             "cash_ratio_usd": cash_ratio_usd,
+            "buying_power_usd": buying_power_usd,
+            "buying_power_ratio_usd": buying_power_ratio_usd,
             "pnl_krw": float(dashboard_state.pnl_krw),
             "pnl_usd": float(dashboard_state.pnl_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
@@ -3868,6 +3876,12 @@ def create_app() -> FastAPI:
     return app
 
 
+def _buying_power_usd() -> float:
+    """Main-screen Buying Power: KIS 주문가능금액, else the 예수금."""
+    value = dashboard_state.buying_power_usd
+    return float(value if value is not None else dashboard_state.cash_usd)
+
+
 def get_dashboard_snapshot() -> dict:
     """Get current dashboard state as a snapshot for WebSocket"""
     dashboard_state.update_signal_candidates()
@@ -3878,6 +3892,7 @@ def get_dashboard_snapshot() -> dict:
         "balance_usd": float(dashboard_state.balance_usd),
         "cash_krw": float(dashboard_state.cash_krw),
         "cash_usd": float(dashboard_state.cash_usd),
+        "buying_power_usd": _buying_power_usd(),
         "pnl_krw": float(dashboard_state.pnl_krw),
         "pnl_usd": float(dashboard_state.pnl_usd),
         "positions": [p.model_dump() for p in dashboard_state.positions.values()],

@@ -231,6 +231,7 @@ class DashboardSyncMixin:
         else:
             self.dashboard.balance_usd = balance.get("total_eval", Decimal("0"))
             self.dashboard.cash_usd = balance.get("cash", Decimal("0"))
+            self.dashboard.buying_power_usd = balance.get("buying_power")
             self._unsettled_usd = balance.get("unsettled", Decimal("0"))
         return balance
 

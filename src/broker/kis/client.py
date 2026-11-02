@@ -311,7 +311,52 @@ class KISBroker:
                 "total_eval": usd_cash + stock_eval + unsettled,
                 "cash": usd_cash,
                 "unsettled": unsettled,
+                "buying_power": await self._get_overseas_buying_power(),
             }
+
+    async def _get_overseas_buying_power(self) -> Decimal | None:
+        """USD amount an order can spend now (해외주식 매수가능금액조회).
+
+        Unlike the settlement-basis 예수금, KIS nets in unsettled buys and
+        sells. The query is per symbol and price, but the amount is not:
+        any NASDAQ symbol at a nominal price reads the account-wide figure.
+        Display only, so None (not an exception) when it can't be read.
+        """
+        tr_id = "VTTS3007R" if self.paper_trading else "TTTS3007R"
+        endpoint = "/uapi/overseas-stock/v1/trading/inquire-psamount"
+        params = {
+            "CANO": self._auth.account_no[:8],
+            "ACNT_PRDT_CD": self._auth.account_no[9:],
+            "OVRS_EXCG_CD": "NASD",
+            "OVRS_ORD_UNPR": "1",
+            "ITEM_CD": "AAPL",
+        }
+        if self._session is None:
+            return None
+        try:
+            async with self._session.get(
+                f"{self.base_url}{endpoint}",
+                headers=self._auth.get_headers(tr_id),
+                params=params,
+            ) as resp:
+                data = await resp.json()
+        except Exception as e:
+            logger.warning(f"Overseas buying power query failed: {e}")
+            return None
+
+        output = data.get("output") if data.get("rt_cd") == "0" else None
+        if not isinstance(output, dict):
+            logger.warning(
+                f"Overseas buying power unavailable: {data.get('msg1')}"
+            )
+            return None
+        logger.info(f"Overseas buying power output: {output}")
+        # ovrs_ord_psbl_amt: 해외주문가능금액 (USD)
+        amount = output.get("ovrs_ord_psbl_amt")
+        try:
+            return Decimal(amount) if amount not in (None, "") else None
+        except ArithmeticError:
+            return None
 
     async def _get_overseas_balance_fallback(self) -> dict:
         """Fail-safe when the present-balance API is unavailable.

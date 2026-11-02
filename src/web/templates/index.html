@@ -14,9 +14,9 @@
                     <div class="hero-stat-sub {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</div>
                 </div>
                 <div class="hero-stat">
-                    <div class="hero-stat-label">Cash</div>
-                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(cash_usd) }}</div>
-                    <div class="hero-stat-sub">{{ "{:.0f}%".format(cash_ratio_usd) }}</div>
+                    <div class="hero-stat-label">Buying Power</div>
+                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(buying_power_usd) }}</div>
+                    <div class="hero-stat-sub">{{ "{:.0f}%".format(buying_power_ratio_usd) }}</div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Positions</div>
@@ -33,8 +33,8 @@
                 <div class="value small" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</div>
             </div>
             <div class="card">
-                <div class="label">Cash</div>
-                <div class="value small" id="cash-usd">${{ "{:,.2f}".format(cash_usd) }}</div>
+                <div class="label">Buying Power</div>
+                <div class="value small" id="cash-usd">${{ "{:,.2f}".format(buying_power_usd) }}</div>
             </div>
             <div class="card">
                 <div class="label">P&L</div>

@@ -118,9 +118,11 @@ class DashboardWebSocket {
             usdBalance.textContent = this.formatUSD(data.balance_usd);
         }
 
+        // The main screen's Buying Power (KIS 주문가능금액, else 예수금)
+        const buyingPower = data.buying_power_usd ?? data.cash_usd;
         const usdCash = document.getElementById('cash-usd');
-        if (usdCash && data.cash_usd !== undefined) {
-            usdCash.textContent = this.formatUSD(data.cash_usd);
+        if (usdCash && buyingPower !== undefined) {
+            usdCash.textContent = this.formatUSD(buyingPower);
         }
 
         const usdPnl = document.getElementById('pnl-usd');
@@ -149,8 +151,8 @@ class DashboardWebSocket {
         }
 
         const heroCash = document.getElementById('hero-cash');
-        if (heroCash && data.cash_usd !== undefined) {
-            heroCash.textContent = this.formatUSD(data.cash_usd);
+        if (heroCash && buyingPower !== undefined) {
+            heroCash.textContent = this.formatUSD(buyingPower);
         }
 
         const heroPnl = document.getElementById('hero-pnl');

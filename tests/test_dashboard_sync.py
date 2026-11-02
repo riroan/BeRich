@@ -68,3 +68,46 @@ async def test_unsettled_is_zero_when_broker_omits_the_fields():
 
     assert balance["unsettled"] == Decimal("0")
     assert balance["total_eval"] == Decimal("6470.17")
+
+
+def _broker_with_responses(*payloads: dict) -> KISBroker:
+    """Broker whose successive GETs return ``payloads`` in order."""
+    broker = _broker_returning(payloads[0])
+    contexts = []
+    for payload in payloads:
+        resp = MagicMock()
+        resp.json = AsyncMock(return_value=payload)
+        ctx = MagicMock()
+        ctx.__aenter__ = AsyncMock(return_value=resp)
+        ctx.__aexit__ = AsyncMock(return_value=False)
+        contexts.append(ctx)
+    broker._session.get = MagicMock(side_effect=contexts)
+    return broker
+
+
+@pytest.mark.asyncio
+async def test_buying_power_comes_from_the_psamount_query():
+    psamount = {
+        "rt_cd": "0",
+        "output": {"ovrs_ord_psbl_amt": "1961.02", "ord_psbl_frcr_amt": "903.17"},
+    }
+    broker = _broker_with_responses(_PROD_RESPONSE, psamount)
+
+    balance = await broker._get_overseas_balance()
+
+    assert balance["buying_power"] == Decimal("1961.02")
+    # 예수금 is unchanged; buying power is reported alongside it
+    assert balance["cash"] == Decimal("903.170000")
+    psamount_call = broker._session.get.call_args_list[1]
+    assert psamount_call.args[0].endswith("/trading/inquire-psamount")
+
+
+@pytest.mark.asyncio
+async def test_buying_power_is_none_when_the_query_fails():
+    failed = {"rt_cd": "1", "msg1": "error"}
+    broker = _broker_with_responses(_PROD_RESPONSE, failed)
+
+    balance = await broker._get_overseas_balance()
+
+    assert balance["buying_power"] is None
+    assert balance["cash"] == Decimal("903.170000")
