@@ -232,6 +232,18 @@
             line: '#3b82f6',
         };
 
+        // One request for the per-day equity rows, shared by the 일봉 chart
+        // and Monthly Returns
+        let dailyEquityPromise = null;
+        function loadDailyEquity() {
+            if (!dailyEquityPromise) {
+                dailyEquityPromise = fetch('/api/equity-history?daily=true')
+                    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
+                    .then(result => result.data || []);
+            }
+            return dailyEquityPromise;
+        }
+
         // Create equity chart
         const equityChartContainer = document.getElementById('equity-chart');
         if (equityChartContainer) {
@@ -330,32 +342,14 @@
                 return point.adjusted_total_usd ?? point.total_usd ?? 0;
             }
 
-            // Bucket the fine-grained snapshots into one OHLC candle per day
-            // (open = first, high/low = intraday extremes, close = last).
-            function toDailyCandles(points) {
-                const byDay = new Map();
-                points.forEach(p => {
-                    const v = equityUsdValue(p);
-                    if (v <= 0) return;
-                    const day = String(p.timestamp).slice(0, 10);
-                    const c = byDay.get(day);
-                    if (!c) byDay.set(day, { open: v, high: v, low: v, close: v });
-                    else { c.high = Math.max(c.high, v); c.low = Math.min(c.low, v); c.close = v; }
-                });
-                return [...byDay.entries()]
-                    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))
-                    .map(([day, c]) => ({ time: day, open: c.open, high: c.high, low: c.low, close: c.close }));
-            }
-
-            // Full 90-day fetch, only for 일봉 — bucketing to daily candles
-            // compresses it to ~90 points, so unlike 분봉 it's cheap and
-            // doesn't need pagination. Loaded once, on first switch to 일봉.
+            // 일봉 candles, already folded to one row per day on the server
+            // (the full 90-day snapshot window is megabytes). Loaded once, on
+            // first switch to 일봉.
             async function ensureDailyLoaded() {
                 if (dailyCandlesLoaded) return;
                 try {
-                    const res = await fetch('/api/equity-history');
-                    const result = await res.json();
-                    dailyCandles = toDailyCandles(result.data || []);
+                    const rows = await loadDailyEquity();
+                    dailyCandles = rows.map(r => ({ time: r.time, open: r.open, high: r.high, low: r.low, close: r.close }));
                     dailyCandlesLoaded = true;
                 } catch (err) {
                     console.error('Failed to load daily equity data:', err);
@@ -462,23 +456,20 @@
             function monthlyEmpty(text) {
                 monthlyContainer.innerHTML = '<p class="empty" style="grid-column:1/-1;">' + text + '</p>';
             }
-            fetch('/api/equity-history')
-                .then(res => res.json())
-                .then(result => {
-                    const data = result.data || [];
+            loadDailyEquity()
+                .then(data => {
                     if (data.length < 2) return monthlyEmpty('Not enough data for monthly returns');
 
                     // Group by month — use the TWR index so deposits don't
-                    // count as monthly gains
+                    // count as monthly gains. Each month holds its days'
+                    // closing index; the very first month starts from its
+                    // first day's opening index.
                     const months = {};
-                    function monthlyValue(point) {
-                        return point.twr_index ?? point.adjusted_total_usd ?? point.total_usd ?? 0;
-                    }
-                    data.forEach(p => {
-                        const d = new Date(p.timestamp);
-                        const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+                    data.forEach((p, i) => {
+                        const key = p.time.slice(0, 7);
                         if (!months[key]) months[key] = [];
-                        months[key].push(monthlyValue(p));
+                        if (i === 0) months[key].push(p.twr_open ?? p.close);
+                        months[key].push(p.twr_index ?? p.close);
                     });
 
                     const keys = Object.keys(months).sort();

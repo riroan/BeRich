@@ -332,6 +332,35 @@ def flow_adjusted_series(
     return augmented, returns
 
 
+def daily_equity_rows(series: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fold a flow_adjusted_series into one row per calendar day.
+
+    ``open/high/low/close`` are the day's equity values (execution basis, as
+    the equity curve plots them); ``twr_open``/``twr_index`` are the day's
+    first and last TWR index, which Monthly Returns chains. 90 days of
+    5-minute snapshots shrink from megabytes to ~90 rows.
+    """
+    days: dict[str, dict[str, Any]] = {}
+    for point in series:
+        value = _equity_usd_value(point)
+        if value <= 0:
+            continue
+        day = str(point.get("timestamp", ""))[:10]
+        twr = point.get("twr_index")
+        row = days.get(day)
+        if row is None:
+            days[day] = {
+                "time": day, "open": value, "high": value, "low": value,
+                "close": value, "twr_open": twr, "twr_index": twr,
+            }
+        else:
+            row["high"] = max(row["high"], value)
+            row["low"] = min(row["low"], value)
+            row["close"] = value
+            row["twr_index"] = twr
+    return [days[d] for d in sorted(days)]
+
+
 class DashboardState:
     """Shared state for dashboard data"""
 
@@ -1926,7 +1955,9 @@ def create_app() -> FastAPI:
         }
 
     @app.get("/api/equity-history")
-    async def get_equity_history(limit: int | None = None, before: str | None = None):
+    async def get_equity_history(
+        limit: int | None = None, before: str | None = None, daily: bool = False,
+    ):
         """Get equity curve data from the DB.
 
         Reads from storage (full 90-day window) instead of the in-memory
@@ -1937,8 +1968,9 @@ def create_app() -> FastAPI:
         ``limit``+``before`` switch to cursor pagination (same convention as
         ``/api/symbol/{symbol}/history``) so the 분봉 chart can lazy-load
         instead of pulling the full window upfront. Called with no params,
-        returns the full window — used by Monthly Returns, which needs the
-        complete flow-adjusted chain to compute correctly.
+        returns the full window. ``daily=true`` folds that full window into
+        one row per day (see ``daily_equity_rows``) for the 일봉 chart and
+        Monthly Returns, which otherwise pulled megabytes of snapshots.
         """
         before_dt: datetime | None = None
         if before:
@@ -1955,7 +1987,7 @@ def create_app() -> FastAPI:
                 points = await storage.get_equity_history(limit=limit, before=before_dt)
                 flows = await storage.get_cash_flows()
                 series, _ = flow_adjusted_series(points, flows)
-                return {"data": series}
+                return {"data": daily_equity_rows(series) if daily else series}
             except Exception as e:
                 logger.warning(f"Equity history DB read failed: {e}")
             finally:
@@ -1963,7 +1995,7 @@ def create_app() -> FastAPI:
         series, _ = flow_adjusted_series(
             dashboard_state.equity_history, dashboard_state.cash_flows
         )
-        return {"data": series}
+        return {"data": daily_equity_rows(series) if daily else series}
 
     class PrincipalUpdate(BaseModel):
         principal_usd: float

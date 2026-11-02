@@ -543,38 +543,47 @@ class Storage:
         """
         from sqlalchemy import text
 
+        # Open/close/RSI are index lookups on (symbol, timestamp) per day.
+        # Joining the grouped rows back to price_rsi instead made SQLite
+        # re-run the GROUP BY for every row (minutes on ~100k ticks), and
+        # the scan is bounded to the window the limit can reach: ``limit``
+        # trading days fit in well under twice as many calendar days.
         sql = text(
             """
-            WITH daily AS (
-                SELECT date(timestamp) AS d,
-                       MIN(timestamp)  AS mn,
-                       MAX(timestamp)  AS mx,
-                       MAX(price)      AS hi,
-                       MIN(price)      AS lo
-                FROM price_rsi
-                WHERE symbol = :symbol
-                GROUP BY date(timestamp)
-            )
-            SELECT daily.d AS bar_day,
-                   o.price AS open,
-                   daily.hi AS high,
-                   daily.lo AS low,
-                   c.price AS close,
-                   c.rsi   AS rsi
-            FROM daily
-            JOIN price_rsi o
-              ON o.symbol = :symbol AND o.timestamp = daily.mn
-            JOIN price_rsi c
-              ON c.symbol = :symbol AND c.timestamp = daily.mx
-            WHERE c.rsi IS NOT NULL
-            ORDER BY daily.d DESC
+            SELECT bar_day, open, high, low, close, rsi FROM (
+                SELECT daily.d AS bar_day,
+                       (SELECT o.price FROM price_rsi o
+                         WHERE o.symbol = :symbol AND o.timestamp = daily.mn
+                         LIMIT 1) AS open,
+                       daily.hi AS high,
+                       daily.lo AS low,
+                       (SELECT c.price FROM price_rsi c
+                         WHERE c.symbol = :symbol AND c.timestamp = daily.mx
+                         LIMIT 1) AS close,
+                       (SELECT c.rsi FROM price_rsi c
+                         WHERE c.symbol = :symbol AND c.timestamp = daily.mx
+                         LIMIT 1) AS rsi
+                FROM (
+                    SELECT date(timestamp) AS d,
+                           MIN(timestamp)  AS mn,
+                           MAX(timestamp)  AS mx,
+                           MAX(price)      AS hi,
+                           MIN(price)      AS lo
+                    FROM price_rsi
+                    WHERE symbol = :symbol AND timestamp >= :since
+                    GROUP BY date(timestamp)
+                ) daily
+            ) bars
+            WHERE rsi IS NOT NULL
+            ORDER BY bar_day DESC
             LIMIT :limit
             """
         )
+        since = datetime.now() - timedelta(days=limit * 2 + 7)
 
         async with self.async_session() as session:
             result = await session.execute(
-                sql, {"symbol": symbol, "limit": limit},
+                sql, {"symbol": symbol, "since": since, "limit": limit},
             )
             rows = result.mappings().all()
 
