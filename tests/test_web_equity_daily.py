@@ -1,5 +1,7 @@
 """Per-day equity rows served to the 일봉 chart and Monthly Returns."""
 
+import pytest
+
 from src.web.app import daily_equity_rows, flow_adjusted_series
 
 
@@ -18,5 +20,5 @@ def test_daily_rows_fold_snapshots_into_ohlc_and_twr():
     day1 = rows[0]
     assert (day1["open"], day1["high"], day1["low"], day1["close"]) == (100, 110, 100, 105)
     assert day1["twr_open"] == 100.0
-    assert day1["twr_index"] == 105.0
-    assert rows[1]["twr_index"] == 99.0
+    assert day1["twr_index"] == pytest.approx(105.0)
+    assert rows[1]["twr_index"] == pytest.approx(99.0)
