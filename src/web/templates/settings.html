@@ -54,7 +54,8 @@
         .strategy-content { display: none; }
         .strategy-content.active { display: flex; flex-direction: column; gap: 16px; }
         .strategy-select { display: none; }
-        .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; }
+        .form-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+        .btn-backtest { background: var(--card); color: var(--text); }
         .save-status { font-size: 13px; min-height: 18px; }
         .save-status.success { color: var(--emerald); }
         .save-status.error { color: var(--red); }
@@ -757,6 +758,7 @@
 
                 <div class="form-actions">
                     <span class="save-status" id="status-{{ cfg.name }}"></span>
+                    <button type="button" class="btn btn-backtest" onclick="backtestWith({{ cfg.name|tojson|forceescape }})">이 설정으로 백테스트</button>
                     <button type="submit" class="btn btn-save">Save & Apply</button>
                     <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
                     <button type="button" class="btn settings-delete-btn" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
@@ -773,6 +775,116 @@
 
 {% block scripts %}
     <script>
+        const SAVED_PARAMS = { {% for cfg in strategy_configs %}{{ cfg.name|tojson }}: {{ cfg.params|tojson }},{% endfor %} };
+        const STRATEGY_SYMBOLS = { {% for cfg in strategy_configs %}{{ cfg.name|tojson }}: [{% for s in cfg.symbols or [] %}{{ (s.symbol if s is mapping else s)|tojson }},{% endfor %}],{% endfor %} };
+
+        // Form -> params, shared by Save and "이 설정으로 백테스트"
+        function collectParams(form, strategyName) {
+            const params = {
+                rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
+                rsi_method: form.querySelector('[name="rsi_method"]').value,
+                cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
+                stop_loss_reentry_days: parseInt(form.querySelector('[name="stop_loss_reentry_days"]').value),
+            };
+
+            // PnL ladders. A row counts only when both cells are filled; an
+            // empty table is sent as [] so the backend reads it as "off"
+            // rather than falling back to the scalar default.
+            function pnlLevels(containerId, pctType, portionType) {
+                const rows = [];
+                document.getElementById(containerId).querySelectorAll('tr').forEach(row => {
+                    const pct = row.querySelector(`[data-type="${pctType}"]`).value.trim();
+                    const portion = row.querySelector(`[data-type="${portionType}"]`).value.trim();
+                    if (pct === '' || portion === '') return;
+                    rows.push([parseFloat(pct), parseInt(portion) / 100]);
+                });
+                return rows;
+            }
+
+            params.stop_loss_levels = pnlLevels(
+                'sl-levels-' + strategyName, 'sl-pct', 'sl-portion');
+            params.take_profit_levels = pnlLevels(
+                'tp-levels-' + strategyName, 'tp-pct', 'tp-portion');
+
+            // Thresholds must deepen as the ladder progresses, or a later
+            // stage can never fire and the portion is stranded.
+            const ordered = (rows, cmp) => rows.every(
+                (r, i) => i === 0 || cmp(r[0], rows[i - 1][0]));
+            if (!ordered(params.stop_loss_levels, (a, b) => a < b)) {
+                return {error: 'Stop loss levels must get more negative'};
+            }
+            if (!ordered(params.take_profit_levels, (a, b) => a > b)) {
+                return {error: 'Take profit levels must increase'};
+            }
+
+            const buyContainer = document.getElementById('buy-levels-' + strategyName);
+            params.avg_down_levels = [];
+            buyContainer.querySelectorAll('tr').forEach(row => {
+                const rsi = parseInt(row.querySelector('[data-type="buy-rsi"]').value);
+                const portion = parseInt(row.querySelector('[data-type="buy-portion"]').value) / 100;
+                params.avg_down_levels.push([rsi, portion]);
+            });
+
+            const sellContainer = document.getElementById('sell-levels-' + strategyName);
+            params.sell_levels = [];
+            sellContainer.querySelectorAll('tr').forEach(row => {
+                const rsi = parseInt(row.querySelector('[data-type="sell-rsi"]').value);
+                const portion = parseInt(row.querySelector('[data-type="sell-portion"]').value) / 100;
+                params.sell_levels.push([rsi, portion]);
+            });
+
+            return {params};
+        }
+
+        const PARAM_LABELS = {
+            rsi_period: 'RSI 기간', rsi_method: 'RSI 방식', cooldown_days: '쿨다운(일)',
+            stop_loss_reentry_days: '손절 후 재진입(일)', stop_loss_levels: '손절 단계',
+            take_profit_levels: '익절 단계', avg_down_levels: '매수 단계', sell_levels: '매도 단계',
+        };
+
+        // Old configs may still hold the scalar form of a PnL ladder, and
+        // omit keys that run on the strategy's defaults (same as the form)
+        function normalizeParams(p) {
+            const out = {rsi_period: 14, rsi_method: 'wilder', cooldown_days: 1, stop_loss_reentry_days: 3, ...p};
+            if (!('stop_loss_levels' in out)) out.stop_loss_levels = p.stop_loss != null ? [[p.stop_loss, 1]] : [];
+            if (!('take_profit_levels' in out)) out.take_profit_levels = p.take_profit != null ? [[p.take_profit, 1]] : [];
+            return out;
+        }
+
+        function formatParam(key, value) {
+            if (!Array.isArray(value)) return value == null ? '-' : String(value);
+            if (!value.length) return '없음';
+            const pct = key === 'stop_loss_levels' || key === 'take_profit_levels';
+            return value.map(([t, portion]) => `${pct ? t + '%' : 'RSI ' + t}→${Math.round(portion * 100)}%`).join(', ');
+        }
+
+        function describeChanges(oldParams, newParams) {
+            const before = normalizeParams(oldParams);
+            return Object.keys(PARAM_LABELS)
+                .filter(k => k in newParams && JSON.stringify(before[k]) !== JSON.stringify(newParams[k]))
+                .map(k => `${PARAM_LABELS[k]}: ${formatParam(k, before[k])} → ${formatParam(k, newParams[k])}`);
+        }
+
+        // Carry the form as it stands (saved or not) to the Backtest page
+        function backtestWith(strategyName) {
+            const form = document.querySelector('#strategy-' + CSS.escape(strategyName) + ' form');
+            const collected = collectParams(form, strategyName);
+            const statusEl = document.getElementById('status-' + strategyName);
+            if (collected.error) {
+                statusEl.textContent = collected.error;
+                statusEl.className = 'save-status error';
+                return;
+            }
+            try {
+                sessionStorage.setItem('bt-preset', JSON.stringify({
+                    name: strategyName,
+                    params: collected.params,
+                    symbol: (STRATEGY_SYMBOLS[strategyName] || [])[0] || null,
+                }));
+            } catch (e) { /* private mode: the page opens with defaults */ }
+            location.href = '/backtest?from=settings';
+        }
+
         function toggleEdit(strategyName) {
             const content = document.getElementById('strategy-' + strategyName);
             content.classList.toggle('editing');
@@ -926,62 +1038,23 @@
                 return;
             }
 
-            const params = {
-                rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
-                rsi_method: form.querySelector('[name="rsi_method"]').value,
-                cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
-                stop_loss_reentry_days: parseInt(form.querySelector('[name="stop_loss_reentry_days"]').value),
-            };
-
-            // PnL ladders. A row counts only when both cells are filled; an
-            // empty table is sent as [] so the backend reads it as "off"
-            // rather than falling back to the scalar default.
-            function pnlLevels(containerId, pctType, portionType) {
-                const rows = [];
-                document.getElementById(containerId).querySelectorAll('tr').forEach(row => {
-                    const pct = row.querySelector(`[data-type="${pctType}"]`).value.trim();
-                    const portion = row.querySelector(`[data-type="${portionType}"]`).value.trim();
-                    if (pct === '' || portion === '') return;
-                    rows.push([parseFloat(pct), parseInt(portion) / 100]);
-                });
-                return rows;
-            }
-
-            params.stop_loss_levels = pnlLevels(
-                'sl-levels-' + strategyName, 'sl-pct', 'sl-portion');
-            params.take_profit_levels = pnlLevels(
-                'tp-levels-' + strategyName, 'tp-pct', 'tp-portion');
-
-            // Thresholds must deepen as the ladder progresses, or a later
-            // stage can never fire and the portion is stranded.
-            const ordered = (rows, cmp) => rows.every(
-                (r, i) => i === 0 || cmp(r[0], rows[i - 1][0]));
-            if (!ordered(params.stop_loss_levels, (a, b) => a < b)) {
-                statusEl.textContent = 'Stop loss levels must get more negative';
+            const collected = collectParams(form, strategyName);
+            if (collected.error) {
+                statusEl.textContent = collected.error;
                 statusEl.className = 'save-status error';
                 return;
             }
-            if (!ordered(params.take_profit_levels, (a, b) => a > b)) {
-                statusEl.textContent = 'Take profit levels must increase';
-                statusEl.className = 'save-status error';
+            const params = collected.params;
+
+            // Saving applies to live trading at once, so say what changes
+            const changes = describeChanges(SAVED_PARAMS[strategyName] || {}, params);
+            if (newName !== strategyName) changes.unshift(`이름: ${strategyName} → ${newName}`);
+            if (!changes.length) {
+                statusEl.textContent = '변경 사항 없음';
+                statusEl.className = 'save-status';
                 return;
             }
-
-            const buyContainer = document.getElementById('buy-levels-' + strategyName);
-            params.avg_down_levels = [];
-            buyContainer.querySelectorAll('tr').forEach(row => {
-                const rsi = parseInt(row.querySelector('[data-type="buy-rsi"]').value);
-                const portion = parseInt(row.querySelector('[data-type="buy-portion"]').value) / 100;
-                params.avg_down_levels.push([rsi, portion]);
-            });
-
-            const sellContainer = document.getElementById('sell-levels-' + strategyName);
-            params.sell_levels = [];
-            sellContainer.querySelectorAll('tr').forEach(row => {
-                const rsi = parseInt(row.querySelector('[data-type="sell-rsi"]').value);
-                const portion = parseInt(row.querySelector('[data-type="sell-portion"]').value) / 100;
-                params.sell_levels.push([rsi, portion]);
-            });
+            if (!confirm('저장하면 실매매에 바로 적용됩니다.\n\n' + changes.join('\n') + '\n\n저장할까요?')) return;
 
             statusEl.textContent = 'Saving...';
             statusEl.className = 'save-status';
@@ -1006,6 +1079,7 @@
                     return;
                 }
 
+                SAVED_PARAMS[strategyName] = params;
                 statusEl.textContent = data.bot_reloaded ? 'Saved & applied' : 'Saved (bot not running)';
                 statusEl.className = 'save-status success';
                 content.classList.remove('editing');

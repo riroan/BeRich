@@ -767,7 +767,8 @@
                 const p = (cfg && cfg.params) || {};
                 setSlider('bt-rsi-period', p.rsi_period);
                 document.getElementById('bt-rsi-method').value = p.rsi_method || 'wilder';
-                setSlider('bt-stop-loss', p.stop_loss);
+                setSlider('bt-stop-loss', p.stop_loss_levels && p.stop_loss_levels.length
+                    ? p.stop_loss_levels[0][0] : p.stop_loss);
                 setSlider('bt-cooldown', p.cooldown_days);
                 setSlider('bt-stop-reentry', p.stop_loss_reentry_days ?? 3);
                 setLevels('buy', p.avg_down_levels);
@@ -794,6 +795,18 @@
                 const cfg = presetConfigs[presetSelect.value];
                 if (cfg) applyStrategyPreset(cfg);
             });
+
+            // Settings' "이 설정으로 백테스트" hands over the form as edited,
+            // saved or not
+            let handoff = null;
+            try {
+                handoff = JSON.parse(sessionStorage.getItem('bt-preset') || 'null');
+                sessionStorage.removeItem('bt-preset');
+            } catch (e) { handoff = null; }
+            if (handoff && handoff.params) {
+                applyStrategyPreset(handoff);
+                if (handoff.symbol) document.getElementById('bt-symbol').value = handoff.symbol;
+            }
 
             const colors = {
                 bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
