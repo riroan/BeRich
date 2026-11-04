@@ -63,6 +63,7 @@
             {% for s in symbols if s.strategy_name == strategy %}
             <div class="sym-row{{ ' is-off' if not s.enabled else '' }}" data-id="{{ s.id }}" data-symbol="{{ s.symbol }}" data-price="{{ s.price or '' }}" data-portion="{{ s.buy_portion }}" data-market="{{ s.market|lower }}">
                 <a href="/symbol/{{ s.symbol }}" class="sym-badge">{{ s.symbol }}</a>
+                <span class="sym-name sym-row-name">{{ s.name }}</span>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <span class="sym-off-badge">OFF</span>
                 {# Mobile only: the controls live in the edit sheet, so the card shows what they are set to #}
@@ -76,6 +77,8 @@
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
+                    <span class="sym-sheet-label">이름</span>
+                    <input type="text" class="sym-name-input" value="{{ s.name }}" maxlength="40" placeholder="이름 (예: 삼성전자)" aria-label="{{ s.symbol }} display name" onchange="updateName({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="sym-sheet-label">섹터</span>
                     <select class="sym-sector{{ ' is-unset' if not s.sector else '' }}" aria-label="{{ s.symbol }} sector" onchange="updateSector({{ s.id }}, '{{ s.symbol }}', this.value)">
                         <option value="" {{ 'selected' if not s.sector else '' }}>— 미지정 —</option>
@@ -276,6 +279,20 @@
                 });
                 if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
                 else setSymbolStatus(`${symbol} weight updated.`, 'success');
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+        }
+
+        async function updateName(id, symbol, name) {
+            const label = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"] .sym-row-name`);
+            if (label) label.textContent = name.trim();
+            try {
+                const resp = await fetch(`/api/symbols/${id}/name?symbol=${encodeURIComponent(symbol)}`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({name}),
+                });
+                if (!resp.ok) setSymbolStatus('Failed to update name.', 'error');
+                else setSymbolStatus(`${symbol} name updated.`, 'success');
             } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 

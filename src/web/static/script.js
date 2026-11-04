@@ -69,6 +69,7 @@ class DashboardWebSocket {
 
     updateDashboard(data) {
         if (!data) return;
+        if (data.symbol_names) this.symbolNames = data.symbol_names;
 
         // Update balance cards
         this.updateBalances(data);
@@ -191,7 +192,7 @@ class DashboardWebSocket {
                 <tr class="position-row" data-href="${href}"
                     data-symbol="${escapedSymbol}" data-pnl="${pos.pnl_pct}" data-rsi="${pos.rsi != null ? pos.rsi : ''}" data-price="${pos.current_price != null ? pos.current_price : ''}"
                     tabindex="0" role="link" aria-label="Open ${escapedSymbol} chart">
-                    <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${escapedSymbol}</a></td>
+                    <td data-label="Symbol" class="full-width"><a href="${href}" class="sym-badge">${escapedSymbol}</a>${this.nameTag(pos.symbol)}</td>
                     <td data-label="Price">${this.formatPrice(pos.current_price, pos.market)}</td>
                     <td data-label="P&L" class="${pos.pnl_pct >= 0 ? 'positive' : 'negative'}">
                         ${pos.pnl_pct >= 0 ? '+' : ''}${pos.pnl_pct.toFixed(1)}%
@@ -235,6 +236,12 @@ class DashboardWebSocket {
                 ${this.renderNextTriggers(pos)}
             </div>
         `;
+    }
+
+    // Display name a user gave the symbol (005930 → 삼성전자), if any
+    nameTag(symbol, tag = 'span') {
+        const name = (this.symbolNames || {})[String(symbol).toUpperCase()];
+        return name ? `<${tag} class="sym-name">${this.escapeHTML(name)}</${tag}>` : '';
     }
 
     updateActivity(items) {
@@ -342,6 +349,7 @@ class DashboardWebSocket {
                    aria-label="Open ${escapedSymbol} chart">
                     <div class="rsi-left">
                         <div class="rsi-symbol">${escapedSymbol}</div>
+                        ${this.nameTag(symbol, 'div')}
                         <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
                     </div>
                     <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi != null ? Number(rsi).toFixed(1) : '-'}</span>

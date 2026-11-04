@@ -468,6 +468,8 @@ class DashboardState:
         # plan. Filled from the DB by the web routes; the live strategy
         # instances are used when the bot runs in-process.
         self.symbol_params: dict[str, dict] = {}
+        # Optional display names (KRX codes say little: 005930 → 삼성전자)
+        self.symbol_names: dict[str, str] = {}
 
         # Hot reload callback, and the bot loop it has to run on (set by bot)
         self.reload_callback: Any | None = None
@@ -1247,6 +1249,9 @@ def _asset_version(name: str) -> int:
 
 
 templates.env.globals["asset_v"] = _asset_version
+templates.env.globals["sym_name"] = (
+    lambda symbol: dashboard_state.symbol_names.get(str(symbol).upper(), "")
+)
 
 
 def _avg_rsi() -> float | None:
@@ -2430,9 +2435,9 @@ def create_app() -> FastAPI:
             records = await storage.get_current_positions()
             dashboard_state.replace_positions_from_records(records)
             try:
-                dashboard_state.symbol_params = _params_by_symbol(
-                    await storage.get_all_strategy_configs()
-                )
+                configs = await storage.get_all_strategy_configs()
+                dashboard_state.symbol_params = _params_by_symbol(configs)
+                dashboard_state.symbol_names = _names_by_symbol(configs)
             except Exception as e:
                 logger.warning(f"Failed to load strategy params for web: {e}")
         except Exception as e:
@@ -2441,6 +2446,14 @@ def create_app() -> FastAPI:
             await storage.close()
         dashboard_state.apply_position_plans()
         return list(dashboard_state.positions.values())
+
+    def _names_by_symbol(configs: list[dict]) -> dict[str, str]:
+        return {
+            str(s["symbol"]).upper(): s["name"]
+            for cfg in configs
+            for s in cfg.get("symbols", [])
+            if isinstance(s, dict) and s.get("name")
+        }
 
     def _params_by_symbol(configs: list[dict]) -> dict[str, dict]:
         out: dict[str, dict] = {}
@@ -2594,6 +2607,9 @@ def create_app() -> FastAPI:
                                 else None
                             ),
                             "strategy_name": cfg["name"],
+                            "name": (
+                                s.get("name") if isinstance(s, dict) else None
+                            ) or "",
                             "enabled": cfg["enabled"] and sym_enabled,
                             "max_weight": mw,
                             "buy_portion": buy_portion,
@@ -3037,6 +3053,53 @@ def create_app() -> FastAPI:
 
     class SectorUpdate(BaseModel):
         sector: str
+
+    class SymbolNameUpdate(BaseModel):
+        name: str
+
+    @app.post("/api/symbols/{config_id}/name")
+    async def update_symbol_name(
+        config_id: int, body: SymbolNameUpdate, symbol: str,
+    ):
+        """Set a display name for a symbol (e.g. 삼성전자 for 005930)"""
+        storage = await _get_web_storage()
+        if not storage:
+            raise HTTPException(
+                status_code=503, detail="Storage not available",
+            )
+        name = body.name.strip()[:40]
+        try:
+            config = await storage.get_strategy_config_by_id(config_id)
+            if not config:
+                raise HTTPException(
+                    status_code=404, detail="Strategy config not found",
+                )
+            symbol_upper = symbol.upper()
+            new_symbols = []
+            found = False
+            for s in config["symbols"]:
+                sym = s["symbol"] if isinstance(s, dict) else s
+                if sym == symbol_upper:
+                    found = True
+                    entry = s if isinstance(s, dict) else {"symbol": sym}
+                    if name:
+                        entry["name"] = name
+                    else:
+                        entry.pop("name", None)
+                    new_symbols.append(entry)
+                else:
+                    new_symbols.append(s)
+            if not found:
+                raise HTTPException(
+                    status_code=404, detail="Symbol not found",
+                )
+            await storage.update_strategy_config(
+                config["name"], symbols=new_symbols,
+            )
+            dashboard_state.symbol_names[symbol_upper] = name
+            return {"symbol": symbol_upper, "name": name}
+        finally:
+            await storage.close()
 
     @app.post("/api/symbols/{config_id}/sector")
     async def update_symbol_sector(
@@ -3978,6 +4041,7 @@ def get_dashboard_snapshot() -> dict:
         "pnl_usd": float(dashboard_state.pnl_usd),
         "positions": _planned_positions(),
         "decisions": _recent_decisions(),
+        "symbol_names": dict(dashboard_state.symbol_names),
         "rsi_values": dict(dashboard_state.rsi_values),
         "rsi_prices": dict(dashboard_state.rsi_prices),
         "rsi_thresholds": dict(dashboard_state.rsi_thresholds),

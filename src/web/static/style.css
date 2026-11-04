@@ -861,8 +861,8 @@ tr:hover { background: rgba(59,130,246,0.04); }
 .rsi-item.near-buy .rsi-value { color: var(--gain) !important; }
 .rsi-item.near-sell .rsi-value { color: var(--loss) !important; }
 /* Past the second rung — same hue, brighter. */
-.rsi-item.near-buy .rsi-value.rsi-danger { color: #6ee7b7 !important; }
-.rsi-item.near-sell .rsi-value.rsi-danger { color: #fca5a5 !important; }
+.rsi-item.near-buy .rsi-value.rsi-danger { color: #fca5a5 !important; }
+.rsi-item.near-sell .rsi-value.rsi-danger { color: #93c5fd !important; }
 .rsi-item:hover { background: var(--card); }
 .rsi-item.held:hover { background: rgba(59,130,246,0.2); }
 .rsi-item:focus-visible {
@@ -3406,8 +3406,8 @@ select option { background: var(--surface); color: var(--text); }
     }
     .pause-btn { background: rgba(5,150,105,0.1); }
     .pause-btn.paused { background: rgba(220,38,38,0.1); }
-    .signal-tag.buy { background: rgba(5,150,105,0.08); }
-    .signal-tag.sell { background: rgba(220,38,38,0.08); }
+    .signal-tag.buy { background: var(--gain-bg); }
+    .signal-tag.sell { background: var(--loss-bg); }
     .alert { background: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.15); }
     .alert.warning { background: rgba(217,119,6,0.05); border-color: rgba(217,119,6,0.15); }
     tr:hover { background: rgba(59,130,246,0.06); }
@@ -3720,3 +3720,13 @@ select option { background: var(--surface); color: var(--text); }
 .perf-link-card { text-decoration: none; color: inherit; display: block; }
 .perf-link-card .value.small { color: var(--blue); }
 .perf-link-card:hover { border-color: var(--blue); }
+
+/* User-set display name under a ticker/code */
+.sym-name { display: block; font-size: 11px; font-weight: 500; color: var(--text-muted); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sym-row .sym-name { display: inline; margin-left: -4px; font-size: 12px; max-width: 110px; }
+.sym-row .sym-name:empty { display: none; }
+.sym-controls .sym-name-input { width: 120px; }
+@media (max-width: 768px) {
+    .sym-row .sym-name { max-width: 80px; }
+    .sym-row.editing .sym-controls .sym-name-input { width: 100%; }
+}
