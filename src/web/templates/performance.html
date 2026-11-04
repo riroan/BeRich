@@ -164,7 +164,9 @@
                 <div class="panel">
                     <h2>Monthly Returns</h2>
                     <div class="monthly-grid" id="monthly-returns">
-                        <p class="empty" style="grid-column:1/-1;">Loading...</p>
+                        {# Placeholders shaped like the month cards, so nothing jumps when they load #}
+                        {% for _ in range(3) %}<div class="monthly-card skeleton" aria-hidden="true"></div>{% endfor %}
+                        <span class="sr-only">Loading monthly returns</span>
                     </div>
                 </div>
             </section>
