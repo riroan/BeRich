@@ -5,23 +5,23 @@
 {% block content %}
         <!-- 1a. Mobile hero summary (shown ≤768px) -->
         <div class="mobile-hero">
-            <div class="hero-label">총 자산</div>
+            <div class="hero-label">Total Balance</div>
             <div class="hero-balance" id="hero-balance">${{ "{:,.2f}".format(balance_usd) }}</div>
             <div class="hero-stats">
                 <div class="hero-stat">
-                    <div class="hero-stat-label">오늘 손익</div>
+                    <div class="hero-stat-label">Today P&L</div>
                     <div class="hero-stat-value {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl">{{ pnl_usd|usd_signed(2, true) }}</div>
                     <div class="hero-stat-sub {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="hero-pnl-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</div>
                 </div>
                 <div class="hero-stat">
-                    <div class="hero-stat-label">주문가능금액</div>
+                    <div class="hero-stat-label">Buying Power</div>
                     <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(buying_power_usd) }}</div>
                     <div class="hero-stat-sub">{{ "{:.0f}%".format(buying_power_ratio_usd) }}</div>
                 </div>
                 <div class="hero-stat">
-                    <div class="hero-stat-label">보유 종목</div>
+                    <div class="hero-stat-label">Positions</div>
                     <div class="hero-stat-value">{{ position_count }}</div>
-                    <div class="hero-stat-sub">관심 {{ rsi_with_prices|length }}</div>
+                    <div class="hero-stat-sub">{{ rsi_with_prices|length }} watched</div>
                 </div>
             </div>
         </div>
@@ -29,24 +29,24 @@
         <!-- 1b. Desktop summary cards (shown >768px) -->
         <div class="cards-row cols-3 summary-desktop">
             <div class="card">
-                <div class="label">총자산</div>
+                <div class="label">Total</div>
                 <div class="value small" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</div>
             </div>
             <div class="card">
-                <div class="label">주문가능금액</div>
+                <div class="label">Buying Power</div>
                 <div class="value small" id="cash-usd">${{ "{:,.2f}".format(buying_power_usd) }}</div>
             </div>
             <div class="card">
-                <div class="label">손익</div>
+                <div class="label">P&L</div>
                 <div class="value small {{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd">{{ pnl_usd|usd_signed(2, true) }}</div>
-                <div class="delta"><span class="{{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</span><span class="dim"> · 보유 {{ position_count }}</span></div>
+                <div class="delta"><span class="{{ 'positive' if pnl_usd >= 0 else 'negative' }}" id="pnl-usd-pct">{{ "{:+.2f}%".format(pnl_usd / balance_usd * 100) if balance_usd else '—' }}</span><span class="dim"> · {{ position_count }} positions</span></div>
             </div>
         </div>
 
         <!-- Risk Alerts -->
         {% if risk_alerts %}
         <div class="card" style="border-left:3px solid var(--red);">
-            <div class="section-title" style="color:var(--red);">리스크 경고</div>
+            <div class="section-title" style="color:var(--red);">Risk Alerts</div>
             {% for alert in risk_alerts %}
             <div class="alert {{ alert.severity }}">
                 <span class="alert-type">{{ alert.type | replace('_', ' ') | title }}</span>
@@ -62,13 +62,13 @@
         <div class="two-col">
             <div class="card">
                 <div class="section-title">
-                    <span>보유 종목 <span class="count">{{ position_count }}</span></span>
+                    <span>Positions <span class="count">{{ position_count }}</span></span>
                     <span class="sort-controls">
                         <select id="positions-sort" class="sort-select" aria-label="Sort positions by">
-                            <option value="pnl">손익</option>
+                            <option value="pnl">P&L</option>
                             <option value="rsi">RSI</option>
-                            <option value="price">가격</option>
-                            <option value="symbol">종목</option>
+                            <option value="price">Price</option>
+                            <option value="symbol">Symbol</option>
                         </select>
                         <button type="button" id="positions-sort-dir" class="sort-dir" data-dir="asc" aria-label="Toggle sort direction">↑</button>
                     </span>
@@ -77,11 +77,11 @@
                 <table id="positions-table" class="center-table mobile-cards">
                     <thead>
                         <tr>
-                            <th>종목</th>
-                            <th>가격</th>
-                            <th>손익</th>
+                            <th>Symbol</th>
+                            <th>Price</th>
+                            <th>P&L</th>
                             <th>RSI</th>
-                            <th>단계</th>
+                            <th>Stage</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -115,18 +115,11 @@
                                         </div>
                                         <span class="stage-reset">{{ pos.sell_stage_reset_remaining or '-' }}</span>
                                     </div>
-                                    {% if pos.next_buy_rsi is not none or pos.next_sell_rsi is not none or pos.stop_price is not none %}
-                                    <div class="stage-next" aria-label="Next triggers">
-                                        {% if pos.next_buy_rsi is not none %}<span class="next-buy">매수 RSI≤{{ "%.0f"|format(pos.next_buy_rsi) }}</span>{% endif %}
-                                        {% if pos.next_sell_rsi is not none %}<span class="next-sell">매도 RSI≥{{ "%.0f"|format(pos.next_sell_rsi) }}</span>{% endif %}
-                                        {% if pos.stop_price is not none %}<span class="next-stop">손절 {% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.stop_price) }}{% else %}${{ "{:,.2f}".format(pos.stop_price) }}{% endif %}</span>{% endif %}
-                                    </div>
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
                         {% else %}
-                        <tr><td colspan="5" class="empty">보유 종목 없음</td></tr>
+                        <tr><td colspan="5" class="empty">No positions</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -134,12 +127,12 @@
             </div>
             <div class="card">
                 <div class="section-title">
-                    <span>RSI 모니터 <span class="count">{{ rsi_with_prices|length }}</span></span>
+                    <span>RSI Monitor <span class="count">{{ rsi_with_prices|length }}</span></span>
                     <span class="sort-controls">
                         <select id="rsi-sort" class="sort-select" aria-label="Sort RSI monitor by">
                             <option value="rsi">RSI</option>
-                            <option value="symbol">이름</option>
-                            <option value="price">가격</option>
+                            <option value="symbol">Name</option>
+                            <option value="price">Price</option>
                         </select>
                         <button type="button" id="rsi-sort-dir" class="sort-dir" data-dir="asc" aria-label="Toggle sort direction">↑</button>
                     </span>
@@ -158,7 +151,7 @@
                         <span class="rsi-value {{ rsi_class(symbol, data.rsi) }}">{{ "{:.1f}".format(data.rsi) }}</span>
                     </a>
                     {% else %}
-                    <p class="empty">RSI 데이터 없음</p>
+                    <p class="empty">No RSI data</p>
                     {% endfor %}
                 </div>
             </div>
@@ -169,17 +162,17 @@
         <aside class="dash-side" aria-label="Signals and status">
         <!-- 3b. Bot activity: what the bot did with each signal, and why not -->
         <div class="card activity-card">
-            <div class="section-title">봇 활동</div>
+            <div class="section-title">Bot Activity</div>
             <ul class="activity-list" id="activity-list">
                 {% for d in decisions %}
                 <li class="activity-item">
                     <span class="activity-time">{{ d.time[11:16] }}</span>
                     <a class="sym-badge" href="/symbol/{{ d.symbol }}">{{ d.symbol }}</a>
-                    <span class="activity-tag {{ d.outcome }} {{ d.action }}">{{ {'order': '주문', 'blocked': '보류', 'rejected': '거부'}[d.outcome] }}</span>
+                    <span class="activity-tag {{ d.outcome }} {{ d.action }}">{{ {'order': 'ORDER', 'blocked': 'HOLD', 'rejected': 'REJECTED'}[d.outcome] }}</span>
                     <span class="activity-detail">{{ d.detail }}</span>
                 </li>
                 {% else %}
-                <li class="empty-state">아직 기록된 활동이 없습니다</li>
+                <li class="empty-state">No activity yet</li>
                 {% endfor %}
             </ul>
         </div>
@@ -187,7 +180,7 @@
         <!-- 3. Signals -->
         <div class="three-col signals-grid">
             <div class="signal-card">
-                <h3>매수 후보</h3>
+                <h3>Buy Candidates</h3>
                 {% for c in buy_candidates %}
                 <a class="signal-item two-col" href="/symbol/{{ c.symbol }}" aria-label="Open {{ c.symbol }} chart">
                     <span class="sym-badge">{{ c.symbol }}</span>
@@ -196,7 +189,7 @@
                 {% endfor %}
             </div>
             <div class="signal-card">
-                <h3>매도 후보</h3>
+                <h3>Sell Candidates</h3>
                 {% for c in sell_candidates %}
                 <a class="signal-item two-col" href="/symbol/{{ c.symbol }}" aria-label="Open {{ c.symbol }} chart">
                     <span class="sym-badge">{{ c.symbol }}</span>
@@ -205,7 +198,7 @@
                 {% endfor %}
             </div>
             <div class="signal-card recent-trades-card">
-                <h3>최근 거래</h3>
+                <h3>Recent Trades</h3>
                 {% for log in trade_logs[:5] %}
                 <a class="signal-item" href="/symbol/{{ log.symbol }}" aria-label="Open {{ log.symbol }} chart">
                     <span class="sym-badge">{{ log.symbol }}</span>
@@ -214,28 +207,28 @@
                     <span class="trade-price">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</span>
                 </a>
                 {% else %}
-                <div class="empty-state">최근 거래 없음</div>
+                <div class="empty-state">No recent activity</div>
                 {% endfor %}
             </div>
         </div>
 
         <!-- 4. System Status: one row of chips -->
         <div class="card sys-card">
-            <div class="section-title">시스템 상태</div>
+            <div class="section-title">System Status</div>
             <div class="sys-chips">
                 {% macro chip(id, label, ok, text) %}<span class="sys-chip {{ 'ok' if ok else 'bad' }}" id="{{ id }}"><span class="sys-dot" aria-hidden="true"></span>{{ label }} <b>{{ text }}</b></span>{% endmacro %}
-                {{ chip('sys-auto', '자동매매', system_status.auto_trading_enabled, 'ON' if system_status.auto_trading_enabled else 'OFF') }}
+                {{ chip('sys-auto', 'Auto Trading', system_status.auto_trading_enabled, 'ON' if system_status.auto_trading_enabled else 'OFF') }}
                 {{ chip('sys-api', 'API', system_status.api_connected, 'OK' if system_status.api_connected else 'ERR') }}
-                {{ chip('sys-account', '계정', system_status.account_tradable, 'OK' if system_status.account_tradable else 'N/A') }}
-                {{ chip('sys-data', '데이터', system_status.data_collection_ok, 'OK' if system_status.data_collection_ok else 'ERR') }}
+                {{ chip('sys-account', 'Account', system_status.account_tradable, 'OK' if system_status.account_tradable else 'N/A') }}
+                {{ chip('sys-data', 'Data', system_status.data_collection_ok, 'OK' if system_status.data_collection_ok else 'ERR') }}
             </div>
             <div class="sys-times">
-                <span>전략 실행 <b id="last-strategy-run">{{ system_status.last_strategy_run or '-' }}</b></span>
-                <span>가격 갱신 <b id="last-price-update">{{ system_status.last_price_update or '-' }}</b></span>
+                <span>Strategy run <b id="last-strategy-run">{{ system_status.last_strategy_run or '-' }}</b></span>
+                <span>Price update <b id="last-price-update">{{ system_status.last_price_update or '-' }}</b></span>
             </div>
             {% if system_status.error_message %}
             <div class="alert">
-                <span class="alert-type">오류</span>
+                <span class="alert-type">Error</span>
                 <span class="alert-message">{{ system_status.error_message }}</span>
             </div>
             {% endif %}
@@ -245,7 +238,7 @@
 
         {% if bot_status %}
         <div class="footer-info">
-            {{ bot_status.strategies|join(', ') }} · 가동 {{ bot_status.uptime }}
+            {{ bot_status.strategies|join(', ') }} · Uptime {{ bot_status.uptime }}
         </div>
         {% endif %}
 {% endblock %}

@@ -44,12 +44,12 @@
 
         <div class="performance-page">
             <div class="performance-mobile-header" aria-label="Performance page title">
-                <h1>성과</h1>
+                <h1>Performance</h1>
             </div>
 
             <!-- Performance Metrics -->
             <section class="perf-hero-card" aria-label="Performance summary">
-                <div class="perf-label">총수익률</div>
+                <div class="perf-label">Total Return</div>
                 {% if principal_usd > 0 %}
                 <div class="perf-hero-row">
                     <div class="perf-hero-value {{ return_class }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
@@ -60,13 +60,13 @@
                 {% else %}
                 {# Without a principal the return is a meaningless +0.00% #}
                 <div class="principal-onboarding">
-                    <p>원금을 입력하면 총수익률을 계산합니다.</p>
-                    <button type="button" class="btn principal-start-btn" onclick="document.getElementById('principal-edit-btn').click()">원금 입력</button>
+                    <p>Set your principal to see the total return.</p>
+                    <button type="button" class="btn principal-start-btn" onclick="document.getElementById('principal-edit-btn').click()">Set principal</button>
                 </div>
                 {% endif %}
                 <div class="perf-hero-stats">
                     <div class="perf-hero-stat">
-                        <span class="perf-label">잔고</span>
+                        <span class="perf-label">Balance</span>
                         <strong>${{ "{:,.2f}".format(balance_usd) }}</strong>
                     </div>
                     <div class="perf-hero-stat">
@@ -79,14 +79,14 @@
                     </div>
                 </div>
                 <div class="principal-row">
-                    <span>원금</span>
-                    <strong>{% if principal_usd > 0 %}${{ "{:,.2f}".format(principal_usd) }}{% else %}미설정{% endif %}</strong>
-                    <button type="button" class="principal-edit-btn" id="principal-edit-btn">수정</button>
+                    <span>Principal</span>
+                    <strong>{% if principal_usd > 0 %}${{ "{:,.2f}".format(principal_usd) }}{% else %}Not set{% endif %}</strong>
+                    <button type="button" class="principal-edit-btn" id="principal-edit-btn">Edit</button>
                 </div>
                 <form class="principal-form" id="principal-form" hidden>
                     <input type="number" id="principal-input" step="0.01" min="0"
-                           placeholder="입금액 (USD)" aria-label="입금액 (USD)">
-                    <button type="submit" class="btn-save">저장</button>
+                           placeholder="Deposit (USD)" aria-label="Deposit (USD)">
+                    <button type="submit" class="btn-save">Save</button>
                 </form>
                 <div class="principal-error" id="principal-error" hidden></div>
             </section>
@@ -94,19 +94,19 @@
             <!-- Account ratio + where trade statistics live now -->
             <div class="perf-stat-grid">
                 <div class="perf-stat-card">
-                    <div class="label">샤프 지수</div>
+                    <div class="label">Sharpe Ratio</div>
                     <div class="value small {{ sharpe_class }}">{{ "{:.2f}".format(performance.sharpe_ratio) }}</div>
                 </div>
                 <a class="perf-stat-card perf-link-card" href="/analytics">
-                    <div class="label">매매 분석</div>
-                    <div class="value small">승률 · 손익 →</div>
-                    <div class="delta dim">{{ performance.total_trades }}건 · Analytics</div>
+                    <div class="label">Trade Analytics</div>
+                    <div class="value small">Win rate · P&amp;L →</div>
+                    <div class="delta dim">{{ performance.total_trades }} trades</div>
                 </a>
             </div>
 
             <!-- Capital Gains Tax (해외주식 양도소득세) -->
             <section class="perf-panel">
-                <div class="section-title">양도소득세<span class="info-dot" tabindex="0" role="button" aria-label="계산식 설명" data-tip="해외주식 양도소득세 (국내주식은 일반투자자 비과세)
+                <div class="section-title">Capital Gains Tax<span class="info-dot" tabindex="0" role="button" aria-label="How this is calculated" data-tip="해외주식 양도소득세 (국내주식은 일반투자자 비과세)
 ① 실현손익 = Σ(매도 손익 × 체결일 환율)
 ② 과세표준 = max(① − 2,500,000원, 0)
 ③ 세액 = ② × 22% (양도세 20% + 지방소득세 2%)
@@ -116,11 +116,11 @@
                     <table class="center-table mobile-cards">
                         <thead>
                             <tr>
-                                <th>연도</th>
-                                <th>실현 손익</th>
-                                <th>환율</th>
-                                <th>예상 세액</th>
-                                <th>남은 공제</th>
+                                <th>Year</th>
+                                <th>Realized P&L</th>
+                                <th>FX Rate</th>
+                                <th>Est. Tax</th>
+                                <th>Deduction Left</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -128,7 +128,7 @@
                             <tr>
                                 <td data-label="Year">{{ t.year }}</td>
                                 {% if t.tax is none %}
-                                <td data-label="Realized P&L" class="dim" colspan="4">환율 조회 실패</td>
+                                <td data-label="Realized P&L" class="dim" colspan="4">FX rate unavailable</td>
                                 {% else %}
                                 <td data-label="Realized P&L" class="{{ 'positive' if t.realized_pnl_usd > 0 else ('negative' if t.realized_pnl_usd < 0 else '') }}">{{ t.realized_pnl_usd|usd_signed }}</td>
                                 <td data-label="FX Rate" class="dim">{{ "{:,.2f}".format(t.fx_rate) }}</td>
@@ -149,10 +149,10 @@
             <!-- Equity Curve Chart -->
             <section class="perf-panel perf-chart-card">
                 <div class="perf-chart-header">
-                    <div class="section-title">자산 곡선</div>
+                    <div class="section-title">Equity Curve</div>
                     <div class="chart-tf-toggle" role="group" aria-label="Equity curve timeframe">
-                        <button type="button" class="chart-tf-btn equity-tf-btn active" data-tf="tick" aria-pressed="true">분봉</button>
-                        <button type="button" class="chart-tf-btn equity-tf-btn" data-tf="daily" aria-pressed="false">일봉</button>
+                        <button type="button" class="chart-tf-btn equity-tf-btn active" data-tf="tick" aria-pressed="true">Intraday</button>
+                        <button type="button" class="chart-tf-btn equity-tf-btn" data-tf="daily" aria-pressed="false">Daily</button>
                     </div>
                 </div>
                 <div id="equity-chart" class="chart-container-small" role="img" aria-label="Portfolio equity curve chart" tabindex="0"></div>
@@ -162,11 +162,11 @@
             <!-- Monthly Returns -->
             <section class="monthly-section">
                 <div class="panel">
-                    <h2>월별 수익률</h2>
+                    <h2>Monthly Returns</h2>
                     <div class="monthly-grid" id="monthly-returns">
                         {# Placeholders shaped like the month cards, so nothing jumps when they load #}
                         {% for _ in range(3) %}<div class="monthly-card skeleton" aria-hidden="true"></div>{% endfor %}
-                        <span class="sr-only">월별 수익률 불러오는 중</span>
+                        <span class="sr-only">Loading monthly returns</span>
                     </div>
                 </div>
             </section>
@@ -395,7 +395,7 @@
                     const data = result.data || [];
 
                     if (data.length === 0) {
-                        equityChartContainer.innerHTML = '<p class="empty">자산 곡선을 그릴 데이터가 부족합니다</p>';
+                        equityChartContainer.innerHTML = '<p class="empty">Not enough data for equity curve</p>';
                         return;
                     }
 
@@ -406,7 +406,7 @@
                 })
                 .catch(err => {
                     console.error('Failed to load equity data:', err);
-                    equityChartContainer.innerHTML = '<p class="empty">자산 데이터를 불러오지 못했습니다</p>';
+                    equityChartContainer.innerHTML = '<p class="empty">Failed to load equity data</p>';
                 });
 
             // Resize handler
@@ -421,7 +421,7 @@
             }
             loadDailyEquity()
                 .then(data => {
-                    if (data.length < 2) return monthlyEmpty('월별 수익률을 계산할 데이터가 부족합니다');
+                    if (data.length < 2) return monthlyEmpty('Not enough data for monthly returns');
 
                     // Group by month — use the TWR index so deposits don't
                     // count as monthly gains. Each month holds its days'
@@ -436,7 +436,7 @@
                     });
 
                     const keys = Object.keys(months).sort();
-                    if (keys.length < 2) return monthlyEmpty('월별 수익률을 계산할 데이터가 부족합니다');
+                    if (keys.length < 2) return monthlyEmpty('Not enough data for monthly returns');
 
                     const container = monthlyContainer;
                     const monthlyCards = keys.map((key, i) => {
@@ -464,7 +464,7 @@
                             '</div>';
                     }).join('');
                 })
-                .catch(() => monthlyEmpty('월별 수익률을 불러오지 못했습니다'));
+                .catch(() => monthlyEmpty('Failed to load monthly returns'));
         }
 
         // Principal (원금) editor — 입금액만 입력하면 기존 원금에 더해서 저장.

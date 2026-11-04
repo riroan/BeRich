@@ -3,29 +3,29 @@
 {% block title %}Correlation Preview - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <header class="page-mobile-title"><h1>상관관계</h1></header>
+        <header class="page-mobile-title"><h1>Correlation</h1></header>
 
         <section class="symbols-section">
             <div class="panel">
-                <h2>포트폴리오 상관관계</h2>
+                <h2>Portfolio Correlation</h2>
                 <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
                     각 종목이 다른 보유종목과 최근 60일간 가장 비슷하게 움직인 정도 (0 = 무관, 1 = 항상 같이 움직임)
                 </p>
 
                 {% if symbol_count < 3 %}
-                <p style="color:var(--dim);">보유종목이 3개 미만이라 상관관계를 계산할 의미가 없어요.</p>
+                <p style="color:var(--dim);">Correlation needs at least 3 holdings.</p>
                 {% elif not correlations %}
-                <p style="color:var(--dim);">계산할 가격 데이터가 아직 부족해요.</p>
+                <p style="color:var(--dim);">Not enough price data yet.</p>
                 {% else %}
                 <div style="display:flex; gap:16px; margin-bottom:14px;">
                     <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
-                        <span class="alloc-dot" style="background:var(--positive); width:10px; height:10px;"></span>낮음
+                        <span class="alloc-dot" style="background:var(--positive); width:10px; height:10px;"></span>Low
                     </span>
                     <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
-                        <span class="alloc-dot" style="background:var(--warning); width:10px; height:10px;"></span>보통
+                        <span class="alloc-dot" style="background:var(--warning); width:10px; height:10px;"></span>Medium
                     </span>
                     <span style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--dim);">
-                        <span class="alloc-dot" style="background:var(--negative); width:10px; height:10px;"></span>높음
+                        <span class="alloc-dot" style="background:var(--negative); width:10px; height:10px;"></span>High
                     </span>
                 </div>
 
@@ -43,8 +43,8 @@
                 </div>
                 {% if correlations|length > 5 %}
                 <button type="button" class="btn-text" id="corr-list-toggle" onclick="toggleCorrList()"
-                        data-expanded="0" data-more-label="{{ correlations|length - 5 }}개 더보기" style="margin-top:10px;">
-                    {{ correlations|length - 5 }}개 더보기
+                        data-expanded="0" data-more-label="Show {{ correlations|length - 5 }} more" style="margin-top:10px;">
+                    Show {{ correlations|length - 5 }} more
                 </button>
                 {% endif %}
                 {% endif %}
@@ -54,7 +54,7 @@
         {% if matrix_rows %}
         <section class="symbols-section">
             <div class="panel">
-                <h2>전체 매트릭스 (비교용)</h2>
+                <h2>Full matrix</h2>
                 <p style="font-size:13px; color:var(--dim); margin:-4px 0 14px;">
                     위 리스트가 압축한 원본 데이터. 종목이 몇 개 안 될 땐 괜찮지만 늘어날수록 옆으로 스크롤해야 함 — 그래서 리스트를 기본으로 씀.
                 </p>
@@ -96,7 +96,7 @@
                 btn.dataset.expanded = expanded ? '0' : '1';
                 btn.textContent = expanded
                     ? btn.dataset.moreLabel
-                    : '접기';
+                    : 'Show less';
             }
 
             // [data-tip] tooltips are wired globally by initTooltips() in script.js.

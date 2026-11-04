@@ -3689,17 +3689,7 @@ select option { background: var(--surface); color: var(--text); }
 }
 
 /* ===================== Header: state in words, one row on mobile ======== */
-/* The pause button said nothing but a play/pause glyph, which read as either
-   the state or the action. It now shows the state in words. */
-.header-right .pause-btn {
-    width: auto;
-    flex: 0 0 auto;
-    padding: 0 12px;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 0;
-}
+/* Pause button: icon only (▶ trading / ❚❚ paused); state is in aria-label */
 .header-right [data-tip] { cursor: help; }
 @media (max-width: 768px) {
     /* Brand and chips share one row */
@@ -3712,8 +3702,7 @@ select option { background: var(--surface); color: var(--text); }
     .header-right .bot-status.running,
     .header-right .mode.real { display: none; }
     .header-right .rsi-header-badge,
-    .header-right .warmup,
-    .header-right .pause-btn { height: 32px; }
+    .header-right .warmup { height: 32px; }
 }
 
 /* Performance → Analytics link card */

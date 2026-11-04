@@ -140,7 +140,7 @@
         .bt-rsi-chart {
             border-top: 1px solid var(--border);
         }
-        /* Sits in the chart header next to <h2>차트</h2>, same as the symbol
+        /* Sits in the chart header next to <h2>Chart</h2>, same as the symbol
            page's timeframe toggle. */
         .bt-combined-chart-panel .symbol-chart-header { margin-bottom: 10px; }
         .bt-combined-chart-panel .symbol-chart-header h2 { margin: 0; }
@@ -495,7 +495,7 @@
 {% endblock %}
 
 {% block content %}
-        <header class="page-mobile-title"><h1>백테스트</h1></header>
+        <header class="page-mobile-title"><h1>Backtest</h1></header>
         <div class="section-title bt-title-row">
             <span>Backtest — <span id="bt-strategy-label">RSI Mean Reversion</span></span>
             <div class="chart-tf-toggle" role="group" aria-label="Backtest strategy">
@@ -511,9 +511,9 @@
                     <div class="bt-preset-card" data-rsi-only>
                     <div class="bt-row bt-preset-row">
                         <div class="bt-field">
-                            <label for="bt-strategy-preset">저장된 전략 불러오기</label>
+                            <label for="bt-strategy-preset">Load Saved Strategy</label>
                             <select id="bt-strategy-preset">
-                                <option value="">직접 입력</option>
+                                <option value="">Manual / Custom</option>
                             </select>
                         </div>
                     </div>
@@ -522,57 +522,57 @@
                     <div class="bt-main-card">
                     <div class="bt-row bt-core-grid">
                         <div class="bt-field">
-                            <label for="bt-symbol">종목</label>
+                            <label for="bt-symbol">Symbol</label>
                             <input type="text" id="bt-symbol" value="GOOG" placeholder="e.g. 005930 or AAPL">
                         </div>
                         <div class="bt-field">
-                            <label for="bt-market">시장</label>
+                            <label for="bt-market">Market</label>
                             <select id="bt-market">
-                                <option value="krx">한국 (KRX)</option>
-                                <option value="nasdaq" selected>미국 (US)</option>
+                                <option value="krx">Korea (KRX)</option>
+                                <option value="nasdaq" selected>US</option>
                             </select>
                         </div>
                         <div class="bt-field bt-date-field">
-                            <label for="bt-start">시작</label>
+                            <label for="bt-start">Start</label>
                             <input type="date" id="bt-start">
                         </div>
                         <div class="bt-field bt-date-field">
-                            <label for="bt-end">종료</label>
+                            <label for="bt-end">End</label>
                             <input type="date" id="bt-end">
                         </div>
                         <div class="bt-field bt-capital-field">
-                            <label for="bt-capital">초기 자본</label>
+                            <label for="bt-capital">Initial Capital</label>
                             <input type="text" inputmode="numeric" id="bt-capital" class="bt-num" value="10,000,000">
                         </div>
                     </div>
                     </div>
 
                     <div class="bt-params-card" data-rsi-only>
-                    <div class="bt-section-h">파라미터</div>
+                    <div class="bt-section-h">Parameters</div>
                     <div class="bt-slider-row">
-                        <label>RSI 기간</label>
+                        <label>RSI Period</label>
                         <input type="range" id="bt-rsi-period" min="5" max="30" value="14">
                         <span class="bt-slider-val" id="bt-rsi-period-v">14</span>
                     </div>
                     <div class="bt-slider-row">
-                        <label for="bt-rsi-method">RSI 방식</label>
+                        <label for="bt-rsi-method">RSI Method</label>
                         <select id="bt-rsi-method">
-                            <option value="wilder" selected>Wilder (매매 봇과 동일)</option>
-                            <option value="cutler">Cutler (단순평균)</option>
+                            <option value="wilder" selected>Wilder (same as bot)</option>
+                            <option value="cutler">Cutler (SMA)</option>
                         </select>
                     </div>
                     <div class="bt-slider-row">
-                        <label>손절</label>
+                        <label>Stop Loss</label>
                         <input type="range" id="bt-stop-loss" min="-100" max="-1" value="-10">
                         <span class="bt-slider-val" id="bt-stop-loss-v">-10%</span>
                     </div>
                     <div class="bt-slider-row">
-                        <label>쿨다운</label>
+                        <label>Cooldown</label>
                         <input type="range" id="bt-cooldown" min="1" max="30" value="1">
                         <span class="bt-slider-val" id="bt-cooldown-v">1d</span>
                     </div>
                     <div class="bt-slider-row">
-                        <label title="Days a stop-loss exit blocks buying back in">손절 후 재진입</label>
+                        <label title="Days a stop-loss exit blocks buying back in">Stop Re-entry</label>
                         <input type="range" id="bt-stop-reentry" min="0" max="30" value="3">
                         <span class="bt-slider-val" id="bt-stop-reentry-v">3d</span>
                     </div>
@@ -582,10 +582,10 @@
                     <div class="bt-toggle-row">
                         <label class="bt-check">
                             <input type="checkbox" id="bt-reset-recovery">
-                            <span>RSI 회복 후 단계 반복</span>
+                            <span>Require RSI Recovery</span>
                         </label>
                         <div class="bt-field">
-                            <label for="bt-recovery-rsi">회복 RSI</label>
+                            <label for="bt-recovery-rsi">Recovery RSI</label>
                             <input type="number" id="bt-recovery-rsi" class="bt-num" value="50" min="0" max="100" step="1" disabled>
                         </div>
                     </div>
@@ -595,38 +595,38 @@
                         <div class="bt-level-card bt-buy-card">
                             <div class="bt-section-h bt-buy-title">Buy · RSI ≤</div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">1단계</span><span class="bt-stage-short">S1</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 1</span><span class="bt-stage-short">S1</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-1" value="30" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-buy-p-1" value="50" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-1" value="50" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">2단계</span><span class="bt-stage-short">S2</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 2</span><span class="bt-stage-short">S2</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-2" value="25" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-buy-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">3단계</span><span class="bt-stage-short">S3</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 3</span><span class="bt-stage-short">S3</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≤</span><input type="number" id="bt-buy-rsi-3" value="20" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-buy-p-3" value="20" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-buy-p-3" value="20" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                         </div>
 
                         <div class="bt-level-card bt-sell-card">
                             <div class="bt-section-h bt-sell-title">Sell · RSI ≥</div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">1단계</span><span class="bt-stage-short">S1</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 1</span><span class="bt-stage-short">S1</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-1" value="65" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-sell-p-1" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-1" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">2단계</span><span class="bt-stage-short">S2</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 2</span><span class="bt-stage-short">S2</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-2" value="70" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-sell-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-2" value="30" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                             <div class="bt-stage-row">
-                                <span class="bt-stage-name"><span class="bt-stage-full">3단계</span><span class="bt-stage-short">S3</span></span>
+                                <span class="bt-stage-name"><span class="bt-stage-full">Stage 3</span><span class="bt-stage-short">S3</span></span>
                                 <label class="bt-stage-control"><span class="bt-stage-control-label">RSI ≥</span><input type="number" id="bt-sell-rsi-3" value="75" min="0" max="100"></label>
-                                <label class="bt-stage-control"><span class="bt-stage-control-label">비중 %</span><input type="number" id="bt-sell-p-3" value="40" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
+                                <label class="bt-stage-control"><span class="bt-stage-control-label">Portion %</span><input type="number" id="bt-sell-p-3" value="40" min="0" max="100" step="1"><span class="bt-stage-percent" aria-hidden="true">%</span></label>
                             </div>
                         </div>
                     </div>
@@ -634,7 +634,7 @@
                     <div class="bt-run-actions">
                         <button type="button" id="bt-run" class="bt-run-btn">
                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
-                            <span class="bt-run-label">백테스트 실행</span>
+                            <span class="bt-run-label">Run Backtest</span>
                         </button>
                     </div>
                 </form>
@@ -647,27 +647,27 @@
             <div class="panel bt-results-summary">
                 <div class="bt-result-grid">
                     <div class="card bt-total-card">
-                        <div class="label">수익률</div>
+                        <div class="label">RETURN</div>
                         <div class="value small" id="bt-total"></div>
                     </div>
                     <div class="card bt-bh-card">
-                        <div class="label">단순 보유</div>
+                        <div class="label">BUY &amp; HOLD</div>
                         <div class="value small" id="bt-bh"></div>
                     </div>
                     <div class="card bt-alpha-card">
-                        <div class="label">초과수익</div>
+                        <div class="label">ALPHA</div>
                         <div class="value small" id="bt-alpha"></div>
                     </div>
                     <div class="card bt-buys-card">
-                        <div class="label">매수</div>
+                        <div class="label">BUYS</div>
                         <div class="value small" id="bt-buys"></div>
                     </div>
                     <div class="card bt-sells-card">
-                        <div class="label">매도</div>
+                        <div class="label">SELLS</div>
                         <div class="value small" id="bt-sells"></div>
                     </div>
                     <div class="card bt-winrate-card">
-                        <div class="label">승률</div>
+                        <div class="label">WIN RATE</div>
                         <div class="value small" id="bt-winrate"></div>
                     </div>
                 </div>
@@ -675,13 +675,13 @@
 
             <div class="panel bt-compare" id="bt-compare">
                 <div class="bt-compare-head">
-                    <h2>결과 비교</h2>
-                    <button type="button" class="btn bt-pin-btn" id="bt-pin-btn">이 결과를 A로 고정</button>
+                    <h2>Compare</h2>
+                    <button type="button" class="btn bt-pin-btn" id="bt-pin-btn">Pin as A</button>
                 </div>
-                <p class="bt-compare-hint" id="bt-compare-hint">결과를 A로 고정한 뒤 설정을 바꿔 다시 돌리면 나란히 비교합니다.</p>
+                <p class="bt-compare-hint" id="bt-compare-hint">Pin a result as A, change settings and run again to compare side by side.</p>
                 <div class="table-wrap">
                     <table class="bt-compare-table" id="bt-compare-table" hidden>
-                        <thead><tr><th></th><th id="bt-cmp-a-label">A</th><th id="bt-cmp-b-label">현재</th><th>차이</th></tr></thead>
+                        <thead><tr><th></th><th id="bt-cmp-a-label">A</th><th id="bt-cmp-b-label">Current</th><th>Diff</th></tr></thead>
                         <tbody id="bt-compare-body"></tbody>
                     </table>
                 </div>
@@ -690,15 +690,15 @@
             <div class="chart-section bt-combined-chart-section">
                 <div class="panel bt-combined-chart-panel">
                     <div class="symbol-chart-header">
-                        <h2>차트</h2>
+                        <h2>Chart</h2>
                         <div class="chart-tf-toggle bt-chart-toggle" role="group" aria-label="Price chart style">
-                            <button type="button" class="chart-tf-btn active" data-chart="line" aria-pressed="true">라인</button>
+                            <button type="button" class="chart-tf-btn active" data-chart="line" aria-pressed="true">Line</button>
                             <button type="button" class="chart-tf-btn" data-chart="ha" aria-pressed="false" title="하이킨아시 캔들" aria-label="하이킨아시">HA</button>
                         </div>
                     </div>
                     <div class="bt-chart-stack">
                         <div class="bt-chart-block bt-price-chart">
-                            <div class="bt-chart-label">가격</div>
+                            <div class="bt-chart-label">Price</div>
                             <div id="bt-price-chart" class="chart-container-small" role="img" aria-label="Backtest price chart with trades" tabindex="0"></div>
                         </div>
                         <div class="bt-chart-block bt-rsi-chart">
@@ -1120,20 +1120,20 @@
             const CMP_KEY = 'bt-compare-a';
             let lastRun = null;
             const CMP_ROWS = [
-                ['수익률', 'total_return_pct', 'pct', 1],
-                ['알파', 'alpha_pct', 'pp', 1],
-                ['최대 낙폭', 'max_drawdown_pct', 'pct', -1],
-                ['매수 횟수', 'num_buys', 'n', 0],
-                ['매도 횟수', 'num_sells', 'n', 0],
-                ['손절 횟수', 'num_stop_losses', 'n', -1],
-                ['승률', 'win_rate_pct', 'pct', 1],
+                ['Return', 'total_return_pct', 'pct', 1],
+                ['Alpha', 'alpha_pct', 'pp', 1],
+                ['Max drawdown', 'max_drawdown_pct', 'pct', -1],
+                ['Buys', 'num_buys', 'n', 0],
+                ['Sells', 'num_sells', 'n', 0],
+                ['Stop-losses', 'num_stop_losses', 'n', -1],
+                ['Win rate', 'win_rate_pct', 'pct', 1],
             ];
             function loadPinned() {
                 try { return JSON.parse(localStorage.getItem(CMP_KEY) || 'null'); } catch (e) { return null; }
             }
             function runLabel() {
                 const v = id => (document.getElementById(id) || {}).value;
-                return `${(v('bt-symbol') || '').toUpperCase()} · 손절 ${v('bt-stop-loss')}% · 쿨다운 ${v('bt-cooldown')}일 · 재진입 ${v('bt-stop-reentry')}일`;
+                return `${(v('bt-symbol') || '').toUpperCase()} · SL ${v('bt-stop-loss')}% · cooldown ${v('bt-cooldown')}d · re-entry ${v('bt-stop-reentry')}d`;
             }
             function fmtCmp(value, kind) {
                 if (value == null || Number.isNaN(value)) return '-';
@@ -1148,7 +1148,7 @@
                 const pinned = loadPinned();
                 const table = document.getElementById('bt-compare-table');
                 const pinBtn = document.getElementById('bt-pin-btn');
-                pinBtn.textContent = pinned ? 'A 해제' : '이 결과를 A로 고정';
+                pinBtn.textContent = pinned ? 'Unpin A' : 'Pin as A';
                 document.getElementById('bt-compare-hint').hidden = !!pinned;
                 table.hidden = !(pinned && lastRun);
                 if (!pinned || !lastRun) return;
@@ -1163,7 +1163,7 @@
                     const sign = diff > 0 ? '+' : '';
                     const diffText = diff == null ? '-' : sign + (kind === 'n' ? diff : diff.toFixed(2) + (kind === 'pct' || kind === 'pp' ? 'p' : ''));
                     return `<tr><td>${name}</td><td>${fmtCmp(a, kind)}</td><td>${fmtCmp(b, kind)}</td><td class="${cls}">${diffText}</td></tr>`;
-                }).join('') + `<tr class="bt-cmp-labels"><td>설정</td><td>${pinned.label.replace(/</g, '&lt;')}</td><td>${lastRun.label.replace(/</g, '&lt;')}</td><td></td></tr>`;
+                }).join('') + `<tr class="bt-cmp-labels"><td>Settings</td><td>${pinned.label.replace(/</g, '&lt;')}</td><td>${lastRun.label.replace(/</g, '&lt;')}</td><td></td></tr>`;
             }
             document.getElementById('bt-pin-btn').addEventListener('click', () => {
                 try {

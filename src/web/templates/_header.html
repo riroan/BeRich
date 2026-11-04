@@ -9,7 +9,7 @@
                 RSI {{ "{:.0f}".format(portfolio_rsi) }}
             </a>
             {% endif %}
-            <span id="ws-status" class="ws-status disconnected" role="status" aria-label="Offline connection" title="OFFLINE" data-tip="실시간 연결 — 초록: 연결됨, 빨강: 끊김 (숫자가 갱신되지 않음)" tabindex="0"></span>
+            <span id="ws-status" class="ws-status disconnected" role="status" aria-label="Offline connection" title="OFFLINE" data-tip="Live connection — green: connected, red: offline (numbers not updating)" tabindex="0"></span>
             {% set is_running = bot_status.running if bot_status else false %}
             {% set is_paper = bot_status.paper_trading if bot_status else true %}
             {% set warmup_remaining = bot_status.warmup_remaining if bot_status and bot_status.warmup_remaining else 0 %}
@@ -18,7 +18,7 @@
                   role="status"
                   aria-label="Bot {{ 'running' if is_running else 'stopped' }}"
                   title="Bot {{ 'running' if is_running else 'stopped' }}"
-                  data-tip="봇 — 초록: 실행 중, 빨강: 멈춤" tabindex="0">
+                  data-tip="Bot — green: running, red: stopped" tabindex="0">
                 <span class="bot-status-dot" aria-hidden="true"></span>
                 <span class="bot-status-label">BOT</span>
             </span>
@@ -26,19 +26,18 @@
                   class="pill mode {{ 'paper' if is_paper else 'real' }}"
                   aria-label="{{ 'Paper trading' if is_paper else 'Real trading' }}"
                   title="{{ 'Paper' if is_paper else 'Real' }}"
-                  data-tip="거래 모드 — P: 모의투자, R: 실전" tabindex="0">
+                  data-tip="Mode — P: paper, R: real" tabindex="0">
                 {{ 'P' if is_paper else 'R' }}
             </span>
-            <span id="bot-warmup-status" class="pill warmup" aria-label="Warmup {{ warmup_remaining }} remaining" data-tip="워밍업 남은 시간 — 끝나야 매매를 시작합니다" tabindex="0"{% if not warmup_remaining %} hidden{% endif %}>{{ warmup_remaining }}</span>
+            <span id="bot-warmup-status" class="pill warmup" aria-label="Warmup {{ warmup_remaining }} remaining" data-tip="Warm-up left — trading starts after it" tabindex="0"{% if not warmup_remaining %} hidden{% endif %}>{{ warmup_remaining }}</span>
             <button id="pause-btn" class="pause-btn {{ 'paused' if trading_paused else '' }}"
-                    onclick="togglePause()" aria-pressed="{{ 'true' if trading_paused else 'false' }}">
-                {{ '정지됨' if trading_paused else '매매 중' }}
-            </button>
+                    onclick="togglePause()" aria-pressed="{{ 'true' if trading_paused else 'false' }}"
+                    aria-label="{{ 'Trading paused — resume' if trading_paused else 'Trading — pause' }}"></button>
         </div>
     </div>
     {% set sticky_pnl = pnl_usd if pnl_usd is defined else none %}
     <div class="sticky-pnl" aria-live="polite">
-        <div><span class="sticky-label">손익</span> <span id="sticky-pnl-usd" class="sticky-value {{ 'positive' if sticky_pnl is not none and sticky_pnl >= 0 else ('negative' if sticky_pnl is not none else '') }}">{% if sticky_pnl is not none %}{{ sticky_pnl|usd_signed(2, true) }}{% else %}N/A{% endif %}</span></div>
+        <div><span class="sticky-label">P&L</span> <span id="sticky-pnl-usd" class="sticky-value {{ 'positive' if sticky_pnl is not none and sticky_pnl >= 0 else ('negative' if sticky_pnl is not none else '') }}">{% if sticky_pnl is not none %}{{ sticky_pnl|usd_signed(2, true) }}{% else %}N/A{% endif %}</span></div>
         <div><span class="sticky-label">WS</span> <span id="sticky-ws-value" class="sticky-value negative">OFFLINE</span></div>
-        <div><span class="sticky-label">갱신</span> <span id="sticky-last-update" class="sticky-value">{{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span></div>
+        <div><span class="sticky-label">Last</span> <span id="sticky-last-update" class="sticky-value">{{ last_update.strftime('%H:%M:%S') if last_update else 'N/A' }}</span></div>
     </div>

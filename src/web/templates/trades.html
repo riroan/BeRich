@@ -7,56 +7,56 @@
         {% set sell_count = trade_logs|selectattr('action', 'in', ['sell', 'partial_sell'])|list|length %}
         {% set total_pnl = trade_logs|rejectattr('pnl', 'none')|sum(attribute='pnl') %}
 
-        <header class="page-mobile-title"><h1>거래</h1></header>
+        <header class="page-mobile-title"><h1>Trades</h1></header>
         <!-- Summary — mobile strip (6a, ≤768px) -->
         <div class="trade-summary-strip">
-            <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">총자산</div></div>
-            <div class="tss-item"><div class="tss-num positive">{{ buy_count }}</div><div class="tss-label">매수</div></div>
-            <div class="tss-item"><div class="tss-num negative">{{ sell_count }}</div><div class="tss-label">매도</div></div>
-            <div class="tss-item tss-pnl"><div class="tss-num {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div><div class="tss-label">총 손익</div></div>
+            <div class="tss-item"><div class="tss-num">{{ trade_logs|length }}</div><div class="tss-label">Total</div></div>
+            <div class="tss-item"><div class="tss-num positive">{{ buy_count }}</div><div class="tss-label">Buy</div></div>
+            <div class="tss-item"><div class="tss-num negative">{{ sell_count }}</div><div class="tss-label">Sell</div></div>
+            <div class="tss-item tss-pnl"><div class="tss-num {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div><div class="tss-label">Total P&amp;L</div></div>
         </div>
 
         <!-- Summary Cards — desktop (>768px) -->
         <div class="cards-row summary-desktop">
             <div class="card">
-                <div class="label">총 거래</div>
+                <div class="label">Total Trades</div>
                 <div class="value small">{{ trade_logs|length }}</div>
             </div>
             <div class="card">
-                <div class="label">매수 주문</div>
+                <div class="label">Buy Orders</div>
                 <div class="value small">{{ buy_count }}</div>
             </div>
             <div class="card">
-                <div class="label">매도 주문</div>
+                <div class="label">Sell Orders</div>
                 <div class="value small">{{ sell_count }}</div>
             </div>
             <div class="card">
-                <div class="label">총 손익</div>
+                <div class="label">Total P&amp;L</div>
                 <div class="value small {{ 'positive' if total_pnl >= 0 else 'negative' }}">{{ total_pnl|usd_signed }}</div>
             </div>
         </div>
 
         <!-- Trade Table -->
         <div class="card trades-card">
-            <div class="section-title">전체 거래 <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
+            <div class="section-title">All Trades <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
 
             <div class="trade-filters">
                 <select id="period-filter" class="sort-select" aria-label="Filter by period">
-                    <option value="">전체 기간</option>
-                    <option value="0">오늘</option>
-                    <option value="7">최근 7일</option>
-                    <option value="30">최근 30일</option>
-                    <option value="90">최근 90일</option>
+                    <option value="">All time</option>
+                    <option value="0">Today</option>
+                    <option value="7">Last 7 days</option>
+                    <option value="30">Last 30 days</option>
+                    <option value="90">Last 90 days</option>
                 </select>
                 <select id="action-filter" class="sort-select" aria-label="Filter by action">
-                    <option value="all">전체 구분</option>
-                    <option value="buy">매수</option>
-                    <option value="sell">매도</option>
-                    <option value="stop_loss">손절</option>
-                    <option value="take_profit">익절</option>
+                    <option value="all">All actions</option>
+                    <option value="buy">Buy</option>
+                    <option value="sell">Sell</option>
+                    <option value="stop_loss">Stop Loss</option>
+                    <option value="take_profit">Take Profit</option>
                 </select>
                 <select id="symbol-filter" class="sort-select" aria-label="Filter by symbol">
-                    <option value="">전체 종목</option>
+                    <option value="">All symbols</option>
                     {% for sym in trade_logs|map(attribute='symbol')|unique|sort %}
                     <option value="{{ sym }}">{{ sym }}</option>
                     {% endfor %}
@@ -67,16 +67,16 @@
             <table class="trades-table center-table mobile-cards">
                 <thead>
                     <tr>
-                        <th>시각</th>
-                        <th>종목</th>
-                        <th>시장</th>
-                        <th>구분</th>
-                        <th>가격</th>
-                        <th>수량</th>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>Market</th>
+                        <th>Action</th>
+                        <th>Price</th>
+                        <th>Qty</th>
                         <th>RSI</th>
-                        <th>결과</th>
-                        <th>손익</th>
-                        <th>손익률</th>
+                        <th>Result</th>
+                        <th>P&L</th>
+                        <th>P&L %</th>
                     </tr>
                 </thead>
                 <tbody id="trades-body">
@@ -103,11 +103,11 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="10" class="empty">거래 내역 없음</td>
+                        <td colspan="10" class="empty">No trades recorded</td>
                     </tr>
                     {% endfor %}
                     <tr id="trades-empty-filter" hidden>
-                        <td colspan="10" class="empty">조건에 맞는 거래 없음</td>
+                        <td colspan="10" class="empty">No trades match this filter</td>
                     </tr>
                 </tbody>
             </table>
@@ -133,11 +133,11 @@
                     <div class="tcm-body">
                         <div class="tcm-metrics">
                             <div class="tcm-metric">
-                                <div class="tcm-label">가격</div>
+                                <div class="tcm-label">Price</div>
                                 <div class="tcm-val">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</div>
                             </div>
                             <div class="tcm-metric">
-                                <div class="tcm-label">수량</div>
+                                <div class="tcm-label">QTY</div>
                                 <div class="tcm-val">{{ log.quantity }}</div>
                             </div>
                             <div class="tcm-metric">

@@ -17,16 +17,16 @@
     <div class="login-container">
         <div class="login-card">
             <h1>Be<span>Rich</span></h1>
-            <p class="subtitle">트레이딩 대시보드</p>
+            <p class="subtitle">Trading Dashboard</p>
             {% if error %}
             <div class="login-error" role="alert">{{ error }}</div>
             {% endif %}
             <form class="login-form" method="POST" action="/login">
-                <label for="login-username">아이디</label>
+                <label for="login-username">Username</label>
                 <input type="text" id="login-username" name="username" placeholder="Username" autocomplete="username" required>
-                <label for="login-password">비밀번호</label>
+                <label for="login-password">Password</label>
                 <input type="password" id="login-password" name="password" placeholder="Password" autocomplete="current-password" required>
-                <button type="submit" class="btn">로그인</button>
+                <button type="submit" class="btn">Login</button>
             </form>
         </div>
     </div>

@@ -3,20 +3,20 @@
 {% block title %}Symbol Management - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <header class="page-mobile-title"><h1>종목</h1></header>
+        <header class="page-mobile-title"><h1>Symbols</h1></header>
         <!-- Add Symbol (desktop: top card · mobile: FAB bottom sheet) -->
         <div class="card add-symbol-card" id="add-symbol-card">
             <div class="sheet-grabber"></div>
-            <div class="section-title">종목 추가
+            <div class="section-title">Add Symbol
                 <button type="button" class="sheet-close" onclick="closeAddSheet()" aria-label="Close">&#x2715;</button>
             </div>
             <div class="sym-add-form">
                 <div class="form-field">
-                    <label for="symbol-input">티커</label>
+                    <label for="symbol-input">Ticker</label>
                     <input type="text" id="symbol-input" placeholder="AAPL" autocomplete="off" autocapitalize="characters">
                 </div>
                 <div class="form-field">
-                    <label for="market-select">시장</label>
+                    <label for="market-select">Market</label>
                     <select id="market-select">
                         {% for market in markets %}
                         <option value="{{ market }}">{{ market | upper }}</option>
@@ -24,7 +24,7 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="strategy-select">전략</label>
+                    <label for="strategy-select">Strategy</label>
                     <select id="strategy-select">
                         {% for s in strategies %}
                         <option value="{{ s.name }}">{{ s.name }}</option>
@@ -32,19 +32,19 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="sector-input">섹터</label>
+                    <label for="sector-input">Sector</label>
                     <select id="sector-input">
-                        <option value="">— 미지정 —</option>
+                        <option value="">— None —</option>
                         {% for sec in sector_choices %}
                         <option value="{{ sec }}">{{ sec }}</option>
                         {% endfor %}
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="weight-input">최대 비중 (%)</label>
+                    <label for="weight-input">Max Weight (%)</label>
                     <input type="number" id="weight-input" value="20" min="1" max="100" step="0.1" inputmode="decimal">
                 </div>
-                <button id="add-symbol-btn" onclick="addSymbol()" class="btn">종목 추가</button>
+                <button id="add-symbol-btn" onclick="addSymbol()" class="btn">Add Symbol</button>
             </div>
             <div id="symbol-form-status" class="form-status" role="status" aria-live="polite"></div>
         </div>
@@ -67,32 +67,30 @@
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <span class="sym-off-badge">OFF</span>
                 {# Mobile only: the controls live in the edit sheet, so the card shows what they are set to #}
-                <span class="sym-summary"><span class="sym-sum-sector{{ ' is-unset' if not s.sector else '' }}">{{ s.sector or '섹터 미지정' }}</span><span class="sym-sum-weight">{{ s.max_weight }}%</span></span>
-                <button type="button" class="sym-edit-btn" onclick="toggleEdit(this)" aria-pressed="false" aria-label="Edit {{ s.symbol }}">&#9998; 편집</button>
+                <span class="sym-summary"><span class="sym-sum-sector{{ ' is-unset' if not s.sector else '' }}">{{ s.sector or 'No sector' }}</span><span class="sym-sum-weight">{{ s.max_weight }}%</span></span>
+                <button type="button" class="sym-edit-btn" onclick="toggleEdit(this)" aria-pressed="false" aria-label="Edit {{ s.symbol }}">&#9998; Edit</button>
                 <fieldset class="sym-fields" disabled>
-                <div class="sym-sheet-head"><span class="sym-sheet-title">{{ s.symbol }}</span><button type="button" class="sheet-close" onclick="closeSymEdit()" aria-label="닫기">&#x2715;</button></div>
-                <span class="sym-sheet-label sym-sheet-label-toggle">매매 활성화</span>
+                <div class="sym-sheet-head"><span class="sym-sheet-title">{{ s.symbol }}</span><button type="button" class="sheet-close" onclick="closeSymEdit()" aria-label="Close">&#x2715;</button></div>
+                <span class="sym-sheet-label sym-sheet-label-toggle">Trading enabled</span>
                 <label class="toggle sym-toggle">
                     <input type="checkbox" {{ 'checked' if s.enabled else '' }} aria-label="Enable {{ s.symbol }}" onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
-                    <span class="sym-sheet-label">이름</span>
-                    <input type="text" class="sym-name-input" value="{{ s.name }}" maxlength="40" placeholder="이름 (예: 삼성전자)" aria-label="{{ s.symbol }} display name" onchange="updateName({{ s.id }}, '{{ s.symbol }}', this.value)">
-                    <span class="sym-sheet-label">섹터</span>
+                    <span class="sym-sheet-label">Sector</span>
                     <select class="sym-sector{{ ' is-unset' if not s.sector else '' }}" aria-label="{{ s.symbol }} sector" onchange="updateSector({{ s.id }}, '{{ s.symbol }}', this.value)">
-                        <option value="" {{ 'selected' if not s.sector else '' }}>— 미지정 —</option>
+                        <option value="" {{ 'selected' if not s.sector else '' }}>— None —</option>
                         {% for sec in sector_choices %}
                         <option value="{{ sec }}" {{ 'selected' if sec == s.sector else '' }}>{{ sec }}</option>
                         {% endfor %}
                     </select>
-                    <span class="sym-sheet-label">전략</span>
+                    <span class="sym-sheet-label">Strategy</span>
                     <select class="sym-strategy" aria-label="{{ s.symbol }} strategy" onchange="moveSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                         {% for opt in strategies %}
                         <option value="{{ opt.name }}" {{ 'selected' if opt.name == s.strategy_name else '' }}>{{ opt.name }}</option>
                         {% endfor %}
                     </select>
-                    <span class="sym-sheet-label">최대 비중</span>
+                    <span class="sym-sheet-label">Max weight</span>
                     <button type="button" class="step-btn" tabindex="-1" onclick="stepWeight({{ s.id }}, '{{ s.symbol }}', -1)" aria-label="Decrease {{ s.symbol }} weight">&minus;</button>
                     <input type="number" value="{{ s.max_weight }}" min="0" max="100" step="0.1" inputmode="decimal" aria-label="{{ s.symbol }} max weight" oninput="refreshShares(this)" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
@@ -170,19 +168,19 @@
             const weightInput = document.getElementById('weight-input');
             const maxWeight = parseFloat(weightInput.value);
             if (!symbol) {
-                setSymbolStatus('티커를 입력하세요.', 'error');
+                setSymbolStatus('Ticker is required.', 'error');
                 input.focus();
                 return;
             }
             if (!(maxWeight >= 1 && maxWeight <= 100)) {
-                setSymbolStatus('비중은 1~100 사이여야 합니다.', 'error');
+                setSymbolStatus('Weight must be between 1 and 100.', 'error');
                 weightInput.focus();
                 return;
             }
 
             button.disabled = true;
-            button.textContent = '추가 중...';
-            setSymbolStatus('종목 추가 중...');
+            button.textContent = 'Adding...';
+            setSymbolStatus('Adding symbol...');
 
             try {
                 const resp = await fetch('/api/symbols', {
@@ -200,10 +198,10 @@
                 }
                 else { location.reload(); }
             } catch (e) {
-                setSymbolStatus('오류: ' + e.message, 'error');
+                setSymbolStatus('Error: ' + e.message, 'error');
             } finally {
                 button.disabled = false;
-                button.textContent = '종목 추가';
+                button.textContent = 'Add Symbol';
             }
         }
 
@@ -211,7 +209,7 @@
             const row = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"]`);
             if (row && el) row.classList.toggle('is-off', !el.checked);
             try { await fetch(`/api/symbols/${id}/toggle?symbol=${encodeURIComponent(symbol)}`, {method: 'POST'}); }
-            catch (e) { setSymbolStatus('실패: ' + e.message, 'error'); location.reload(); }
+            catch (e) { setSymbolStatus('Failed: ' + e.message, 'error'); location.reload(); }
         }
 
         async function stepWeight(id, symbol, dir) {
@@ -232,7 +230,7 @@
             const list = row.querySelector('.sym-fields');
             list.disabled = !list.disabled;
             const editing = !list.disabled;
-            btn.textContent = editing ? '\u2713 완료' : '\u270E 편집';
+            btn.textContent = editing ? '\u2713 Done' : '\u270E Edit';
             btn.classList.toggle('editing', editing);
             btn.setAttribute('aria-pressed', String(editing));
             // Mobile shows the fields as a bottom sheet over the list
@@ -251,7 +249,7 @@
             const sector = row.querySelector('.sym-sector');
             const sumSector = row.querySelector('.sym-sum-sector');
             if (sector && sumSector) {
-                sumSector.textContent = sector.value || '섹터 미지정';
+                sumSector.textContent = sector.value || 'No sector';
                 sumSector.classList.toggle('is-unset', !sector.value);
             }
             const weight = row.querySelector('.sym-controls input[type="number"]');
@@ -277,23 +275,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({max_weight: parseFloat(weight)}),
                 });
-                if (!resp.ok) setSymbolStatus('비중 변경 실패', 'error');
-                else setSymbolStatus(`${symbol} 비중 변경됨`, 'success');
-            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
-        }
-
-        async function updateName(id, symbol, name) {
-            const label = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"] .sym-row-name`);
-            if (label) label.textContent = name.trim();
-            try {
-                const resp = await fetch(`/api/symbols/${id}/name?symbol=${encodeURIComponent(symbol)}`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({name}),
-                });
-                if (!resp.ok) setSymbolStatus('이름 변경 실패', 'error');
-                else setSymbolStatus(`${symbol} 이름 변경됨`, 'success');
-            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
+                if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
+                else setSymbolStatus(`${symbol} weight updated.`, 'success');
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
         async function updateSector(id, symbol, sector) {
@@ -305,9 +289,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({sector}),
                 });
-                if (!resp.ok) setSymbolStatus('섹터 변경 실패', 'error');
-                else setSymbolStatus(`${symbol} 섹터 변경됨`, 'success');
-            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
+                if (!resp.ok) setSymbolStatus('Failed to update sector.', 'error');
+                else setSymbolStatus(`${symbol} sector updated.`, 'success');
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
         async function moveSymbol(id, symbol, el) {
@@ -328,7 +312,7 @@
                 // the row belongs under a different group heading now
                 location.reload();
             } catch (e) {
-                setSymbolStatus('오류: ' + e.message, 'error');
+                setSymbolStatus('Error: ' + e.message, 'error');
                 el.disabled = false;
             }
         }
@@ -343,7 +327,7 @@
                 } else {
                     setSymbolStatus(`Failed to delete ${symbol}.`, 'error');
                 }
-            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
+            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
         }
 
         document.getElementById('symbol-input').addEventListener('keypress', e => {

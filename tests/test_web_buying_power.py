@@ -31,7 +31,7 @@ def test_main_screen_shows_buying_power():
 
     assert 'id="cash-usd">$1,961.02<' in html
     assert 'id="hero-cash">$1,961.02<' in html
-    assert ">주문가능금액<" in html
+    assert ">Buying Power<" in html
     assert snapshot["buying_power_usd"] == 1961.02
 
 

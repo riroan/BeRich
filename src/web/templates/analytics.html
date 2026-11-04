@@ -26,28 +26,28 @@
 {% block content %}
 <div class="analytics-page">
     <header class="analytics-mobile-title">
-        <h1>분석</h1>
+        <h1>Analytics</h1>
     </header>
 
     <section class="analytics-kpi-grid" aria-label="Analytics summary">
         <div class="analytics-kpi-card">
-            <div class="analytics-label">승률</div>
+            <div class="analytics-label">Win Rate</div>
             <div class="analytics-kpi-value {{ 'positive' if statistics.win_rate >= 50 else 'negative' }}">
                 {{ "{:.1f}%".format(statistics.win_rate) }}
             </div>
         </div>
         <div class="analytics-kpi-card">
-            <div class="analytics-label">총 손익</div>
+            <div class="analytics-label">Total P&amp;L</div>
             <div class="analytics-kpi-value {{ 'positive' if statistics.total_pnl >= 0 else 'negative' }}">
                 {{ money0(statistics.total_pnl) }}
             </div>
         </div>
         <div class="analytics-kpi-card">
-            <div class="analytics-label">거래</div>
+            <div class="analytics-label">Trades</div>
             <div class="analytics-kpi-value neutral">{{ statistics.total_trades }}</div>
         </div>
         <div class="analytics-kpi-card">
-            <div class="analytics-label">손익비</div>
+            <div class="analytics-label">Profit Factor</div>
             <div class="analytics-kpi-value neutral">
                 {{ profit_factor(statistics.profit_factor, statistics.total_pnl, statistics.losing_trades) }}
             </div>
@@ -60,7 +60,7 @@
     {% set worst_trade_abs = (statistics.worst_trade|float)|abs %}
     <!-- Win/Loss (moved from Performance) -->
     <section class="analytics-card perf-win-card">
-        <div class="section-title">승 / 패</div>
+        <div class="section-title">Win / Loss</div>
         <div class="wl-bar-wrap">
             <div class="wl-bar{{ ' wl-bar-none' if statistics.total_trades == 0 }}" aria-hidden="true">
                 <div class="wl-fill win" style="width:{{ win_pct }}%"></div>
@@ -74,29 +74,29 @@
         <div class="wl-details">
             <div class="wl-col">
                 <div class="wl-stat">
-                    <span class="dim">평균 이익</span>
+                    <span class="dim">Avg Win</span>
                     <span class="positive">${{ "{:,.2f}".format(statistics.avg_win|float) }}</span>
                 </div>
                 <div class="wl-stat">
-                    <span class="dim">최대 이익</span>
+                    <span class="dim">Best</span>
                     <span class="positive">${{ "{:,.2f}".format(statistics.best_trade|float) }}</span>
                 </div>
                 <div class="wl-stat wl-count-stat">
-                    <span class="dim">이익 거래</span>
+                    <span class="dim">Wins</span>
                     <span class="positive">{{ statistics.winning_trades }}</span>
                 </div>
             </div>
             <div class="wl-col">
                 <div class="wl-stat">
-                    <span class="dim">평균 손실</span>
+                    <span class="dim">Avg Loss</span>
                     <span class="negative">{{ '-' if avg_loss_abs > 0 else '' }}${{ "{:,.2f}".format(avg_loss_abs) }}</span>
                 </div>
                 <div class="wl-stat">
-                    <span class="dim">최대 손실</span>
+                    <span class="dim">Worst</span>
                     <span class="negative">{{ '-' if worst_trade_abs > 0 else '' }}${{ "{:,.2f}".format(worst_trade_abs) }}</span>
                 </div>
                 <div class="wl-stat wl-count-stat">
-                    <span class="dim">손실 거래</span>
+                    <span class="dim">Losses</span>
                     <span class="negative">{{ statistics.losing_trades }}</span>
                 </div>
             </div>
@@ -104,57 +104,57 @@
     </section>
 
     <section class="analytics-card analytics-report-card" aria-labelledby="trade-reports-title">
-        <h2 id="trade-reports-title">기간별 리포트</h2>
+        <h2 id="trade-reports-title">Trade Reports</h2>
         <div class="analytics-report-tabs" role="group" aria-label="Report period">
-            <button type="button" class="report-tab active" data-period="daily" aria-pressed="true">일간</button>
-            <button type="button" class="report-tab" data-period="weekly" aria-pressed="false">주간</button>
-            <button type="button" class="report-tab" data-period="monthly" aria-pressed="false">월간</button>
+            <button type="button" class="report-tab active" data-period="daily" aria-pressed="true">Daily</button>
+            <button type="button" class="report-tab" data-period="weekly" aria-pressed="false">Weekly</button>
+            <button type="button" class="report-tab" data-period="monthly" aria-pressed="false">Monthly</button>
         </div>
 
         <div class="analytics-report-grid" id="report-content">
             <div class="analytics-stat-line analytics-report-extra analytics-report-period">
-                <span class="analytics-stat-label">기간</span>
+                <span class="analytics-stat-label">Period</span>
                 <span class="analytics-stat-value" id="report-period">
                     {% set display_end = daily_report.end_date - timedelta(days=1) %}
                     {{ daily_report.start_date.strftime('%Y-%m-%d') }}{% if daily_report.start_date != display_end %} ~ {{ display_end.strftime('%Y-%m-%d') }}{% endif %}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">거래</span>
+                <span class="analytics-stat-label">Trades</span>
                 <span class="analytics-stat-value" id="report-trades">{{ daily_report.total_trades }}</span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">승률</span>
+                <span class="analytics-stat-label">Win Rate</span>
                 <span class="analytics-stat-value {{ 'positive' if daily_report.win_rate >= 50 else 'negative' }}" id="report-winrate">
                     {{ "{:.1f}%".format(daily_report.win_rate) }}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">승 / 패</span>
+                <span class="analytics-stat-label">W / L</span>
                 <span class="analytics-stat-value" id="report-wl">
                     {{ daily_report.winning_trades }} / {{ daily_report.losing_trades }}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">총 손익</span>
+                <span class="analytics-stat-label">Total P&amp;L</span>
                 <span class="analytics-stat-value {{ 'positive' if daily_report.total_pnl >= 0 else 'negative' }}" id="report-pnl">
                     {{ money0(daily_report.total_pnl, true) }}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">평균 이익</span>
+                <span class="analytics-stat-label">Avg Win</span>
                 <span class="analytics-stat-value positive" id="report-avgwin">
                     {{ money0(daily_report.avg_win, true) }}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">평균 손실</span>
+                <span class="analytics-stat-label">Avg Loss</span>
                 <span class="analytics-stat-value negative" id="report-avgloss">
                     {{ money0(daily_report.avg_loss) }}
                 </span>
             </div>
             <div class="analytics-stat-line analytics-report-extra">
-                <span class="analytics-stat-label">손익비</span>
+                <span class="analytics-stat-label">Profit Factor</span>
                 <span class="analytics-stat-value" id="report-pf">
                     {{ profit_factor(daily_report.profit_factor, daily_report.total_pnl, daily_report.losing_trades) }}
                 </span>
@@ -178,9 +178,9 @@
 
     <section class="analytics-compact-grid" aria-label="Drawdown and streaks">
         <div class="analytics-card analytics-compact-card">
-            <h2>낙폭</h2>
+            <h2>Drawdown</h2>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">현재</span>
+                <span class="analytics-stat-label">Current</span>
                 <span class="analytics-stat-value {{ 'danger' if drawdown.current_drawdown_pct >= 10 else ('warning' if drawdown.current_drawdown_pct >= 5 else '') }}">
                     {{ "{:.1f}%".format(drawdown.current_drawdown_pct) }}
                 </span>
@@ -190,29 +190,29 @@
                 <span class="analytics-stat-value negative">{{ "{:.2f}%".format(drawdown.mdd_pct) }}</span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">최장 기간</span>
+                <span class="analytics-stat-label">Max Dur</span>
                 <span class="analytics-stat-value">{{ drawdown.max_drawdown_duration_days }}d</span>
             </div>
             <div class="analytics-stat-line analytics-extra-row">
-                <span class="analytics-stat-label">현재 기간</span>
+                <span class="analytics-stat-label">Current Dur</span>
                 <span class="analytics-stat-value">{{ drawdown.current_drawdown_duration_days }}d</span>
             </div>
         </div>
 
         <div class="analytics-card analytics-compact-card">
-            <h2>연속 기록</h2>
+            <h2>Streaks</h2>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">현재</span>
+                <span class="analytics-stat-label">Current</span>
                 <span class="analytics-stat-value {{ 'positive' if statistics.current_streak > 0 else ('negative' if statistics.current_streak < 0 else '') }}">
                     {% if statistics.current_streak > 0 %}+{{ statistics.current_streak }}W{% elif statistics.current_streak < 0 %}{{ statistics.current_streak }}L{% else %}-{% endif %}
                 </span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">최대 연승</span>
+                <span class="analytics-stat-label">Max Win</span>
                 <span class="analytics-stat-value positive">{{ statistics.max_win_streak }}</span>
             </div>
             <div class="analytics-stat-line">
-                <span class="analytics-stat-label">최대 연패</span>
+                <span class="analytics-stat-label">Max Loss</span>
                 <span class="analytics-stat-value negative">{{ statistics.max_loss_streak }}</span>
             </div>
             <div class="analytics-stat-line analytics-extra-row">
@@ -225,7 +225,7 @@
     </section>
 
     <section class="analytics-symbols-section" aria-labelledby="analytics-symbols-title">
-        <h2 class="analytics-symbols-title" id="analytics-symbols-title">종목별</h2>
+        <h2 class="analytics-symbols-title" id="analytics-symbols-title">By Symbol</h2>
         {% if statistics.by_symbol %}
         <div class="analytics-symbol-cards">
             {% for s in statistics.by_symbol %}
@@ -236,11 +236,11 @@
                 </div>
                 <div class="analytics-symbol-metrics">
                     <div>
-                        <span>승</span>
+                        <span>Win</span>
                         <strong class="{{ 'positive' if s.win_rate >= 50 else 'negative' }}">{{ "{:.0f}%".format(s.win_rate) }}</strong>
                     </div>
                     <div>
-                        <span>손익</span>
+                        <span>P&amp;L</span>
                         <strong class="{{ 'positive' if s.total_pnl >= 0 else 'negative' }}">{{ money0(s.total_pnl, true) }}</strong>
                     </div>
                 </div>
@@ -252,10 +252,10 @@
             <table class="symbol-stats-table center-table">
                 <thead>
                     <tr>
-                        <th>종목</th>
-                        <th>거래</th>
-                        <th>승률</th>
-                        <th>손익</th>
+                        <th>Symbol</th>
+                        <th>Trades</th>
+                        <th>Win Rate</th>
+                        <th>P&amp;L</th>
                         <th>PF</th>
                     </tr>
                 </thead>
@@ -277,7 +277,7 @@
             </table>
         </div>
         {% else %}
-        <p class="empty">거래 데이터 없음</p>
+        <p class="empty">No trade data available</p>
         {% endif %}
         <div class="pagination" id="symbol-pagination"></div>
     </section>

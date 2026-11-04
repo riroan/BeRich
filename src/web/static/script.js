@@ -180,7 +180,7 @@ class DashboardWebSocket {
         if (!tbody) return;
 
         if (positions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty">보유 종목 없음</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">No positions</td></tr>';
             return;
         }
 
@@ -233,7 +233,6 @@ class DashboardWebSocket {
                     <div class="stage-bar">${dots(sellStage, maxSell)}</div>
                     <span class="stage-reset">${sellReset}</span>
                 </div>
-                ${this.renderNextTriggers(pos)}
             </div>
         `;
     }
@@ -247,9 +246,9 @@ class DashboardWebSocket {
     updateActivity(items) {
         const list = document.getElementById('activity-list');
         if (!list) return;
-        const tags = {order: '주문', blocked: '보류', rejected: '거부'};
+        const tags = {order: 'ORDER', blocked: 'HOLD', rejected: 'REJECTED'};
         if (!items.length) {
-            list.innerHTML = '<li class="empty-state">아직 기록된 활동이 없습니다</li>';
+            list.innerHTML = '<li class="empty-state">No activity yet</li>';
             return;
         }
         list.innerHTML = items.map(d => `
@@ -259,20 +258,6 @@ class DashboardWebSocket {
                 <span class="activity-tag ${this.escapeHTML(d.outcome)} ${this.escapeHTML(d.action)}">${tags[d.outcome] || ''}</span>
                 <span class="activity-detail">${this.escapeHTML(d.detail)}</span>
             </li>`).join('');
-    }
-
-    // Next rung of each ladder: what makes this position trade next
-    renderNextTriggers(pos) {
-        const parts = [];
-        if (pos.next_buy_rsi != null) parts.push(`<span class="next-buy">매수 RSI≤${Math.round(pos.next_buy_rsi)}</span>`);
-        if (pos.next_sell_rsi != null) parts.push(`<span class="next-sell">매도 RSI≥${Math.round(pos.next_sell_rsi)}</span>`);
-        if (pos.stop_price != null) {
-            const price = pos.market === 'KRX'
-                ? Math.round(pos.stop_price).toLocaleString('ko-KR')
-                : '$' + pos.stop_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            parts.push(`<span class="next-stop">손절 ${price}</span>`);
-        }
-        return parts.length ? `<div class="stage-next" aria-label="Next triggers">${parts.join('')}</div>` : '';
     }
 
     sortPositions() {
@@ -319,7 +304,7 @@ class DashboardWebSocket {
 
         const symbols = Object.keys(rsiValues);
         if (symbols.length === 0) {
-            grid.innerHTML = '<p class="empty">RSI 데이터 없음</p>';
+            grid.innerHTML = '<p class="empty">No RSI data</p>';
             return;
         }
 

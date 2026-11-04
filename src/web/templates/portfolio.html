@@ -3,24 +3,24 @@
 {% block title %}Portfolio - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <header class="page-mobile-title"><h1>포트폴리오</h1></header>
+        <header class="page-mobile-title"><h1>Portfolio</h1></header>
         <!-- Portfolio Summary — mobile hero (≤768px) -->
         <div class="mobile-hero">
-            <div class="hero-label">총 평가액</div>
+            <div class="hero-label">Total Value</div>
             <div class="hero-balance">${{ "{:,.2f}".format(total_value) }}</div>
             <div class="hero-stats">
                 <div class="hero-stat">
-                    <div class="hero-stat-label">투자 중</div>
+                    <div class="hero-stat-label">Invested</div>
                     <div class="hero-stat-value">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
                     <div class="hero-stat-sub">{{ "{:.1f}".format(100 - cash_weight) }}%</div>
                 </div>
                 <div class="hero-stat">
-                    <div class="hero-stat-label">현금</div>
+                    <div class="hero-stat-label">Cash</div>
                     <div class="hero-stat-value">${{ "{:,.2f}".format(cash_total) }}</div>
                     <div class="hero-stat-sub">{{ "{:.1f}".format(cash_weight) }}%</div>
                 </div>
                 <div class="hero-stat">
-                    <div class="hero-stat-label">보유 종목</div>
+                    <div class="hero-stat-label">Positions</div>
                     <div class="hero-stat-value">{{ portfolio|length }}</div>
                     <div class="hero-stat-sub">holdings</div>
                 </div>
@@ -30,33 +30,33 @@
         <!-- Portfolio Summary — desktop cards (>768px) -->
         <div class="cards-row summary-desktop">
             <div class="card">
-                <div class="label">총 평가액</div>
+                <div class="label">Total Value</div>
                 <div class="value small">${{ "{:,.2f}".format(total_value) }}</div>
             </div>
             <div class="card">
-                <div class="label">현금</div>
+                <div class="label">Cash</div>
                 <div class="value small">${{ "{:,.2f}".format(cash_total) }}</div>
                 <div class="delta dim">{{ "{:.1f}".format(cash_weight) }}% of portfolio</div>
             </div>
             <div class="card">
-                <div class="label">투자 중</div>
+                <div class="label">Invested</div>
                 <div class="value small">${{ "{:,.2f}".format(total_value - cash_total) }}</div>
             </div>
             <div class="card">
-                <div class="label">보유 종목</div>
+                <div class="label">Positions</div>
                 <div class="value small">{{ portfolio|length }}</div>
             </div>
         </div>
 
         <!-- Chart Section -->
         <div class="card portfolio-allocation-card">
-            <div class="section-title">자산 배분
+            <div class="section-title">Allocation
                 <span class="alloc-head-right">
                     <span class="alloc-toggle" role="group" aria-label="Allocation grouping">
-                        <button type="button" class="alloc-mode active" data-mode="symbol" aria-pressed="true">종목</button>
-                        <button type="button" class="alloc-mode" data-mode="sector" aria-pressed="false">섹터</button>
+                        <button type="button" class="alloc-mode active" data-mode="symbol" aria-pressed="true">Symbol</button>
+                        <button type="button" class="alloc-mode" data-mode="sector" aria-pressed="false">Sector</button>
                     </span>
-                    <a href="/portfolio/correlation" class="alloc-head-link">상관관계 &rarr;</a>
+                    <a href="/portfolio/correlation" class="alloc-head-link">Correlation &rarr;</a>
                 </span>
             </div>
             {% if unassigned %}
@@ -72,20 +72,20 @@
         <!-- Holdings Table -->
         <section class="symbols-section portfolio-holdings">
             <div class="panel">
-                <h2>보유 종목</h2>
+                <h2>Holdings</h2>
                 <div class="table-wrap">
                 <table class="positions-table mobile-cards">
                     <thead>
                         <tr>
-                            <th>종목</th>
-                            <th>시장</th>
-                            <th>수량</th>
-                            <th>평단가</th>
-                            <th>현재</th>
-                            <th>평가액</th>
-                            <th>비중</th>
-                            <th>한도</th>
-                            <th>손익률</th>
+                            <th>Symbol</th>
+                            <th>Market</th>
+                            <th>Qty</th>
+                            <th>Avg Price</th>
+                            <th>Current</th>
+                            <th>Value</th>
+                            <th>Weight</th>
+                            <th>Limit</th>
+                            <th>P&L %</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -107,7 +107,7 @@
                         </tr>
                         {% endfor %}
                         <tr class="cash-row">
-                            <td data-label="Symbol" class="full-width symbol">현금</td>
+                            <td data-label="Symbol" class="full-width symbol">Cash</td>
                             <td data-label="Market">-</td>
                             <td data-label="Qty">-</td>
                             <td data-label="Avg Price">-</td>
@@ -127,13 +127,13 @@
         {% set palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#ec4899','#14b8a6','#a855f7','#0ea5e9','#84cc16','#e11d48','#6366f1','#d946ef','#22d3ee','#facc15','#fb923c','#34d399','#c084fc'] %}
         <section class="portfolio-holdings-mobile">
             <div class="section-title">
-                <span>보유 종목 <span class="count">{{ portfolio|length }}</span></span>
+                <span>Holdings <span class="count">{{ portfolio|length }}</span></span>
                 <span class="sort-controls">
                     <select id="holdings-sort" class="sort-select" aria-label="Sort holdings by">
-                        <option value="value">평가액</option>
-                        <option value="weight">비중</option>
-                        <option value="pnl">손익</option>
-                        <option value="symbol">종목</option>
+                        <option value="value">Value</option>
+                        <option value="weight">Weight</option>
+                        <option value="pnl">P&amp;L</option>
+                        <option value="symbol">Symbol</option>
                     </select>
                     <button type="button" id="holdings-sort-dir" class="sort-dir" data-dir="desc" aria-label="Toggle sort direction">↓</button>
                 </span>
@@ -157,7 +157,7 @@
                     <div class="holding-pnl {{ 'positive' if pos.pnl_pct >= 0 else 'negative' }}">{{ "{:+.1f}%".format(pos.pnl_pct) }}</div>
                 </a>
                 {% else %}
-                <div class="empty-state">보유 종목 없음</div>
+                <div class="empty-state">No holdings</div>
                 {% endfor %}
             </div>
         </section>
