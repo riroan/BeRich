@@ -11,6 +11,9 @@ class DashboardWebSocket {
     }
 
     connect() {
+        // A pending reconnect timer and the resume handler can both land
+        // here; never open a second socket alongside a live one
+        if (this.ws && this.ws.readyState <= WebSocket.OPEN) return;
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${protocol}//${window.location.host}/ws`;
 
@@ -532,6 +535,38 @@ class DashboardWebSocket {
 
 // Initialize WebSocket connection
 let dashboardWS = null;
+
+// iOS suspends a page in the background and drops its WebSocket; the
+// reconnect attempts then burn out while timers are frozen, and the page
+// came back showing stale numbers with nothing to refresh it — a Home
+// Screen app has no reload button. On return, reconnect, and reload the
+// read-only pages if they sat long enough to have gone stale. Pages with
+// forms (settings, backtest, symbols) are left alone so nothing typed is
+// lost.
+const RESUME_RELOAD_AFTER_MS = 5 * 60 * 1000;
+const RESUME_RELOAD_PAGES = ['dashboard', 'portfolio', 'trades', 'performance', 'analytics'];
+let hiddenSince = null;
+
+function onResume() {
+    const hiddenFor = hiddenSince === null ? 0 : Date.now() - hiddenSince;
+    hiddenSince = null;
+    const page = document.body.className.replace(/^.*\bpage-(\w+).*$/, '$1');
+    if (hiddenFor >= RESUME_RELOAD_AFTER_MS && RESUME_RELOAD_PAGES.includes(page)) {
+        window.location.reload();
+        return;
+    }
+    if (dashboardWS && (!dashboardWS.ws || dashboardWS.ws.readyState > WebSocket.OPEN)) {
+        dashboardWS.reconnectAttempts = 0;
+        dashboardWS.connect();
+    }
+}
+
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') hiddenSince = Date.now();
+    else onResume();
+});
+// Restored from the back/forward cache: no visibilitychange is fired
+window.addEventListener('pageshow', (e) => { if (e.persisted) onResume(); });
 
 document.addEventListener('DOMContentLoaded', () => {
     dashboardWS = new DashboardWebSocket();
