@@ -18,6 +18,13 @@
             margin: -8px -10px -8px auto;
         }
         .principal-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .principal-onboarding {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            margin: 6px 0 4px; padding: 12px 14px; border-radius: 10px;
+            background: var(--bg); border: 1px dashed var(--border);
+        }
+        .principal-onboarding p { margin: 0; font-size: 13px; color: var(--text); word-break: keep-all; }
+        .principal-start-btn { flex-shrink: 0; padding: 8px 14px; font-size: 13px; }
         .principal-form input { flex: 1 1 120px; min-width: 0; }
         .principal-form[hidden] { display: none; }
         .principal-error { color: var(--red); font-size: 12px; margin-top: 6px; }
@@ -43,12 +50,20 @@
             <!-- Performance Metrics -->
             <section class="perf-hero-card" aria-label="Performance summary">
                 <div class="perf-label">Total Return</div>
+                {% if principal_usd > 0 %}
                 <div class="perf-hero-row">
                     <div class="perf-hero-value {{ return_class }}">{{ "{:+.2f}%".format(performance.total_return_pct) }}</div>
                     <div class="perf-hero-delta {{ return_class }}">
                         {{ performance.total_return_usd|usd_signed }}
                     </div>
                 </div>
+                {% else %}
+                {# Without a principal the return is a meaningless +0.00% #}
+                <div class="principal-onboarding">
+                    <p>원금을 입력하면 총수익률을 계산합니다.</p>
+                    <button type="button" class="btn principal-start-btn" onclick="document.getElementById('principal-edit-btn').click()">원금 입력</button>
+                </div>
+                {% endif %}
                 <div class="perf-hero-stats">
                     <div class="perf-hero-stat">
                         <span class="perf-label">Balance</span>
