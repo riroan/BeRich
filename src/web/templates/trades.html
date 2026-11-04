@@ -41,6 +41,13 @@
             <div class="section-title">All Trades <span class="count" id="visible-trade-count">{{ trade_logs|length }}</span></div>
 
             <div class="trade-filters">
+                <select id="period-filter" class="sort-select" aria-label="Filter by period">
+                    <option value="">전체 기간</option>
+                    <option value="0">오늘</option>
+                    <option value="7">최근 7일</option>
+                    <option value="30">최근 30일</option>
+                    <option value="90">최근 90일</option>
+                </select>
                 <select id="action-filter" class="sort-select" aria-label="Filter by action">
                     <option value="all">All actions</option>
                     <option value="buy">Buy</option>
@@ -74,7 +81,7 @@
                 </thead>
                 <tbody id="trades-body">
                     {% for log in trade_logs %}
-                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}" data-symbol="{{ log.symbol }}" data-idx="{{ loop.index0 }}">
+                    <tr class="trade-row {{ log.action }}" data-action="{{ log.action }}" data-symbol="{{ log.symbol }}" data-date="{{ log.timestamp[:10] }}" data-idx="{{ loop.index0 }}">
                         <td data-label="Time" class="full-width">{{ log.timestamp }}</td>
                         <td data-label="Symbol"><a href="/symbol/{{ log.symbol }}" class="sym-badge">{{ log.symbol }}</a></td>
                         <td data-label="Market"><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
@@ -112,7 +119,7 @@
                 {% set tagcls = 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') %}
                 {% set trade_raw = log.timestamp|replace('T', ' ') %}
                 {% set trade_time_mobile = trade_raw[0:16] if trade_raw|length >= 16 and trade_raw[4:5] == '-' else trade_raw %}
-                <a class="trade-card-m" href="/symbol/{{ log.symbol }}" data-action="{{ log.action }}" data-idx="{{ loop.index0 }}" aria-label="{{ log.symbol }} trade">
+                <a class="trade-card-m" href="/symbol/{{ log.symbol }}" data-action="{{ log.action }}" data-date="{{ log.timestamp[:10] }}" data-idx="{{ loop.index0 }}" aria-label="{{ log.symbol }} trade">
                     <div class="tcm-head">
                         <span class="sym-badge">{{ log.symbol }}</span>
                         <div class="tcm-meta">
@@ -160,6 +167,15 @@
         let currentPage = 1;
         const actionFilter = document.getElementById('action-filter');
         const symbolFilter = document.getElementById('symbol-filter');
+        const periodFilter = document.getElementById('period-filter');
+        // Oldest date (YYYY-MM-DD, local) a row may have, or '' for all time
+        let periodStart = '';
+        function startOfPeriod(days) {
+            if (days === '') return '';
+            const d = new Date();
+            d.setDate(d.getDate() - Number(days));
+            return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        }
         let currentFilter = actionFilter.value;
         let currentSymbol = symbolFilter.value;
         const rows = Array.from(document.querySelectorAll('.trade-row'));
@@ -179,7 +195,8 @@
 
         function getVisibleRows() {
             return rows.filter(row => rowMatchesFilter(row, currentFilter)
-                && (!currentSymbol || row.dataset.symbol === currentSymbol));
+                && (!currentSymbol || row.dataset.symbol === currentSymbol)
+                && (!periodStart || row.dataset.date >= periodStart));
         }
 
         function showPage(page) {
@@ -198,6 +215,7 @@
             });
             if (emptyFilterRow) emptyFilterRow.hidden = visibleRows.length > 0 || rows.length === 0;
             if (emptyMobile) emptyMobile.hidden = visibleRows.length > 0;
+            groupCardsByDay();
             if (visibleCount) visibleCount.textContent = visibleRows.length;
 
             renderPagination(visibleRows.length);
@@ -221,7 +239,28 @@
             container.innerHTML = html;
         }
 
+        // Mobile cards: a date header above each day's first visible card
+        function groupCardsByDay() {
+            document.querySelectorAll('.trade-day-m').forEach(h => h.remove());
+            let lastDay = null;
+            document.querySelectorAll('.trade-card-m').forEach(card => {
+                if (card.hidden) return;
+                const day = card.dataset.date;
+                if (day && day !== lastDay) {
+                    const header = document.createElement('div');
+                    header.className = 'trade-day-m';
+                    header.textContent = day;
+                    card.before(header);
+                    lastDay = day;
+                }
+            });
+        }
+
         // Filter functionality
+        periodFilter.addEventListener('change', () => {
+            periodStart = startOfPeriod(periodFilter.value);
+            showPage(1);
+        });
         actionFilter.addEventListener('change', () => {
             currentFilter = actionFilter.value;
             showPage(1);

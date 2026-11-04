@@ -3730,3 +3730,10 @@ select option { background: var(--surface); color: var(--text); }
     .sym-row .sym-name { max-width: 80px; }
     .sym-row.editing .sym-controls .sym-name-input { width: 100%; }
 }
+
+/* Trades: day headers between mobile trade cards */
+.trade-day-m {
+    font-size: 12px; font-weight: 700; color: var(--text-muted);
+    padding: 10px 4px 2px; font-variant-numeric: tabular-nums;
+}
+.trade-filters { flex-wrap: wrap; }
