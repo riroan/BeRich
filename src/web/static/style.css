@@ -1960,11 +1960,14 @@ select option { background: var(--surface); color: var(--text); }
         grid-column: 1 / -1;
     }
     table.mobile-cards { min-width: unset; }
+    #positions-table { --pos-cols: minmax(0, 1fr) 64px 44px 34px; }
 
     /* Positions: 3b compact single row — Symbol+price | P&L | RSI | Stage dots.
        Rows sit in one container (thin borders, not separate cards). */
+    /* Fixed columns, shared with the header: every row's P&L, RSI and
+       stage dots line up whatever the content width. */
     #positions-table tbody tr {
-        grid-template-columns: minmax(62px, .9fr) minmax(48px, .7fr) minmax(40px, .55fr) auto;
+        grid-template-columns: var(--pos-cols);
         align-items: center;
         column-gap: 14px;
         row-gap: 2px;
@@ -2054,7 +2057,7 @@ select option { background: var(--surface); color: var(--text); }
     #positions-table thead { display: block; }
     #positions-table thead tr {
         display: grid;
-        grid-template-columns: minmax(62px, .9fr) minmax(48px, .7fr) minmax(40px, .55fr) auto;
+        grid-template-columns: var(--pos-cols);
         gap: 14px;
         padding: 0 6px 6px;
         border-bottom: 1px solid var(--border);
@@ -3782,3 +3785,39 @@ select option { background: var(--surface); color: var(--text); }
 /* An empty activity feed is one quiet line, not a tall card */
 .activity-list .empty-state { padding: 4px 0; margin: 0; text-align: left; font-size: 13px; color: var(--text-muted); border: none; }
 .activity-card .section-title { margin-bottom: 10px; }
+
+/* Page titles above detail pages: the active tab already says where you
+   are. Kept for screen readers only. */
+.page-mobile-title,
+.performance-mobile-header,
+.settings-mobile-header,
+.analytics-mobile-title {
+    position: absolute !important;
+    width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
+/* Bottom nav: icons only, a little taller target without captions */
+.bottom-nav-item { gap: 0; min-height: 48px; }
+.bottom-nav-item svg { width: 24px; height: 24px; }
+
+/* Symbols (mobile): one fixed-height line per card whatever the sector
+   name's length — a long name wrapped the edit button onto a second line.
+   The sector shrinks and ellipsizes; everything else keeps its size. */
+@media (max-width: 768px) {
+    .strategy-group .sym-row { flex-wrap: nowrap; min-height: 58px; }
+    .strategy-group .sym-row > :not(.sym-summary):not(.sym-fields) { flex-shrink: 0; }
+    .sym-summary { flex: 1 1 auto; justify-content: flex-end; overflow: hidden; }
+    .sym-sum-sector { flex: 0 1 auto; min-width: 0; max-width: none; }
+    .sym-sum-weight { flex-shrink: 0; }
+}
+
+/* Trades filters: one row on phones, selects share the width */
+@media (max-width: 768px) {
+    .trade-filters { flex-wrap: nowrap; justify-content: stretch; gap: 6px; }
+    .trade-filters .sort-select {
+        flex: 1 1 0; min-width: 0; width: auto;
+        padding-left: 8px; padding-right: 22px; background-position: right 6px center;
+        text-overflow: ellipsis;
+    }
+}
