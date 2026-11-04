@@ -65,24 +65,31 @@
                 <a href="/symbol/{{ s.symbol }}" class="sym-badge">{{ s.symbol }}</a>
                 <span class="market-badge market-{{ s.market|lower }}">{{ s.market | upper }}</span>
                 <span class="sym-off-badge">OFF</span>
+                {# Mobile only: the controls live in the edit sheet, so the card shows what they are set to #}
+                <span class="sym-summary"><span class="sym-sum-sector{{ ' is-unset' if not s.sector else '' }}">{{ s.sector or '섹터 미지정' }}</span><span class="sym-sum-weight">{{ s.max_weight }}%</span></span>
                 <button type="button" class="sym-edit-btn" onclick="toggleEdit(this)" aria-pressed="false" aria-label="Edit {{ s.symbol }}">&#9998; 편집</button>
                 <fieldset class="sym-fields" disabled>
+                <div class="sym-sheet-head"><span class="sym-sheet-title">{{ s.symbol }}</span><button type="button" class="sheet-close" onclick="closeSymEdit()" aria-label="닫기">&#x2715;</button></div>
+                <span class="sym-sheet-label sym-sheet-label-toggle">매매 활성화</span>
                 <label class="toggle sym-toggle">
                     <input type="checkbox" {{ 'checked' if s.enabled else '' }} aria-label="Enable {{ s.symbol }}" onchange="toggleSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                     <span class="slider"></span>
                 </label>
                 <div class="sym-controls">
+                    <span class="sym-sheet-label">섹터</span>
                     <select class="sym-sector{{ ' is-unset' if not s.sector else '' }}" aria-label="{{ s.symbol }} sector" onchange="updateSector({{ s.id }}, '{{ s.symbol }}', this.value)">
                         <option value="" {{ 'selected' if not s.sector else '' }}>— 미지정 —</option>
                         {% for sec in sector_choices %}
                         <option value="{{ sec }}" {{ 'selected' if sec == s.sector else '' }}>{{ sec }}</option>
                         {% endfor %}
                     </select>
+                    <span class="sym-sheet-label">전략</span>
                     <select class="sym-strategy" aria-label="{{ s.symbol }} strategy" onchange="moveSymbol({{ s.id }}, '{{ s.symbol }}', this)">
                         {% for opt in strategies %}
                         <option value="{{ opt.name }}" {{ 'selected' if opt.name == s.strategy_name else '' }}>{{ opt.name }}</option>
                         {% endfor %}
                     </select>
+                    <span class="sym-sheet-label">최대 비중</span>
                     <button type="button" class="step-btn" tabindex="-1" onclick="stepWeight({{ s.id }}, '{{ s.symbol }}', -1)" aria-label="Decrease {{ s.symbol }} weight">&minus;</button>
                     <input type="number" value="{{ s.max_weight }}" min="0" max="100" step="0.1" inputmode="decimal" aria-label="{{ s.symbol }} max weight" oninput="refreshShares(this)" onchange="updateWeight({{ s.id }}, '{{ s.symbol }}', this.value)">
                     <span class="pct">%</span>
@@ -98,6 +105,7 @@
 
         <!-- Mobile FAB + backdrop for the add-symbol bottom sheet -->
         <div class="sheet-backdrop" id="add-backdrop" onclick="closeAddSheet()"></div>
+        <div class="sheet-backdrop" id="edit-backdrop" onclick="closeSymEdit()"></div>
         <button type="button" class="sym-fab" onclick="openAddSheet()" aria-label="Add symbol">+</button>
 
         {% if not symbols %}
@@ -217,11 +225,35 @@
         // Each row is locked behind its own fieldset so a stray tap can't move a
         // symbol or nudge a weight; that row's own button is the only way in.
         function toggleEdit(btn) {
-            const list = btn.closest('.sym-row').querySelector('.sym-fields');
+            const row = btn.closest('.sym-row');
+            const list = row.querySelector('.sym-fields');
             list.disabled = !list.disabled;
-            btn.textContent = list.disabled ? '\u270E 편집' : '\u2713 완료';
-            btn.classList.toggle('editing', !list.disabled);
-            btn.setAttribute('aria-pressed', String(!list.disabled));
+            const editing = !list.disabled;
+            btn.textContent = editing ? '\u2713 완료' : '\u270E 편집';
+            btn.classList.toggle('editing', editing);
+            btn.setAttribute('aria-pressed', String(editing));
+            // Mobile shows the fields as a bottom sheet over the list
+            row.classList.toggle('editing', editing);
+            document.getElementById('edit-backdrop').classList.toggle('show', editing);
+            if (!editing) refreshSummary(row);
+        }
+
+        function closeSymEdit() {
+            const row = document.querySelector('.sym-row.editing');
+            if (row) toggleEdit(row.querySelector('.sym-edit-btn'));
+        }
+
+        // The compact mobile card mirrors what the sheet was set to
+        function refreshSummary(row) {
+            const sector = row.querySelector('.sym-sector');
+            const sumSector = row.querySelector('.sym-sum-sector');
+            if (sector && sumSector) {
+                sumSector.textContent = sector.value || '섹터 미지정';
+                sumSector.classList.toggle('is-unset', !sector.value);
+            }
+            const weight = row.querySelector('.sym-controls input[type="number"]');
+            const sumWeight = row.querySelector('.sym-sum-weight');
+            if (weight && sumWeight) sumWeight.textContent = weight.value + '%';
         }
 
         function openAddSheet() {
