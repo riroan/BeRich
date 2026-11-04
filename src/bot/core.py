@@ -27,13 +27,16 @@ from src.bot._utils import (
 )
 from src.bot.warmup import WarmupManager
 from src.bot.tick_handler import TickHandlerMixin
+from src.bot.runtime_state import RuntimeStateMixin
 from src.bot.dashboard_sync import DashboardSyncMixin
 from src.bot.data_loader import DataLoaderMixin
 
 logger = logging.getLogger(__name__)
 
 
-class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
+class TradingBot(
+    TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin, RuntimeStateMixin,
+):
     """Main trading bot application"""
 
     def __init__(self, config_dir: str = "config", warmup_hours: int = 0):
@@ -358,6 +361,9 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                     f"Failed to reload strategy {name}: {e}"
                 )
 
+        # Fresh instances start with empty timers (re-entry / stop re-arm)
+        self.carry_strategy_timers(self.strategy_engine.get_strategies(), new_list)
+
         # Atomic swap
         self.strategy_engine._strategies = new_list
 
@@ -543,6 +549,8 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Load historical data
         await self.load_current_positions()
         self.restore_strategy_state_from_positions()
+        # Timers, alert suppression, buy backoff and the activity feed
+        await self.load_runtime_state()
         await self.load_chart_history()
         await self.load_equity_history()
         await self.load_fills()
@@ -563,6 +571,7 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
         # Symbol reconciliation runs regardless of market hours so web-UI
         # symbol edits apply without a restart.
         self._config_sync_task = asyncio.create_task(self._config_sync_loop())
+        self._runtime_state_task = asyncio.create_task(self._runtime_state_loop())
 
         logger.info("Trading Bot started")
         logger.info(f"Paper trading: {self.broker.paper_trading}")
@@ -615,6 +624,14 @@ class TradingBot(TickHandlerMixin, DashboardSyncMixin, DataLoaderMixin):
                 await self._config_sync_task
             except asyncio.CancelledError:
                 pass
+
+        if self._runtime_state_task:
+            self._runtime_state_task.cancel()
+            try:
+                await self._runtime_state_task
+            except asyncio.CancelledError:
+                pass
+        await self.save_runtime_state()
 
         if self.scheduler:
             await self.scheduler.stop()

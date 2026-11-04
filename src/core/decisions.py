@@ -54,6 +54,24 @@ def recent(limit: int = 10) -> list[dict]:
     return list(_entries)[:limit]
 
 
+def export() -> list[dict]:
+    """Entries for persisting (newest first); see restore()."""
+    return list(_entries)
+
+
+def restore(entries: list[dict]) -> None:
+    """Put persisted entries back, under any recorded since startup."""
+    known = {(e["time"], e["symbol"], e["detail"]) for e in _entries}
+    for entry in entries[:MAX_ENTRIES]:
+        if not isinstance(entry, dict) or "time" not in entry:
+            continue
+        if (entry["time"], entry.get("symbol"), entry.get("detail")) in known:
+            continue
+        if len(_entries) >= MAX_ENTRIES:
+            break
+        _entries.append(dict(entry))
+
+
 def clear() -> None:
     _entries.clear()
     _last_seen.clear()

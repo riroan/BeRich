@@ -117,6 +117,7 @@ class TestTradingBot:
         bot.scheduler = AsyncMock()
         bot.order_manager = AsyncMock()
         bot.strategy_engine = AsyncMock()
+        bot.strategy_engine.get_strategies = MagicMock(return_value=[])
         bot.event_bus = AsyncMock()
         bot.broker = AsyncMock()
         bot.storage = AsyncMock()
