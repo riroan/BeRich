@@ -87,7 +87,7 @@
                         <td data-label="Market"><span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span></td>
                         <td data-label="Action">
                             <span class="signal-tag {{ 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') }}">
-                                {% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}
+                                {{ action_label(log.action) }}
                             </span>
                         </td>
                         <td data-label="Price">{% if log.market == 'KRX' %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</td>
@@ -125,7 +125,7 @@
                         <div class="tcm-meta">
                             <div class="tcm-tags">
                                 <span class="market-badge market-{{ log.market|lower }}">{{ log.market }}</span>
-                                <span class="signal-tag {{ tagcls }}">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</span>
+                                <span class="signal-tag {{ tagcls }}">{{ action_label(log.action) }}</span>
                             </div>
                             <span class="tcm-time" title="{{ log.timestamp }}">{{ trade_time_mobile }}</span>
                         </div>

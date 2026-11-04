@@ -350,7 +350,7 @@ class DashboardWebSocket {
                     <div class="rsi-left">
                         <div class="rsi-symbol">${escapedSymbol}</div>
                         ${this.nameTag(symbol, 'div')}
-                        <div class="rsi-price">${price ? this.formatPrice(price, market) : '-'}</div>
+                        <div class="rsi-price">${price ? this.formatPrice(price, market) : ''}</div>
                     </div>
                     <span class="rsi-value ${this.getRSIClass(rsi)}">${rsi != null ? Number(rsi).toFixed(1) : '-'}</span>
                 </a>
@@ -404,18 +404,24 @@ class DashboardWebSocket {
     }
 
     updateSystemStatus(status) {
-        // Auto trading
-        const autoTrading = document.querySelector('.system-item:nth-child(1)');
-        if (autoTrading) {
-            autoTrading.className = `system-item ${status.auto_trading_enabled ? 'ok' : 'off'}`;
-            autoTrading.querySelector('.value').textContent = status.auto_trading_enabled ? 'ON' : 'OFF';
-        }
-
-        // Last price update
-        const lastPriceUpdate = document.getElementById('last-price-update');
-        if (lastPriceUpdate) {
-            lastPriceUpdate.textContent = status.last_price_update || 'N/A';
-        }
+        // [chip id, healthy?, text when healthy, text when not]
+        [
+            ['sys-auto', status.auto_trading_enabled, 'ON', 'OFF'],
+            ['sys-api', status.api_connected, 'OK', 'ERR'],
+            ['sys-account', status.account_tradable, 'OK', 'N/A'],
+            ['sys-data', status.data_collection_ok, 'OK', 'ERR'],
+        ].forEach(([id, ok, yes, no]) => {
+            const chip = document.getElementById(id);
+            if (!chip) return;
+            chip.classList.toggle('ok', !!ok);
+            chip.classList.toggle('bad', !ok);
+            const value = chip.querySelector('b');
+            if (value) value.textContent = ok ? yes : no;
+        });
+        const lastPrice = document.getElementById('last-price-update');
+        if (lastPrice) lastPrice.textContent = status.last_price_update || '-';
+        const lastRun = document.getElementById('last-strategy-run');
+        if (lastRun) lastRun.textContent = status.last_strategy_run || '-';
     }
 
     updateLastUpdateTime(lastUpdate) {

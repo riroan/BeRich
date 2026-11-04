@@ -201,13 +201,13 @@
                 <h2>거래 내역</h2>
                 <div class="symbol-trades-list-m">
                     {% for log in symbol_trades %}
-                    {% set action_label = 'BUY' if log.action == 'buy' else ('SELL' if log.action == 'sell' else ('PARTIAL' if log.action == 'partial_sell' else ('STOP' if log.action == 'stop_loss' else log.action|upper))) %}
+                    {% set action_text = action_label(log.action) %}
                     {% set action_class = 'buy' if log.action == 'buy' else ('stop' if log.action == 'stop_loss' else 'sell') %}
                     {% set trade_raw = log.timestamp|replace('T', ' ') %}
                     {% set trade_mobile_time = trade_raw[5:16] if trade_raw|length >= 16 and trade_raw[4:5] == '-' else trade_raw %}
                     <div class="symbol-trade-card-m">
                         <div class="symbol-trade-left">
-                            <span class="signal-tag {{ action_class }}">{{ action_label }}</span>
+                            <span class="signal-tag {{ action_class }}">{{ action_text }}</span>
                             <div class="symbol-trade-fill">
                                 <span class="symbol-trade-price">{% if is_krx %}{{ "{:,.0f}".format(log.price) }}{% else %}${{ "{:,.2f}".format(log.price) }}{% endif %}</span>
                                 <span class="symbol-trade-qty">&times;{{ log.quantity }}</span>
@@ -236,7 +236,7 @@
                         {% for log in symbol_trades %}
                         <tr class="{{ log.action }}">
                             <td class="time full-width" data-label="Time">{{ log.timestamp }}</td>
-                            <td class="action {{ log.action }}" data-label="Action">{% if log.action == 'buy' %}BUY{% elif log.action == 'sell' %}SELL{% elif log.action == 'partial_sell' %}PARTIAL{% elif log.action == 'stop_loss' %}STOP{% else %}{{ log.action | upper }}{% endif %}</td>
+                            <td class="action {{ log.action }}" data-label="Action">{{ action_label(log.action) }}</td>
                             <td class="number" data-label="Price">{{ "{:,.2f}".format(log.price) }}</td>
                             <td class="number" data-label="Qty">{{ log.quantity }}</td>
                             <td class="number" data-label="RSI">{{ "{:.1f}".format(log.rsi) if log.rsi is not none else '-' }}</td>

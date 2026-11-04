@@ -3746,3 +3746,50 @@ select option { background: var(--surface); color: var(--text); }
 }
 @keyframes skeleton-pulse { 50% { opacity: .45; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* ===================== Dashboard layout ===================== */
+/* What needs attention (positions, RSI) on the left; signals, activity and
+   status in a sidebar. Phones stack them in the same order. */
+.dash-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; }
+.dash-main, .dash-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (min-width: 1024px) {
+    .dash-layout { grid-template-columns: minmax(0, 1fr) 340px; }
+    .dash-side .three-col.signals-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+    .dash-side .signals-grid .signal-card:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 768px) {
+    .dash-layout, .dash-main, .dash-side { gap: 12px; }
+}
+
+/* One heading style for every dashboard card */
+.signal-card h3 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+    margin-bottom: 10px;
+}
+.signal-card .empty-state { border-top: none; color: var(--text-muted); font-size: 13px; }
+.rsi-price:empty { display: none; }
+
+/* System status: one row of chips instead of six tiles */
+.sys-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sys-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border-radius: 999px;
+    background: var(--bg); font-size: 12px; color: var(--dim);
+}
+.sys-chip b { color: var(--text); font-weight: 700; }
+.sys-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); }
+.sys-chip.bad { background: rgba(239,68,68,0.1); }
+.sys-chip.bad .sys-dot { background: var(--red); }
+.sys-chip.bad b { color: var(--red); }
+.sys-times {
+    display: flex; flex-wrap: wrap; gap: 4px 16px; margin-top: 10px;
+    font-size: 12px; color: var(--text-muted);
+}
+.sys-times b { color: var(--dim); font-weight: 600; font-variant-numeric: tabular-nums; }
+.sys-card .section-title { margin-bottom: 12px; }
+
+/* An empty activity feed is one quiet line, not a tall card */
+.activity-list .empty-state { padding: 4px 0; margin: 0; text-align: left; font-size: 13px; color: var(--text-muted); border: none; }
+.activity-card .section-title { margin-bottom: 10px; }

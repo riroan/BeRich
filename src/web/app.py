@@ -576,7 +576,7 @@ class DashboardState:
         if stage <= 0:
             return None
         if not last_date or cooldown_days <= 0:
-            return "Ready"
+            return "가능"
         try:
             started = datetime.fromisoformat(last_date.replace("Z", "+00:00"))
         except ValueError:
@@ -585,7 +585,7 @@ class DashboardState:
         now = datetime.now(started.tzinfo) if started.tzinfo else datetime.now()
         remaining = started + timedelta(days=cooldown_days) - now
         if remaining.total_seconds() <= 0:
-            return "Ready"
+            return "가능"
 
         total_minutes = int((remaining.total_seconds() + 59) // 60)
         days, minutes = divmod(total_minutes, 24 * 60)
@@ -1249,6 +1249,13 @@ def _asset_version(name: str) -> int:
 
 
 templates.env.globals["asset_v"] = _asset_version
+_ACTION_LABELS = {
+    "buy": "매수", "sell": "매도", "partial_sell": "부분매도",
+    "stop_loss": "손절", "take_profit": "익절",
+}
+templates.env.globals["action_label"] = (
+    lambda action: _ACTION_LABELS.get(str(action), str(action).upper())
+)
 templates.env.globals["sym_name"] = (
     lambda symbol: dashboard_state.symbol_names.get(str(symbol).upper(), "")
 )
