@@ -69,6 +69,20 @@
         .bt-results { display: none; }
         .bt-results.shown { display: block; animation: bt-fade 0.3s ease; }
         @keyframes bt-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+        .bt-compare { margin-top: 12px; }
+        .bt-compare-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .bt-compare-head h2 { font-size: 15px; margin: 0; }
+        .bt-pin-btn { background: var(--card); color: var(--text); padding: 8px 12px; font-size: 13px; }
+        .bt-compare-hint { color: var(--dim); font-size: 12px; margin: 8px 0 0; }
+        .bt-compare-table { width: 100%; min-width: 0 !important; table-layout: fixed; margin-top: 10px; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+        .bt-compare-table th:first-child { width: 28%; }
+        .bt-compare-table td { overflow-wrap: anywhere; }
+        @media (max-width: 768px) { .bt-compare-table { font-size: 12px; } }
+        .bt-compare-table th, .bt-compare-table td { padding: 7px 6px; text-align: right; border-bottom: 1px solid var(--border); }
+        .bt-compare-table th:first-child, .bt-compare-table td:first-child { text-align: left; color: var(--dim); }
+        .bt-compare-table .cmp-better { color: var(--emerald); font-weight: 700; }
+        .bt-compare-table .cmp-worse { color: var(--red); font-weight: 700; }
+        .bt-compare-table .bt-cmp-labels td { font-size: 11px; color: var(--text-muted); text-align: left; white-space: normal; }
         .bt-result-grid {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -659,6 +673,20 @@
                 </div>
             </div>
 
+            <div class="panel bt-compare" id="bt-compare">
+                <div class="bt-compare-head">
+                    <h2>결과 비교</h2>
+                    <button type="button" class="btn bt-pin-btn" id="bt-pin-btn">이 결과를 A로 고정</button>
+                </div>
+                <p class="bt-compare-hint" id="bt-compare-hint">결과를 A로 고정한 뒤 설정을 바꿔 다시 돌리면 나란히 비교합니다.</p>
+                <div class="table-wrap">
+                    <table class="bt-compare-table" id="bt-compare-table" hidden>
+                        <thead><tr><th></th><th id="bt-cmp-a-label">A</th><th id="bt-cmp-b-label">현재</th><th>차이</th></tr></thead>
+                        <tbody id="bt-compare-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <div class="chart-section bt-combined-chart-section">
                 <div class="panel bt-combined-chart-panel">
                     <div class="symbol-chart-header">
@@ -1088,6 +1116,63 @@
                 btn.addEventListener('click', () => setChartStyle(btn.dataset.chart));
             });
 
+            // ---- A/B comparison: pin one run, compare every later run to it
+            const CMP_KEY = 'bt-compare-a';
+            let lastRun = null;
+            const CMP_ROWS = [
+                ['수익률', 'total_return_pct', 'pct', 1],
+                ['알파', 'alpha_pct', 'pp', 1],
+                ['최대 낙폭', 'max_drawdown_pct', 'pct', -1],
+                ['매수 횟수', 'num_buys', 'n', 0],
+                ['매도 횟수', 'num_sells', 'n', 0],
+                ['손절 횟수', 'num_stop_losses', 'n', -1],
+                ['승률', 'win_rate_pct', 'pct', 1],
+            ];
+            function loadPinned() {
+                try { return JSON.parse(localStorage.getItem(CMP_KEY) || 'null'); } catch (e) { return null; }
+            }
+            function runLabel() {
+                const v = id => (document.getElementById(id) || {}).value;
+                return `${(v('bt-symbol') || '').toUpperCase()} · 손절 ${v('bt-stop-loss')}% · 쿨다운 ${v('bt-cooldown')}일 · 재진입 ${v('bt-stop-reentry')}일`;
+            }
+            function fmtCmp(value, kind) {
+                if (value == null || Number.isNaN(value)) return '-';
+                if (kind === 'n') return String(value);
+                return value.toFixed(2) + (kind === 'pp' ? 'p' : '%');
+            }
+            function updateCompare(result) {
+                lastRun = {label: runLabel(), metrics: Object.fromEntries(CMP_ROWS.map(r => [r[1], result[r[1]]]))};
+                renderCompare();
+            }
+            function renderCompare() {
+                const pinned = loadPinned();
+                const table = document.getElementById('bt-compare-table');
+                const pinBtn = document.getElementById('bt-pin-btn');
+                pinBtn.textContent = pinned ? 'A 해제' : '이 결과를 A로 고정';
+                document.getElementById('bt-compare-hint').hidden = !!pinned;
+                table.hidden = !(pinned && lastRun);
+                if (!pinned || !lastRun) return;
+                document.getElementById('bt-cmp-a-label').textContent = 'A';
+                document.getElementById('bt-cmp-a-label').title = pinned.label;
+                document.getElementById('bt-cmp-b-label').title = lastRun.label;
+                document.getElementById('bt-compare-body').innerHTML = CMP_ROWS.map(([name, key, kind, better]) => {
+                    const a = pinned.metrics[key], b = lastRun.metrics[key];
+                    const diff = (a != null && b != null) ? b - a : null;
+                    // better: +1 higher is better, -1 lower is better, 0 neutral
+                    const cls = diff == null || diff === 0 || better === 0 ? '' : (diff * better > 0 ? 'cmp-better' : 'cmp-worse');
+                    const sign = diff > 0 ? '+' : '';
+                    const diffText = diff == null ? '-' : sign + (kind === 'n' ? diff : diff.toFixed(2) + (kind === 'pct' || kind === 'pp' ? 'p' : ''));
+                    return `<tr><td>${name}</td><td>${fmtCmp(a, kind)}</td><td>${fmtCmp(b, kind)}</td><td class="${cls}">${diffText}</td></tr>`;
+                }).join('') + `<tr class="bt-cmp-labels"><td>설정</td><td>${pinned.label.replace(/</g, '&lt;')}</td><td>${lastRun.label.replace(/</g, '&lt;')}</td><td></td></tr>`;
+            }
+            document.getElementById('bt-pin-btn').addEventListener('click', () => {
+                try {
+                    if (loadPinned()) localStorage.removeItem(CMP_KEY);
+                    else if (lastRun) localStorage.setItem(CMP_KEY, JSON.stringify(lastRun));
+                } catch (e) { /* storage unavailable */ }
+                renderCompare();
+            });
+
             function renderResults(result) {
                 const tot = document.getElementById('bt-total');
                 tot.textContent = fmtPct(result.total_return_pct);
@@ -1111,6 +1196,7 @@
 
                 const resultsEl = document.getElementById('bt-results');
                 resultsEl.classList.add('shown');
+                updateCompare(result);
 
                 requestAnimationFrame(() => {
                     ensureCharts();

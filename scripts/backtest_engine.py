@@ -162,6 +162,8 @@ def _empty_result(symbol: str, initial_capital: float) -> dict:
         "num_buys": 0,
         "num_sells": 0,
         "win_rate_pct": 0.0,
+        "max_drawdown_pct": 0.0,
+        "num_stop_losses": 0,
         "final_capital": initial_capital,
         "trades": [],
         "prices": [],
@@ -217,6 +219,9 @@ def run_simulation(
     capital = initial_capital
     trades: list[Trade] = []
     buy_events: list[dict] = []   # every BUY at the moment it fires
+    # End-of-day account value high-water mark, for the max drawdown
+    peak_value = float(initial_capital)
+    max_drawdown = 0.0
 
     for date, row in df.iterrows():
         price = row["Close"]
@@ -291,6 +296,11 @@ def run_simulation(
                 )
             strategy.on_fill(signal, date, price, shares_to_sell, shares_before)
 
+        value = float(capital + pos.shares * price)
+        peak_value = max(peak_value, value)
+        if peak_value > 0:
+            max_drawdown = max(max_drawdown, (peak_value - value) / peak_value * 100)
+
     # Close whatever is still open at the last bar.
     if pos.shares > 0:
         last_price = df.iloc[-1]["Close"]
@@ -339,6 +349,10 @@ def run_simulation(
         "num_buys": len(buy_events),
         "num_sells": len(sell_trades_payload),
         "win_rate_pct": round(win_rate, 2),
+        "max_drawdown_pct": round(max_drawdown, 4),
+        "num_stop_losses": sum(
+            1 for t in trades if t.sell_reason == "stop_loss"
+        ),
         "final_capital": capital,
         "trades": trades,
         "prices": [round(float(p), 4) for p in df["Close"].tolist()],

@@ -173,3 +173,14 @@ def _stops(**overrides) -> int:
 
 def test_backtest_partial_stop_fires_more_than_once_in_a_long_slide():
     assert _stops() > 1
+
+
+def test_backtest_reports_drawdown_and_stop_count():
+    result = _run_simulation(
+        _crash_then_slide(), "X", PARAMS, initial_capital=1_000_000,
+    )
+    stops = sum(1 for t in result["trades"] if t.sell_reason == "stop_loss")
+
+    assert result["num_stop_losses"] == stops > 0
+    # bought into a 58% slide: the account sat well below its peak
+    assert 0 < result["max_drawdown_pct"] < 100
