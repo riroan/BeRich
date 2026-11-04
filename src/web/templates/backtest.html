@@ -841,6 +841,8 @@
 
                 const priceContainer = document.getElementById('bt-price-chart');
                 priceChart = LightweightCharts.createChart(priceContainer, {
+                    // A vertical swipe on the chart scrolls the page on touch screens
+                    handleScroll: { vertTouchDrag: false },
                     layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },
@@ -866,6 +868,8 @@
 
                 const rsiContainer = document.getElementById('bt-rsi-chart');
                 rsiChart = LightweightCharts.createChart(rsiContainer, {
+                    // A vertical swipe on the chart scrolls the page on touch screens
+                    handleScroll: { vertTouchDrag: false },
                     layout: { background: { color: colors.bg }, textColor: '#94a3b8', fontSize: isMobile ? 10 : 12 },
                     grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
                     rightPriceScale: { borderColor: colors.grid, minimumWidth: isMobile ? 50 : 80 },

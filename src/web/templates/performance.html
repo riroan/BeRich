@@ -249,6 +249,8 @@
         const equityChartContainer = document.getElementById('equity-chart');
         if (equityChartContainer) {
             const chart = LightweightCharts.createChart(equityChartContainer, {
+                // A vertical swipe on the chart scrolls the page on touch screens
+                handleScroll: { vertTouchDrag: false },
                 layout: {
                     background: { color: colors.bg },
                     textColor: colors.text,

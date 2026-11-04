@@ -314,6 +314,8 @@
         const isMobile = isMobileViewport();
         const heights = chartHeights();
         const priceChart = LightweightCharts.createChart(priceChartContainer, {
+            // A vertical swipe on the chart scrolls the page on touch screens
+            handleScroll: { vertTouchDrag: false },
             layout: {
                 background: { color: colors.bg },
                 textColor: '#94a3b8',
@@ -365,6 +367,8 @@
 
         // Create RSI chart
         const rsiChart = LightweightCharts.createChart(rsiChartContainer, {
+            // A vertical swipe on the chart scrolls the page on touch screens
+            handleScroll: { vertTouchDrag: false },
             layout: {
                 background: { color: colors.bg },
                 textColor: '#94a3b8',
