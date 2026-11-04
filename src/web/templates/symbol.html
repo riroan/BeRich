@@ -410,12 +410,13 @@
 
         // Parse time string to timestamp (server sends KST time)
         function parseTime(timeStr) {
-            // Handle "YYYY-MM-DD HH:MM" format
-            // Parse as local time (browser is in KST), then add 9 hours offset
-            // so the chart displays in KST instead of UTC
-            const date = new Date(timeStr.replace(' ', 'T'));
-            // Add 9 hours (32400 seconds) to compensate for chart's UTC display
-            return Math.floor(date.getTime() / 1000) + 32400;
+            // Server timestamps are naive KST wall-clock strings and the chart
+            // labels in UTC, so the wall clock is read as if it were UTC.
+            // Parsed by hand: Date() reads naive strings in the DEVICE's zone
+            // (off by hours outside Korea) and Safari rejects some forms.
+            const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(timeStr));
+            if (!m) return NaN;
+            return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) / 1000;
         }
 
         // Pagination state for lazy-loading older history

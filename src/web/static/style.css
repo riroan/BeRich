@@ -190,13 +190,18 @@ body {
 /* ===================== Navigation ===================== */
 .nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
-    padding: 0 32px 20px;
+    /* Landscape iPhone (>768px) gets this desktop nav; keep it clear of
+       the notch and let it wrap rather than push Logout off-screen */
+    padding: 0 calc(32px + env(safe-area-inset-right)) 20px
+        calc(32px + env(safe-area-inset-left));
     max-width: 1200px;
     margin: 0 auto;
 }
 .nav-section {
     display: flex;
+    flex-wrap: wrap;
     gap: 4px;
     align-items: center;
 }
@@ -257,7 +262,8 @@ body {
 
 /* ===================== Container ===================== */
 .container {
-    padding: 0 32px 32px;
+    padding: 0 calc(32px + env(safe-area-inset-right)) 32px
+        calc(32px + env(safe-area-inset-left));
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
@@ -616,7 +622,10 @@ body {
     border: 1px solid var(--dim); border-radius: 50%;
     color: var(--dim); font-size: 10px; font-weight: 600;
     cursor: help; vertical-align: middle; user-select: none;
+    position: relative;
 }
+/* 15px is too small to tap; widen the hit area without changing the look */
+.info-dot::after { content: ""; position: absolute; inset: -12px; }
 .info-dot:hover, .info-dot:focus { color: var(--text); border-color: var(--text); }
 
 .alloc-pct {
@@ -3559,6 +3568,7 @@ select option { background: var(--surface); color: var(--text); }
     border: none; background: none; color: var(--dim);
     font-family: inherit; font-size: 12px; font-weight: 600;
     padding: 4px 12px; border-radius: 6px; cursor: pointer;
+    min-height: 32px;
 }
 .alloc-mode.active { background: var(--card); color: var(--text); }
 .alloc-note {
@@ -3570,4 +3580,15 @@ select option { background: var(--surface); color: var(--text); }
    already sizes names to the space left and ellipsizes. */
 @media (min-width: 769px) {
     .alloc-legend.by-sector .alloc-name { width: 116px; white-space: nowrap; }
+}
+
+/* iOS Safari zooms into any form field with text under 16px when it is
+   focused, and the page stays zoomed. Only iOS does this, so only iOS
+   (-webkit-touch-callout is WebKit-on-iOS only) gets the larger text. */
+@supports (-webkit-touch-callout: none) {
+    input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+    select,
+    textarea {
+        font-size: 16px !important;
+    }
 }

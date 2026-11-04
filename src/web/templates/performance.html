@@ -14,7 +14,8 @@
         .principal-row strong { color: var(--white); font-weight: 700; font-variant-numeric: tabular-nums; }
         .principal-edit-btn {
             margin-left: auto; background: none; border: none;
-            color: var(--blue); font-size: 12px; cursor: pointer; padding: 2px 4px;
+            color: var(--blue); font-size: 12px; cursor: pointer; padding: 8px 10px;
+            margin: -8px -10px -8px auto;
         }
         .principal-form { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
         .principal-form input { flex: 1 1 120px; min-width: 0; }
@@ -327,8 +328,13 @@
             let reachedEnd = false;
 
             function parseKST(timeStr) {
-                const date = new Date(timeStr.replace(' ', 'T'));
-                return Math.floor(date.getTime() / 1000) + 32400;
+                // Server timestamps are naive KST wall-clock strings and the chart
+                // labels in UTC, so the wall clock is read as if it were UTC.
+                // Parsed by hand: Date() reads naive strings in the DEVICE's zone
+                // (off by hours outside Korea) and Safari rejects some forms.
+                const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?/.exec(String(timeStr));
+                if (!m) return NaN;
+                return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) / 1000;
             }
             // Raw balance, same source of truth as the BALANCE stat above —
             // deposit_adjusted_usd/twr_index only strip out deposits by their
