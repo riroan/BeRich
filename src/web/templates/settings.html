@@ -633,6 +633,12 @@
                             <input type="number" id="cfg-{{ cfg_idx }}-cooldown-days" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}" min="0" max="365" step="1" inputmode="numeric">
                             <span class="hint">Wait period after trade</span>
                         </div>
+                        <div class="form-group">
+                            <label for="cfg-{{ cfg_idx }}-stop-reentry-days">Stop Re-entry Days</label>
+                            <span class="read-val">{{ params.get('stop_loss_reentry_days', 3) }}</span>
+                            <input type="number" id="cfg-{{ cfg_idx }}-stop-reentry-days" name="stop_loss_reentry_days" value="{{ params.get('stop_loss_reentry_days', 3) }}" min="0" max="60" step="1" inputmode="numeric">
+                            <span class="hint">No buying back for this long after a stop-loss exit</span>
+                        </div>
                         {% set rsi_method = params.get('rsi_method', 'wilder') %}
                         <div class="form-group">
                             <label for="cfg-{{ cfg_idx }}-rsi-method">RSI Method</label>
@@ -836,6 +842,7 @@
                 rsi_method: 'wilder',
                 stop_loss: -10,
                 cooldown_days: 3,
+                stop_loss_reentry_days: 3,
                 avg_down_levels: [[35, 0.3], [30, 0.35], [25, 0.35]],
                 sell_levels: [[70, 0.25], [75, 0.35], [80, 0.4]]
             };
@@ -923,6 +930,7 @@
                 rsi_period: parseInt(form.querySelector('[name="rsi_period"]').value),
                 rsi_method: form.querySelector('[name="rsi_method"]').value,
                 cooldown_days: parseInt(form.querySelector('[name="cooldown_days"]').value),
+                stop_loss_reentry_days: parseInt(form.querySelector('[name="stop_loss_reentry_days"]').value),
             };
 
             // PnL ladders. A row counts only when both cells are filled; an

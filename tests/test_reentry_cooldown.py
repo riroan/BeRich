@@ -6,8 +6,9 @@ fires on RSI alone — right after a stop-loss, when RSI is guaranteed to be
 low because the stop-loss fired on a crash. The stop-loss churns the position
 instead of leaving it.
 
-`reentry_cooldown_days` gates that. It defaults to 0, which keeps the old
-behaviour, so turning it on is a deliberate act.
+`reentry_cooldown_days` gates re-entry after any full exit and defaults to
+0. `stop_loss_reentry_days` gates it after a stop-loss exit only and
+defaults to 3.
 """
 
 from __future__ import annotations
@@ -89,13 +90,23 @@ async def _exit_then_next(strategy, days_later: int):
 
 
 def test_without_the_gate_a_stop_loss_re_buys_immediately():
-    # The behaviour that is live today: the exit realises the loss and the
-    # next tick buys the same falling symbol back.
-    after = asyncio.run(_exit_then_next(_strategy(), days_later=0))
+    # With both gates off the exit realises the loss and the next tick buys
+    # the same falling symbol back.
+    after = asyncio.run(_exit_then_next(
+        _strategy(stop_loss_reentry_days=0), days_later=0,
+    ))
 
     assert after is not None
     assert after.signal_type is SignalType.ENTRY_LONG
     assert after.metadata["reason"] == "avg_down_stage_1"
+
+
+def test_a_stop_loss_exit_blocks_re_entry_by_default():
+    # stop_loss_reentry_days defaults to 3: no buying straight back into
+    # the decline the stop just cut, even with reentry_cooldown_days at 0.
+    after = asyncio.run(_exit_then_next(_strategy(), days_later=0))
+
+    assert after is None
 
 
 def test_the_gate_blocks_re_entry_inside_the_window():

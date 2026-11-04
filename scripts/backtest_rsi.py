@@ -70,6 +70,7 @@ class RSIMeanReversionBacktest(BacktestStrategy):
         # after a full exit, which is what happens when a symbol's state is
         # wiped.
         self.reentry_cooldown_days = p.get("reentry_cooldown_days", 0)
+        self.stop_loss_reentry_days = p.get("stop_loss_reentry_days", 3)
         self.reset_requires_recovery = p.get("reset_requires_recovery", False)
         self.recovery_rsi = p.get("recovery_rsi", 50)
         self.avg_down_levels = p.get(
@@ -87,6 +88,8 @@ class RSIMeanReversionBacktest(BacktestStrategy):
         self.last_buy_date = None
         self.last_sell_date = None
         self.last_exit_date = None
+        self.last_sl_date = None
+        self.last_stop_exit_date = None
         self.rsi_recovered = False
 
     @classmethod
@@ -97,6 +100,7 @@ class RSIMeanReversionBacktest(BacktestStrategy):
             "stop_loss": body.stop_loss,
             "take_profit": body.take_profit,
             "cooldown_days": body.cooldown_days,
+            "stop_loss_reentry_days": body.stop_loss_reentry_days,
             "reset_requires_recovery": body.reset_requires_recovery,
             "recovery_rsi": body.recovery_rsi,
             "avg_down_levels": body.buy_levels,
@@ -130,6 +134,14 @@ class RSIMeanReversionBacktest(BacktestStrategy):
         # 1) PnL ladders. A position sits on one side of its entry, so the
         # two are mutually exclusive; losses are checked first to keep the
         # ordering explicit. Either one ends the bar.
+        # Re-arm the loss ladder cooldown_days (at least 1) after its last
+        # rung filled — mirrors rsi_mean_reversion.
+        if self.pos.shares > 0 and self.sl_stage > 0 and (
+            self.last_sl_date is None
+            or (date - self.last_sl_date).days >= max(self.cooldown_days, 1)
+        ):
+            self.sl_stage = 0
+
         if self.pos.shares > 0:
             pnl_pct = self.pos.pnl_pct(row["Close"])
             for levels, stage, reason, resolve in (
@@ -176,6 +188,14 @@ class RSIMeanReversionBacktest(BacktestStrategy):
             and (date - self.last_exit_date).days < self.reentry_cooldown_days
         ):
             return
+        if (
+            self.stop_loss_reentry_days
+            and self.pos.shares == 0
+            and self.last_stop_exit_date is not None
+            and (date - self.last_stop_exit_date).days
+            < self.stop_loss_reentry_days
+        ):
+            return
 
         buy_repeat_ready = (
             self.last_buy_date is not None
@@ -196,15 +216,20 @@ class RSIMeanReversionBacktest(BacktestStrategy):
     def on_fill(self, signal, date, price, filled, shares_before) -> None:
         if signal.side == "buy":
             self.buy_stage = signal.stage
+            # New cost basis re-arms the loss ladder
+            self.sl_stage = 0
+            self.last_sl_date = None
             if shares_before == 0:
                 self.sell_stage = 0
                 self.last_exit_date = None
+                self.last_stop_exit_date = None
             self.last_buy_date = date
             self.rsi_recovered = False
             return
 
         if signal.reason == "stop_loss":
             self.sl_stage = signal.stage
+            self.last_sl_date = date
         elif signal.reason == "take_profit":
             self.tp_stage = signal.stage
         else:
@@ -216,8 +241,12 @@ class RSIMeanReversionBacktest(BacktestStrategy):
             self.sell_stage = 0
             self.tp_stage = 0
             self.sl_stage = 0
+            self.last_sl_date = None
             self.last_sell_date = None
             self.last_exit_date = date
+            self.last_stop_exit_date = (
+                date if signal.reason == "stop_loss" else None
+            )
 
 
 def _run_simulation(

@@ -51,6 +51,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # _reset_position — it is the one fact about a closed position that
         # still matters, and it gates re-entry.
         self._last_exit_time: dict[str, datetime] = {}
+        # When the last stop-loss rung filled; the loss ladder re-arms
+        # cooldown_days after it, like the RSI ladders.
+        self._last_sl_time: dict[str, datetime] = {}
+        # When a stop-loss (not an RSI sell or take-profit) last took the
+        # position flat. Survives _reset_position for the same reason as
+        # _last_exit_time: it gates re-entry.
+        self._last_stop_exit_time: dict[str, datetime] = {}
         # CONFIRMED regular-session daily bars (immutable base for RSI)
         self._daily_bars: dict[str, pd.DataFrame] = {}
         # Live/forming price — updated every tick in ALL sessions; layered
@@ -236,6 +243,9 @@ class RSIMeanReversionStrategy(BaseStrategy):
         # fresh symbol and stage 1 fires on RSI alone — right after a
         # stop-loss, when RSI is guaranteed to be low. 0 keeps that.
         reentry_cooldown_days = self.params.get("reentry_cooldown_days", 0)
+        # A stop-loss exit leaves RSI low, so without its own wait the next
+        # tick buys straight back into the decline that was just cut.
+        stop_loss_reentry_days = self.params.get("stop_loss_reentry_days", 3)
 
         # Averaging down levels: [(RSI threshold, portion)]
         avg_down_levels = self.params.get("avg_down_levels", [
@@ -277,6 +287,20 @@ class RSIMeanReversionStrategy(BaseStrategy):
         if current_position > 0 and symbol in self._last_sell_time:
             time_since_last_sell = datetime.now() - self._last_sell_time[symbol]
             sell_repeat_ready = time_since_last_sell >= timedelta(days=cooldown_days)
+
+        # Re-arm the loss ladder cooldown_days after its last rung filled.
+        # A partial stop leaves shares held, and the ladder only reset once
+        # the position went flat, so after one stop the rest of the position
+        # was never stopped again however far it fell. No recorded time (a
+        # restart) counts as elapsed, as for the buy ladder above. At least
+        # a day apart: cooldown_days 0 would otherwise re-fire every tick.
+        if current_position > 0 and self._sl_stages.get(symbol, 0) > 0:
+            last_sl = self._last_sl_time.get(symbol)
+            if last_sl is None or (
+                datetime.now() - last_sl
+                >= timedelta(days=max(cooldown_days, 1))
+            ):
+                self._sl_stages[symbol] = 0
 
         # Check stop loss first (if in position)
         if current_position > 0 and symbol in self._entry_prices:
@@ -409,6 +433,20 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 f"{reentry_cooldown_days}d"
             )
             return None
+        if (
+            stop_loss_reentry_days
+            and current_position <= 0
+            and (last_stop := self._last_stop_exit_time.get(symbol))
+            is not None
+            and datetime.now() - last_stop
+            < timedelta(days=stop_loss_reentry_days)
+        ):
+            logger.info(
+                f"[{symbol}] RE-ENTRY BLOCKED | stopped out "
+                f"{(datetime.now() - last_stop).days}d ago < "
+                f"{stop_loss_reentry_days}d"
+            )
+            return None
 
         # Buy signals: progress to the next stage immediately when its
         # threshold is hit. Cooldown resets the ladder back to stage 1.
@@ -514,6 +552,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             del self._tp_stages[symbol]
         if symbol in self._sl_stages:
             del self._sl_stages[symbol]
+        self._last_sl_time.pop(symbol, None)
 
     def _calculate_rsi(self, prices: pd.Series, period: int = 14) -> pd.Series:
         """Calculate RSI using the method configured in strategy params"""
@@ -565,9 +604,14 @@ class RSIMeanReversionStrategy(BaseStrategy):
             if target_stage is not None:
                 self._buy_stages[symbol] = target_stage
             self._last_buy_time[symbol] = datetime.now()
+            # A buy moves the cost basis the loss ladder is measured from,
+            # so it re-arms the ladder against the new average.
+            self._sl_stages[symbol] = 0
+            self._last_sl_time.pop(symbol, None)
             if old_qty <= 0:
                 self._sell_stages[symbol] = 0
                 self._last_exit_time.pop(symbol, None)
+                self._last_stop_exit_time.pop(symbol, None)
 
         await super().on_fill(fill)  # updates _positions
 
@@ -583,6 +627,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             if target_stage is not None and fill.complete:
                 if reason == "stop_loss":
                     self._sl_stages[symbol] = target_stage
+                    self._last_sl_time[symbol] = datetime.now()
                 elif reason == "take_profit":
                     self._tp_stages[symbol] = target_stage
                 else:
@@ -594,3 +639,7 @@ class RSIMeanReversionStrategy(BaseStrategy):
             if self.get_position(symbol) <= 0:
                 self._reset_position(symbol)
                 self._last_exit_time[symbol] = datetime.now()
+                if reason == "stop_loss":
+                    self._last_stop_exit_time[symbol] = datetime.now()
+                else:
+                    self._last_stop_exit_time.pop(symbol, None)

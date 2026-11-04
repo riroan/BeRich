@@ -214,6 +214,8 @@ class BacktestRequest(BaseModel):
     stop_loss: float = -10.0
     take_profit: float | None = None
     cooldown_days: int = 1
+    # Days a stop-loss exit blocks re-entry (0 = re-enter right away)
+    stop_loss_reentry_days: int = 3
     reset_requires_recovery: bool = False
     recovery_rsi: float = 50.0
     initial_capital: float = Field(10_000_000, gt=0, le=1e12)
@@ -250,6 +252,8 @@ class BacktestRequest(BaseModel):
             raise ValueError("take_profit must be between 1 and 1000")
         if not (1 <= self.cooldown_days <= 30):
             raise ValueError("cooldown_days must be between 1 and 30")
+        if not (0 <= self.stop_loss_reentry_days <= 60):
+            raise ValueError("stop_loss_reentry_days must be between 0 and 60")
         if not (0.0 <= self.recovery_rsi <= 100.0):
             raise ValueError("recovery_rsi must be between 0 and 100")
         for name, levels in (("buy_levels", self.buy_levels), ("sell_levels", self.sell_levels)):

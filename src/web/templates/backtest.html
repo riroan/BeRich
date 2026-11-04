@@ -557,6 +557,11 @@
                         <input type="range" id="bt-cooldown" min="1" max="30" value="1">
                         <span class="bt-slider-val" id="bt-cooldown-v">1d</span>
                     </div>
+                    <div class="bt-slider-row">
+                        <label title="Days a stop-loss exit blocks buying back in">Stop Re-entry</label>
+                        <input type="range" id="bt-stop-reentry" min="0" max="30" value="3">
+                        <span class="bt-slider-val" id="bt-stop-reentry-v">3d</span>
+                    </div>
                     </div>
 
                     <div class="bt-recovery-card" data-rsi-only>
@@ -717,6 +722,7 @@
             wireSlider('bt-rsi-period', v => v);
             wireSlider('bt-stop-loss', v => v + '%');
             wireSlider('bt-cooldown', v => v + 'd');
+            wireSlider('bt-stop-reentry', v => v + 'd');
 
             const recoveryToggle = document.getElementById('bt-reset-recovery');
             const recoveryRsi = document.getElementById('bt-recovery-rsi');
@@ -763,6 +769,7 @@
                 document.getElementById('bt-rsi-method').value = p.rsi_method || 'wilder';
                 setSlider('bt-stop-loss', p.stop_loss);
                 setSlider('bt-cooldown', p.cooldown_days);
+                setSlider('bt-stop-reentry', p.stop_loss_reentry_days ?? 3);
                 setLevels('buy', p.avg_down_levels);
                 setLevels('sell', p.sell_levels);
                 if ('reset_requires_recovery' in p) {
@@ -950,6 +957,7 @@
                     rsi_method: document.getElementById('bt-rsi-method').value,
                     stop_loss: num('bt-stop-loss'),
                     cooldown_days: parseInt(document.getElementById('bt-cooldown').value, 10),
+                    stop_loss_reentry_days: parseInt(document.getElementById('bt-stop-reentry').value, 10),
                     reset_requires_recovery: document.getElementById('bt-reset-recovery').checked,
                     recovery_rsi: num('bt-recovery-rsi'),
                     buy_levels: [
