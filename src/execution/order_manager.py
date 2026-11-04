@@ -22,6 +22,16 @@ from src.utils.scheduler import daytime_tag
 from src.web.app import get_dashboard_state
 from src.core import decisions
 
+# After the broker rejects a buy for lack of funds, that symbol's buys pause
+BUY_BACKOFF = timedelta(minutes=30)
+# Phrases KIS uses when an order exceeds what the account can pay for
+_INSUFFICIENT_FUNDS = ("주문가능", "매수가능", "증거금", "잔고")
+
+
+def _is_insufficient_funds(error: Exception) -> bool:
+    return any(phrase in str(error) for phrase in _INSUFFICIENT_FUNDS)
+
+
 # Signal reason (minus its stage number) -> activity-feed label
 _REASON_LABEL = {
     "avg_down_stage": "단계 매수",
@@ -70,6 +80,10 @@ class OrderManager:
         # Key: (symbol, side) → timestamp of last order
         self._recent_orders: dict[tuple[str, str], datetime] = {}
         self._dedup_window = timedelta(seconds=60)
+        # symbol -> when buys may resume after the broker said funds were
+        # short. Without it the unfilled stage re-fired every minute (the
+        # dedup window) and was rejected again each time.
+        self._buy_backoff: dict[str, datetime] = {}
 
     async def start(self) -> None:
         """Start order manager"""
@@ -137,6 +151,12 @@ class OrderManager:
             )
             note(decisions.BLOCKED, "60초 안에 같은 주문이 있어 중복 방지")
             return
+
+        if action == "buy" and (until := self._buy_backoff.get(signal.symbol)):
+            if now < until:
+                note(decisions.BLOCKED, "주문가능금액 부족 — 잠시 매수 중단")
+                return
+            del self._buy_backoff[signal.symbol]
 
         # In-flight guard: with stage counters now advancing on FILL (not at
         # signal time), an unfilled order would otherwise have its stage
@@ -347,6 +367,9 @@ class OrderManager:
             order_id = await self.broker.submit_order(order)
             self._active_orders[order_id] = order
             self._order_meta[order_id] = signal_metadata or {}
+            # It went through, so the next failure for it is news again
+            if self.notifier:
+                self.notifier.reset_order_failures(order.symbol, order.side.value)
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
 
@@ -416,12 +439,22 @@ class OrderManager:
                 result="failed",
             )
 
-            # Send order failed notification (HIGH PRIORITY)
+            if order.side == OrderSide.BUY and _is_insufficient_funds(e):
+                self._buy_backoff[order.symbol] = datetime.now() + BUY_BACKOFF
+                decisions.record(
+                    order.symbol, decisions.REJECTED, "buy",
+                    "주문가능금액 부족 — 30분 뒤 다시 시도",
+                )
+
+            # Send order failed notification (HIGH PRIORITY). Repeats of the
+            # same failure are held back by the notifier.
             if self.notifier:
                 await self.notifier.notify_order_failed(
                     symbol=order.symbol,
                     side=order.side.value,
                     reason=str(e),
+                    code=getattr(e, "code", None),
+                    stop_loss=(signal_metadata or {}).get("reason") == "stop_loss",
                 )
 
             await self.event_bus.publish(

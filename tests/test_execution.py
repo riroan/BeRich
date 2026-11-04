@@ -647,6 +647,8 @@ class TestTradeNotification:
     @pytest.fixture
     def om_with_notifier(self, event_bus, broker, risk_manager, storage):
         notifier = AsyncMock()
+        # the one synchronous notifier method
+        notifier.reset_order_failures = MagicMock()
         om = OrderManager(
             event_bus=event_bus,
             broker=broker,

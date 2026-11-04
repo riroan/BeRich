@@ -537,7 +537,10 @@ class KISBroker:
                 return order_id
             else:
                 order.status = OrderStatus.REJECTED
-                raise OrderError(f"Order rejected: {data.get('msg1')}")
+                raise OrderError(
+                    f"Order rejected: {data.get('msg1')}",
+                    code=data.get("msg_cd"),
+                )
 
     async def _submit_overseas_order(self, order: Order) -> str:
         """Submit overseas US order (pre / regular / after sessions).
@@ -602,7 +605,10 @@ class KISBroker:
                 return order_id
             else:
                 order.status = OrderStatus.REJECTED
-                raise OrderError(f"Overseas order rejected: {data.get('msg1')}")
+                raise OrderError(
+                    f"Overseas order rejected: {data.get('msg1')}",
+                    code=data.get("msg_cd"),
+                )
 
     async def _submit_overseas_day_order(self, order: Order) -> str:
         """Submit a US daytime (주간거래) order.
@@ -667,7 +673,8 @@ class KISBroker:
             else:
                 order.status = OrderStatus.REJECTED
                 raise OrderError(
-                    f"Daytime order rejected: {data.get('msg1')}"
+                    f"Daytime order rejected: {data.get('msg1')}",
+                    code=data.get("msg_cd"),
                 )
 
     async def cancel_order(self, order_id: str, market: Market = Market.KRX) -> bool:

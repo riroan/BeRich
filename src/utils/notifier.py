@@ -1,7 +1,8 @@
 """Discord notification system"""
 
 import aiohttp
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import logging
@@ -20,6 +21,25 @@ COLOR_GRAY = 0x95A5A6     # Neutral
 COLOR_YELLOW = 0xF1C40F   # Caution
 
 
+# How long the same failure alert stays quiet after it was sent. A stop-loss
+# that keeps failing means losses are growing, so it repeats much sooner.
+REPEAT_WINDOW = timedelta(hours=6)
+STOP_LOSS_REPEAT_WINDOW = timedelta(minutes=15)
+ACCOUNT_ERROR_REPEAT_WINDOW = timedelta(hours=1)
+
+
+def failure_signature(reason: str, code: str | None = None) -> str:
+    """What makes two failures 'the same'.
+
+    The broker's error code when there is one; otherwise the message with
+    numbers masked, so '1,234,567원 초과' and '1,200,000원 초과' match.
+    """
+    if code:
+        return f"code:{code}"
+    text = re.sub(r"\d[\d,.]*", "#", str(reason))
+    return re.sub(r"\s+", " ", text).strip()
+
+
 class DiscordNotifier:
     """Discord webhook notifier for trading alerts"""
 
@@ -27,6 +47,8 @@ class DiscordNotifier:
         self.webhook_url = webhook_url
         self.enabled = enabled and bool(webhook_url)
         self._session: aiohttp.ClientSession | None = None
+        # key -> {"sent_at", "suppressed", "last_seen"}; see send_throttled
+        self._throttle: dict[tuple, dict] = {}
 
     async def _get_session(self) -> aiohttp.ClientSession:
         """Get or create aiohttp session"""
@@ -38,6 +60,43 @@ class DiscordNotifier:
         """Close the session"""
         if self._session and not self._session.closed:
             await self._session.close()
+
+    async def send_throttled(
+        self,
+        key: tuple,
+        message: str,
+        color: int,
+        window: timedelta = REPEAT_WINDOW,
+        now: datetime | None = None,
+    ) -> bool:
+        """Send ``message`` unless the same ``key`` was sent within ``window``.
+
+        Repeats inside the window are only counted. The first repeat after
+        it closes is sent with a line saying how many were held back.
+        """
+        now = now or datetime.now()
+        state = self._throttle.get(key)
+        if state is not None and now - state["sent_at"] < window:
+            state["suppressed"] += 1
+            state["last_seen"] = now
+            logger.debug(f"Alert suppressed ({state['suppressed']}x): {key}")
+            return False
+        if state is not None and state["suppressed"]:
+            hours = window.total_seconds() / 3600
+            span = f"{hours:g}시간" if hours >= 1 else f"{window.total_seconds() / 60:g}분"
+            message += (
+                f"\n지난 {span} 동안 같은 알림 {state['suppressed']}회 생략"
+                f" (마지막 {state['last_seen']:%H:%M})"
+            )
+        self._throttle[key] = {"sent_at": now, "suppressed": 0, "last_seen": now}
+        return await self.send(message, color=color)
+
+    def reset_throttle(self, *prefix) -> None:
+        """Forget alerts whose key starts with ``prefix`` — e.g. once an
+        order for that symbol goes through, the next failure is news."""
+        n = len(prefix)
+        for key in [k for k in self._throttle if k[:n] == prefix]:
+            del self._throttle[key]
 
     async def send(self, message: str, color: int = 0x3498DB) -> bool:
         """Send a message to Discord
@@ -420,8 +479,15 @@ class DiscordNotifier:
         symbol: str,
         side: str,
         reason: str,
+        code: str | None = None,
+        stop_loss: bool = False,
     ) -> bool:
-        """Notify order failed - HIGH PRIORITY"""
+        """Notify order failed - HIGH PRIORITY.
+
+        The same failure (symbol, side, reason) is sent once and then held
+        back for REPEAT_WINDOW — a rejected buy was re-sent every minute
+        and so was its alert. Failed stop-losses repeat sooner.
+        """
         action = "매수" if side.lower() == "buy" else "매도"
         message = (
             f"🚨 **{daytime_tag()}[주문 실패] {symbol} {action}**\n"
@@ -429,7 +495,14 @@ class DiscordNotifier:
             f"사유: {reason}\n"
             f"```"
         )
-        return await self.send(message, color=COLOR_RED)
+        return await self.send_throttled(
+            ("order_failed", symbol, side.lower(), failure_signature(reason, code)),
+            message, COLOR_RED,
+            window=STOP_LOSS_REPEAT_WINDOW if stop_loss else REPEAT_WINDOW,
+        )
+
+    def reset_order_failures(self, symbol: str, side: str) -> None:
+        self.reset_throttle("order_failed", symbol, side.lower())
 
     async def notify_data_fetch_failed(
         self,
@@ -445,7 +518,10 @@ class DiscordNotifier:
             f"오류: {error}{retry_info}\n"
             f"```"
         )
-        return await self.send(message, color=COLOR_ORANGE)
+        return await self.send_throttled(
+            ("data_fetch", symbol, failure_signature(error)),
+            message, COLOR_ORANGE,
+        )
 
     async def notify_data_delay(
         self,
@@ -495,7 +571,10 @@ class DiscordNotifier:
             f"오류: {error}\n"
             f"```"
         )
-        return await self.send(message, color=COLOR_RED)
+        return await self.send_throttled(
+            ("account_error", failure_signature(error)),
+            message, COLOR_RED, window=ACCOUNT_ERROR_REPEAT_WINDOW,
+        )
 
     async def notify_scheduler_stopped(
         self,

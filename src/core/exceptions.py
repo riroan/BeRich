@@ -14,8 +14,15 @@ class AuthenticationError(BrokerError):
 
 
 class OrderError(BrokerError):
-    """Order submission/execution errors"""
-    pass
+    """Order submission/execution errors.
+
+    ``code`` is the broker's error code when it gave one (KIS ``msg_cd``):
+    a stable identity for the failure, unlike the message text.
+    """
+
+    def __init__(self, message: str = "", code: str | None = None):
+        super().__init__(message)
+        self.code = code
 
 
 class RiskLimitError(TradingBotError):
