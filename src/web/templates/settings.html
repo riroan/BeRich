@@ -525,7 +525,7 @@
 {% block content %}
         <div class="settings-page">
         <div class="settings-mobile-header">
-            <h1>Settings</h1>
+            <h1>설정</h1>
         </div>
 
         <div class="settings-toolbar{{ '' if strategy_configs else ' is-empty' }}">
@@ -539,7 +539,7 @@
             </div>
             {% if strategy_configs %}
             <div class="settings-select-wrap">
-                <label for="strategy-select-mobile">Strategy</label>
+                <label for="strategy-select-mobile">전략</label>
                 <select class="strategy-select" id="strategy-select-mobile" onchange="switchStrategyByName(this.value)">
                     {% for cfg in strategy_configs %}
                     <option value="{{ cfg.name }}" {{ 'selected' if loop.first else '' }}>
@@ -550,7 +550,7 @@
             </div>
             {% endif %}
             <button class="btn settings-create-btn" onclick="toggleCreateForm(true)" id="btn-create" aria-haspopup="dialog" aria-label="New strategy">
-                <span class="settings-create-label">New Strategy</span>
+                <span class="settings-create-label">새 전략</span>
                 <span class="settings-create-plus" aria-hidden="true">+</span>
             </button>
         </div>
@@ -559,16 +559,16 @@
         <div class="modal-overlay" id="create-modal" aria-hidden="true" onclick="if(event.target===this)toggleCreateForm(false)">
             <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="create-strategy-title">
                 <div class="modal-header">
-                    <div class="section-title" id="create-strategy-title">New Strategy</div>
+                    <div class="section-title" id="create-strategy-title">새 전략</div>
                     <button class="modal-close" onclick="toggleCreateForm(false)" aria-label="Close new strategy dialog">✕</button>
                 </div>
                 <div class="modal-form-grid">
                     <div class="form-group">
-                        <label for="new-name">Name</label>
+                        <label for="new-name">이름</label>
                         <input type="text" id="new-name" placeholder="e.g. NASDAQ_RSI_MeanReversion">
                     </div>
                     <div class="form-group">
-                        <label for="new-class">Strategy Class</label>
+                        <label for="new-class">전략 종류</label>
                         <select id="new-class">
                             {% for cls in strategy_classes %}
                             <option value="{{ cls.class_path }}">{{ cls.name }}</option>
@@ -579,8 +579,8 @@
                 <p class="form-hint">Add symbols from the Symbols page once the strategy exists.</p>
                 <div class="form-actions modal-form-actions">
                     <span class="save-status" id="create-status"></span>
-                    <button class="btn" onclick="toggleCreateForm(false)">Cancel</button>
-                    <button class="btn btn-save" onclick="createStrategy()">Create</button>
+                    <button class="btn" onclick="toggleCreateForm(false)">취소</button>
+                    <button class="btn btn-save" onclick="createStrategy()">만들기</button>
                 </div>
             </div>
         </div>
@@ -593,7 +593,7 @@
             <div class="strategy-meta">
                 <div class="strategy-meta-top">
                     <div class="strategy-meta-title">
-                        <span class="strategy-meta-label">Strategy</span>
+                        <span class="strategy-meta-label">전략</span>
                         <h2>{{ cfg.name }}</h2>
                         <input type="text" class="strategy-name-input" value="{{ cfg.name }}"
                             maxlength="100" pattern="[A-Za-z0-9_-]+" spellcheck="false"
@@ -611,7 +611,7 @@
                         <strong title="{{ cfg.markets|map('upper')|join(', ') }}">{{ cfg.markets|map('upper')|join(' · ') or '—' }}</strong>
                     </div>
                     <div class="strategy-meta-item">
-                        <span>Symbols</span>
+                        <span>종목</span>
                         <strong>{{ cfg.symbols|length }}</strong>
                     </div>
                 </div>
@@ -620,35 +620,35 @@
             <form onsubmit="saveStrategy(event, '{{ cfg.name }}')">
                 <!-- Parameters -->
                 <div class="card">
-                    <div class="section-title">Parameters</div>
+                    <div class="section-title">파라미터</div>
                     <div class="settings-form-grid">
                         <div class="form-group">
-                            <label for="cfg-{{ cfg_idx }}-rsi-period">RSI Period</label>
+                            <label for="cfg-{{ cfg_idx }}-rsi-period">RSI 기간</label>
                             <span class="read-val">{{ params.get('rsi_period', 14) }}</span>
                             <input type="number" id="cfg-{{ cfg_idx }}-rsi-period" name="rsi_period" value="{{ params.get('rsi_period', 14) }}" min="1" max="100" step="1" inputmode="numeric">
-                            <span class="hint">Lookback window in days</span>
+                            <span class="hint">계산 기간(일)</span>
                         </div>
                         <div class="form-group">
-                            <label for="cfg-{{ cfg_idx }}-cooldown-days">Cooldown Days</label>
+                            <label for="cfg-{{ cfg_idx }}-cooldown-days">쿨다운(일)</label>
                             <span class="read-val">{{ params.get('cooldown_days', 1) }}</span>
                             <input type="number" id="cfg-{{ cfg_idx }}-cooldown-days" name="cooldown_days" value="{{ params.get('cooldown_days', 1) }}" min="0" max="365" step="1" inputmode="numeric">
-                            <span class="hint">Wait period after trade</span>
+                            <span class="hint">같은 단계를 다시 쓰기까지 대기</span>
                         </div>
                         <div class="form-group">
-                            <label for="cfg-{{ cfg_idx }}-stop-reentry-days">Stop Re-entry Days</label>
+                            <label for="cfg-{{ cfg_idx }}-stop-reentry-days">손절 후 재진입(일)</label>
                             <span class="read-val">{{ params.get('stop_loss_reentry_days', 3) }}</span>
                             <input type="number" id="cfg-{{ cfg_idx }}-stop-reentry-days" name="stop_loss_reentry_days" value="{{ params.get('stop_loss_reentry_days', 3) }}" min="0" max="60" step="1" inputmode="numeric">
                             <span class="hint">No buying back for this long after a stop-loss exit</span>
                         </div>
                         {% set rsi_method = params.get('rsi_method', 'wilder') %}
                         <div class="form-group">
-                            <label for="cfg-{{ cfg_idx }}-rsi-method">RSI Method</label>
+                            <label for="cfg-{{ cfg_idx }}-rsi-method">RSI 방식</label>
                             <span class="read-val">{{ rsi_method|capitalize }}</span>
                             <select id="cfg-{{ cfg_idx }}-rsi-method" name="rsi_method">
                                 <option value="wilder" {% if rsi_method != 'cutler' %}selected{% endif %}>Wilder</option>
                                 <option value="cutler" {% if rsi_method == 'cutler' %}selected{% endif %}>Cutler</option>
                             </select>
-                            <span class="hint">RSI smoothing formula</span>
+                            <span class="hint">RSI 평활 방식</span>
                         </div>
                     </div>
                 </div>
@@ -656,10 +656,10 @@
                 <!-- Buy / Sell Levels -->
                 <div class="levels-row">
                     <div class="card">
-                        <div class="section-title">Buy Levels</div>
+                        <div class="section-title">매수 단계</div>
                         {% set buy_levels = params.get('avg_down_levels', [[35, 0.3], [30, 0.35], [25, 0.35]]) %}
                         <table class="level-table center-table">
-                            <thead><tr><th>Level</th><th>RSI &le;</th><th>Portion</th></tr></thead>
+                            <thead><tr><th>단계</th><th>RSI &le;</th><th>비중</th></tr></thead>
                             <tbody id="buy-levels-{{ cfg.name }}">
                                 {% for level in buy_levels %}
                                 <tr>
@@ -679,10 +679,10 @@
                         </table>
                     </div>
                     <div class="card">
-                        <div class="section-title">Sell Levels</div>
+                        <div class="section-title">매도 단계</div>
                         {% set sell_levels = params.get('sell_levels', [[70, 0.25], [75, 0.35], [80, 0.4]]) %}
                         <table class="level-table center-table">
-                            <thead><tr><th>Level</th><th>RSI &ge;</th><th>Portion</th></tr></thead>
+                            <thead><tr><th>단계</th><th>RSI &ge;</th><th>비중</th></tr></thead>
                             <tbody id="sell-levels-{{ cfg.name }}">
                                 {% for level in sell_levels %}
                                 <tr>
@@ -707,10 +707,10 @@
                      Blank rows are skipped; all blank turns the ladder off. -->
                 <div class="levels-row">
                     <div class="card">
-                        <div class="section-title">Stop Loss Levels</div>
+                        <div class="section-title">손절 단계</div>
                         {% set sl_levels = params.get('stop_loss_levels') or ([[params.get('stop_loss'), 1.0]] if params.get('stop_loss') is not none else []) %}
                         <table class="level-table pnl-table center-table">
-                            <thead><tr><th>Level</th><th>PnL &le;</th><th>Portion</th></tr></thead>
+                            <thead><tr><th>단계</th><th>PnL &le;</th><th>비중</th></tr></thead>
                             <tbody id="sl-levels-{{ cfg.name }}">
                                 {% for i in range(3) %}
                                 {% set level = sl_levels[i] if i < sl_levels|length else None %}
@@ -731,10 +731,10 @@
                         </table>
                     </div>
                     <div class="card">
-                        <div class="section-title">Take Profit Levels</div>
+                        <div class="section-title">익절 단계</div>
                         {% set tp_levels = params.get('take_profit_levels') or ([[params.get('take_profit'), 1.0]] if params.get('take_profit') else []) %}
                         <table class="level-table pnl-table center-table">
-                            <thead><tr><th>Level</th><th>PnL &ge;</th><th>Portion</th></tr></thead>
+                            <thead><tr><th>단계</th><th>PnL &ge;</th><th>비중</th></tr></thead>
                             <tbody id="tp-levels-{{ cfg.name }}">
                                 {% for i in range(3) %}
                                 {% set level = tp_levels[i] if i < tp_levels|length else None %}
@@ -759,9 +759,9 @@
                 <div class="form-actions">
                     <span class="save-status" id="status-{{ cfg.name }}"></span>
                     <button type="button" class="btn btn-backtest" onclick="backtestWith({{ cfg.name|tojson|forceescape }})">이 설정으로 백테스트</button>
-                    <button type="submit" class="btn btn-save">Save & Apply</button>
-                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">Edit</button>
-                    <button type="button" class="btn settings-delete-btn" onclick="deleteStrategy('{{ cfg.name }}')">Delete</button>
+                    <button type="submit" class="btn btn-save">저장 및 적용</button>
+                    <button type="button" class="btn btn-edit" onclick="toggleEdit('{{ cfg.name }}')">편집</button>
+                    <button type="button" class="btn settings-delete-btn" onclick="deleteStrategy('{{ cfg.name }}')">삭제</button>
                 </div>
             </form>
         </div>
@@ -811,10 +811,10 @@
             const ordered = (rows, cmp) => rows.every(
                 (r, i) => i === 0 || cmp(r[0], rows[i - 1][0]));
             if (!ordered(params.stop_loss_levels, (a, b) => a < b)) {
-                return {error: 'Stop loss levels must get more negative'};
+                return {error: '손절 단계는 갈수록 더 낮아야 합니다'};
             }
             if (!ordered(params.take_profit_levels, (a, b) => a > b)) {
-                return {error: 'Take profit levels must increase'};
+                return {error: '익절 단계는 갈수록 더 높아야 합니다'};
             }
 
             const buyContainer = document.getElementById('buy-levels-' + strategyName);
@@ -937,7 +937,7 @@
             const classPath = document.getElementById('new-class').value;
 
             if (!name) {
-                statusEl.textContent = 'Name required';
+                statusEl.textContent = '이름을 입력하세요';
                 statusEl.className = 'save-status error';
                 return;
             }
@@ -959,7 +959,7 @@
                 sell_levels: [[70, 0.25], [75, 0.35], [80, 0.4]]
             };
 
-            statusEl.textContent = 'Creating...';
+            statusEl.textContent = '만드는 중...';
             statusEl.className = 'save-status';
 
             try {
@@ -972,13 +972,13 @@
                 });
                 const data = await resp.json();
                 if (!resp.ok) {
-                    statusEl.textContent = data.detail || 'Failed';
+                    statusEl.textContent = data.detail || '실패';
                     statusEl.className = 'save-status error';
                     return;
                 }
                 location.reload();
             } catch (e) {
-                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.textContent = '오류: ' + e.message;
                 statusEl.className = 'save-status error';
             }
         }
@@ -1002,7 +1002,7 @@
                     setStrategyStatus(name, data.detail || 'Delete failed', 'error');
                 }
             } catch (e) {
-                setStrategyStatus(name, 'Error: ' + e.message, 'error');
+                setStrategyStatus(name, '오류: ' + e.message, 'error');
             }
         }
 
@@ -1021,7 +1021,7 @@
                     setStrategyStatus(name, enabled ? 'Enabled.' : 'Disabled.', 'success');
                 }
             } catch (e) {
-                setStrategyStatus(name, 'Error: ' + e.message, 'error');
+                setStrategyStatus(name, '오류: ' + e.message, 'error');
             }
         }
 
@@ -1033,7 +1033,7 @@
             const newName = content.querySelector('.strategy-name-input').value.trim();
 
             if (!/^[A-Za-z0-9_-]{1,100}$/.test(newName)) {
-                statusEl.textContent = 'Name: letters, digits, _ or - only';
+                statusEl.textContent = '이름: 영문, 숫자, _, - 만 쓸 수 있습니다';
                 statusEl.className = 'save-status error';
                 return;
             }
@@ -1056,7 +1056,7 @@
             }
             if (!confirm('저장하면 실매매에 바로 적용됩니다.\n\n' + changes.join('\n') + '\n\n저장할까요?')) return;
 
-            statusEl.textContent = 'Saving...';
+            statusEl.textContent = '저장 중...';
             statusEl.className = 'save-status';
 
             try {
@@ -1068,7 +1068,7 @@
                 const data = await resp.json();
 
                 if (!resp.ok) {
-                    statusEl.textContent = data.detail || 'Failed';
+                    statusEl.textContent = data.detail || '실패';
                     statusEl.className = 'save-status error';
                     return;
                 }
@@ -1080,7 +1080,7 @@
                 }
 
                 SAVED_PARAMS[strategyName] = params;
-                statusEl.textContent = data.bot_reloaded ? 'Saved & applied' : 'Saved (bot not running)';
+                statusEl.textContent = data.bot_reloaded ? '저장 및 적용됨' : '저장됨 (봇 미실행)';
                 statusEl.className = 'save-status success';
                 content.classList.remove('editing');
 
@@ -1100,7 +1100,7 @@
 
                 setTimeout(() => { statusEl.textContent = ''; }, 3000);
             } catch (e) {
-                statusEl.textContent = 'Error: ' + e.message;
+                statusEl.textContent = '오류: ' + e.message;
                 statusEl.className = 'save-status error';
             }
         }

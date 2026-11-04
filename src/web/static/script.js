@@ -180,7 +180,7 @@ class DashboardWebSocket {
         if (!tbody) return;
 
         if (positions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="empty">No positions</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="empty">보유 종목 없음</td></tr>';
             return;
         }
 
@@ -319,7 +319,7 @@ class DashboardWebSocket {
 
         const symbols = Object.keys(rsiValues);
         if (symbols.length === 0) {
-            grid.innerHTML = '<p class="empty">No RSI data</p>';
+            grid.innerHTML = '<p class="empty">RSI 데이터 없음</p>';
             return;
         }
 

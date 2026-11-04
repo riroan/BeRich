@@ -30,7 +30,7 @@
             </div>
 
             <div class="symbol-hero-card">
-                <div class="symbol-label">Current Price</div>
+                <div class="symbol-label">현재가</div>
                 <div class="symbol-hero-price-row">
                     <span class="symbol-hero-price">
                         {% if detail_price is not none %}
@@ -43,7 +43,7 @@
                 </div>
                 <div class="symbol-hero-metrics">
                     <div class="symbol-hero-metric">
-                        <div class="symbol-label">P&amp;L</div>
+                        <div class="symbol-label">손익</div>
                         {% if position %}
                         <div class="symbol-hero-metric-value {{ 'positive' if position.pnl >= 0 else 'negative' }}">{{ "{:+.1f}%".format(position.pnl_pct) }}</div>
                         <div class="symbol-hero-metric-sub {{ 'positive' if position.pnl >= 0 else 'negative' }}">
@@ -59,7 +59,7 @@
                         {% endif %}
                     </div>
                     <div class="symbol-hero-metric">
-                        <div class="symbol-label">Quantity</div>
+                        <div class="symbol-label">수량</div>
                         <div class="symbol-hero-metric-value">{{ "{:,.0f}".format(position.quantity) if position else "0" }}</div>
                         <div class="symbol-hero-metric-sub dim">
                             {% if position %}
@@ -78,15 +78,15 @@
                     <div class="symbol-stat-value {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
                 </div>
                 <div class="symbol-stat-card">
-                    <div class="symbol-label">Buy Stage</div>
+                    <div class="symbol-label">매수 단계</div>
                     <div class="symbol-stat-value">{{ position.buy_stage ~ '/' ~ position.max_buy_stages if position else '-' }}</div>
                 </div>
                 <div class="symbol-stat-card">
-                    <div class="symbol-label">Stop Loss Dist</div>
+                    <div class="symbol-label">손절까지</div>
                     <div class="symbol-stat-value {% if position %}{{ 'negative' if position.stop_loss_distance <= 2 else ('warning' if position.stop_loss_distance <= 5 else '') }}{% endif %}">{{ "{:.1f}%".format(position.stop_loss_distance) if position else '-' }}</div>
                 </div>
                 <div class="symbol-stat-card">
-                    <div class="symbol-label">Last Trade</div>
+                    <div class="symbol-label">최근 거래</div>
                     <div class="symbol-stat-value">{{ last_trade_mobile }}</div>
                 </div>
             </div>
@@ -95,11 +95,11 @@
         {% if position %}
         <div class="cards-row symbol-desktop-summary" >
             <div class="card">
-                <div class="label">Current Price</div>
+                <div class="label">현재가</div>
                 <div class="value small">{% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.current_price) }}{% else %}${{ "{:,.2f}".format(position.current_price) }}{% endif %}</div>
             </div>
             <div class="card">
-                <div class="label">P&L</div>
+                <div class="label">손익</div>
                 <div class="value small {{ 'positive' if position.pnl >= 0 else 'negative' }}">{{ "{:+.1f}%".format(position.pnl_pct) }}</div>
                 <div class="delta {{ 'positive' if position.pnl >= 0 else 'negative' }}">{% if position.market == 'KRX' %}{{ "{:+,.0f}".format(position.pnl) }}{% else %}{{ position.pnl|usd_signed }}{% endif %}</div>
             </div>
@@ -108,37 +108,37 @@
                 <div class="value small {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
             </div>
             <div class="card">
-                <div class="label">Quantity</div>
+                <div class="label">수량</div>
                 <div class="value small">{{ position.quantity }}</div>
                 <div class="delta dim">Avg {% if position.market == 'KRX' %}{{ "{:,.0f}".format(position.avg_price) }}{% else %}${{ "{:,.2f}".format(position.avg_price) }}{% endif %}</div>
             </div>
         </div>
         <div class="cards-row symbol-desktop-summary" >
             <div class="card">
-                <div class="label">Buy Stage</div>
+                <div class="label">매수 단계</div>
                 <div class="value small">{{ position.buy_stage }}/{{ position.max_buy_stages }}</div>
             </div>
             <div class="card">
-                <div class="label">Stop Loss Dist</div>
+                <div class="label">손절까지</div>
                 <div class="value small {{ 'danger' if position.stop_loss_distance <= 2 else ('warning' if position.stop_loss_distance <= 5 else '') }}">{{ "{:.1f}%".format(position.stop_loss_distance) }}</div>
             </div>
             <div class="card">
-                <div class="label">Today Change</div>
+                <div class="label">오늘 변동</div>
                 <div class="value js-today-change">-</div>
             </div>
             <div class="card">
-                <div class="label">Last Trade</div>
+                <div class="label">최근 거래</div>
                 <div class="value small dim" >{{ last_trade_raw }}</div>
             </div>
         </div>
         {% else %}
         <div class="cards-row symbol-desktop-summary" >
             <div class="card">
-                <div class="label">Current Price</div>
+                <div class="label">현재가</div>
                 <div class="value small">{% if current_price %}{% if symbol_market == 'krx' %}{{ "{:,.0f}".format(current_price) }}{% else %}${{ "{:,.2f}".format(current_price) }}{% endif %}{% else %}-{% endif %}</div>
             </div>
             <div class="card">
-                <div class="label">P&L</div>
+                <div class="label">손익</div>
                 <div class="value small dim">-</div>
             </div>
             <div class="card">
@@ -146,25 +146,25 @@
                 <div class="value small {% if rsi is not none %}{% if rsi <= 24 or rsi >= 76 %}rsi-danger{% elif rsi <= 35 or rsi >= 65 %}rsi-warning{% else %}rsi-neutral{% endif %}{% endif %}">{{ "{:.1f}".format(rsi) if rsi is not none else '-' }}</div>
             </div>
             <div class="card">
-                <div class="label">Quantity</div>
+                <div class="label">수량</div>
                 <div class="value small dim">0</div>
             </div>
         </div>
         <div class="cards-row symbol-desktop-summary" >
             <div class="card">
-                <div class="label">Buy Stage</div>
+                <div class="label">매수 단계</div>
                 <div class="value small dim">-</div>
             </div>
             <div class="card">
-                <div class="label">Stop Loss Dist</div>
+                <div class="label">손절까지</div>
                 <div class="value small dim">-</div>
             </div>
             <div class="card">
-                <div class="label">Today Change</div>
+                <div class="label">오늘 변동</div>
                 <div class="value js-today-change">-</div>
             </div>
             <div class="card">
-                <div class="label">Last Trade</div>
+                <div class="label">최근 거래</div>
                 <div class="value small dim" >{{ last_trade_raw }}</div>
             </div>
         </div>
@@ -173,7 +173,7 @@
         <section class="chart-section symbol-combined-chart-section">
             <div class="panel symbol-combined-chart-panel">
                 <div class="symbol-chart-header">
-                    <h2>Chart</h2>
+                    <h2>차트</h2>
                     <div class="chart-tf-toggle" role="group" aria-label="Chart mode">
                         <button type="button" class="chart-tf-btn active" data-tf="tick" aria-pressed="true">분봉</button>
                         <button type="button" class="chart-tf-btn" data-tf="daily" aria-pressed="false">일봉</button>
@@ -182,7 +182,7 @@
                 </div>
                 <div class="symbol-chart-stack">
                     <div class="symbol-chart-block symbol-price-chart">
-                        <div class="symbol-chart-label">Price</div>
+                        <div class="symbol-chart-label">가격</div>
                         <div id="price-chart" class="chart-container-small" role="img" aria-label="{{ symbol }} price chart with trade markers" tabindex="0"></div>
                     </div>
                     <div class="symbol-chart-block symbol-rsi-chart">
@@ -198,7 +198,7 @@
         {% if symbol_trades %}
         <section class="trades-section">
             <div class="panel">
-                <h2>Trade History</h2>
+                <h2>거래 내역</h2>
                 <div class="symbol-trades-list-m">
                     {% for log in symbol_trades %}
                     {% set action_label = 'BUY' if log.action == 'buy' else ('SELL' if log.action == 'sell' else ('PARTIAL' if log.action == 'partial_sell' else ('STOP' if log.action == 'stop_loss' else log.action|upper))) %}
@@ -224,12 +224,12 @@
                 <table class="trades-table center-table mobile-cards">
                     <thead>
                         <tr>
-                            <th>Time</th>
-                            <th>Action</th>
-                            <th>Price</th>
-                            <th>Qty</th>
+                            <th>시각</th>
+                            <th>구분</th>
+                            <th>가격</th>
+                            <th>수량</th>
                             <th>RSI</th>
-                            <th>P&L</th>
+                            <th>손익</th>
                         </tr>
                     </thead>
                     <tbody>

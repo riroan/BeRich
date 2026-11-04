@@ -3,20 +3,20 @@
 {% block title %}Symbol Management - BeRich Dashboard{% endblock %}
 
 {% block content %}
-        <header class="page-mobile-title"><h1>Symbols</h1></header>
+        <header class="page-mobile-title"><h1>종목</h1></header>
         <!-- Add Symbol (desktop: top card · mobile: FAB bottom sheet) -->
         <div class="card add-symbol-card" id="add-symbol-card">
             <div class="sheet-grabber"></div>
-            <div class="section-title">Add Symbol
+            <div class="section-title">종목 추가
                 <button type="button" class="sheet-close" onclick="closeAddSheet()" aria-label="Close">&#x2715;</button>
             </div>
             <div class="sym-add-form">
                 <div class="form-field">
-                    <label for="symbol-input">Ticker</label>
+                    <label for="symbol-input">티커</label>
                     <input type="text" id="symbol-input" placeholder="AAPL" autocomplete="off" autocapitalize="characters">
                 </div>
                 <div class="form-field">
-                    <label for="market-select">Market</label>
+                    <label for="market-select">시장</label>
                     <select id="market-select">
                         {% for market in markets %}
                         <option value="{{ market }}">{{ market | upper }}</option>
@@ -24,7 +24,7 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="strategy-select">Strategy</label>
+                    <label for="strategy-select">전략</label>
                     <select id="strategy-select">
                         {% for s in strategies %}
                         <option value="{{ s.name }}">{{ s.name }}</option>
@@ -32,7 +32,7 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="sector-input">Sector</label>
+                    <label for="sector-input">섹터</label>
                     <select id="sector-input">
                         <option value="">— 미지정 —</option>
                         {% for sec in sector_choices %}
@@ -41,10 +41,10 @@
                     </select>
                 </div>
                 <div class="form-field">
-                    <label for="weight-input">Max Weight (%)</label>
+                    <label for="weight-input">최대 비중 (%)</label>
                     <input type="number" id="weight-input" value="20" min="1" max="100" step="0.1" inputmode="decimal">
                 </div>
-                <button id="add-symbol-btn" onclick="addSymbol()" class="btn">Add Symbol</button>
+                <button id="add-symbol-btn" onclick="addSymbol()" class="btn">종목 추가</button>
             </div>
             <div id="symbol-form-status" class="form-status" role="status" aria-live="polite"></div>
         </div>
@@ -170,19 +170,19 @@
             const weightInput = document.getElementById('weight-input');
             const maxWeight = parseFloat(weightInput.value);
             if (!symbol) {
-                setSymbolStatus('Ticker is required.', 'error');
+                setSymbolStatus('티커를 입력하세요.', 'error');
                 input.focus();
                 return;
             }
             if (!(maxWeight >= 1 && maxWeight <= 100)) {
-                setSymbolStatus('Weight must be between 1 and 100.', 'error');
+                setSymbolStatus('비중은 1~100 사이여야 합니다.', 'error');
                 weightInput.focus();
                 return;
             }
 
             button.disabled = true;
-            button.textContent = 'Adding...';
-            setSymbolStatus('Adding symbol...');
+            button.textContent = '추가 중...';
+            setSymbolStatus('종목 추가 중...');
 
             try {
                 const resp = await fetch('/api/symbols', {
@@ -200,10 +200,10 @@
                 }
                 else { location.reload(); }
             } catch (e) {
-                setSymbolStatus('Error: ' + e.message, 'error');
+                setSymbolStatus('오류: ' + e.message, 'error');
             } finally {
                 button.disabled = false;
-                button.textContent = 'Add Symbol';
+                button.textContent = '종목 추가';
             }
         }
 
@@ -211,7 +211,7 @@
             const row = document.querySelector(`.sym-row[data-id="${id}"][data-symbol="${symbol}"]`);
             if (row && el) row.classList.toggle('is-off', !el.checked);
             try { await fetch(`/api/symbols/${id}/toggle?symbol=${encodeURIComponent(symbol)}`, {method: 'POST'}); }
-            catch (e) { setSymbolStatus('Failed: ' + e.message, 'error'); location.reload(); }
+            catch (e) { setSymbolStatus('실패: ' + e.message, 'error'); location.reload(); }
         }
 
         async function stepWeight(id, symbol, dir) {
@@ -277,9 +277,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({max_weight: parseFloat(weight)}),
                 });
-                if (!resp.ok) setSymbolStatus('Failed to update weight.', 'error');
-                else setSymbolStatus(`${symbol} weight updated.`, 'success');
-            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+                if (!resp.ok) setSymbolStatus('비중 변경 실패', 'error');
+                else setSymbolStatus(`${symbol} 비중 변경됨`, 'success');
+            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
         }
 
         async function updateName(id, symbol, name) {
@@ -291,9 +291,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({name}),
                 });
-                if (!resp.ok) setSymbolStatus('Failed to update name.', 'error');
-                else setSymbolStatus(`${symbol} name updated.`, 'success');
-            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+                if (!resp.ok) setSymbolStatus('이름 변경 실패', 'error');
+                else setSymbolStatus(`${symbol} 이름 변경됨`, 'success');
+            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
         }
 
         async function updateSector(id, symbol, sector) {
@@ -305,9 +305,9 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({sector}),
                 });
-                if (!resp.ok) setSymbolStatus('Failed to update sector.', 'error');
-                else setSymbolStatus(`${symbol} sector updated.`, 'success');
-            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+                if (!resp.ok) setSymbolStatus('섹터 변경 실패', 'error');
+                else setSymbolStatus(`${symbol} 섹터 변경됨`, 'success');
+            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
         }
 
         async function moveSymbol(id, symbol, el) {
@@ -328,7 +328,7 @@
                 // the row belongs under a different group heading now
                 location.reload();
             } catch (e) {
-                setSymbolStatus('Error: ' + e.message, 'error');
+                setSymbolStatus('오류: ' + e.message, 'error');
                 el.disabled = false;
             }
         }
@@ -343,7 +343,7 @@
                 } else {
                     setSymbolStatus(`Failed to delete ${symbol}.`, 'error');
                 }
-            } catch (e) { setSymbolStatus('Error: ' + e.message, 'error'); }
+            } catch (e) { setSymbolStatus('오류: ' + e.message, 'error'); }
         }
 
         document.getElementById('symbol-input').addEventListener('keypress', e => {
