@@ -126,6 +126,12 @@ class PositionInfo(BaseModel):
     sell_stage_reset_remaining: str | None = None
     stop_loss_pct: float = -10.0
     stop_loss_distance: float = 0.0  # how far from stop loss
+    # Next rung of each ladder (see src.strategy.plan); None = spent/unknown
+    next_buy_rsi: float | None = None
+    next_buy_stage: int | None = None
+    next_sell_rsi: float | None = None
+    next_sell_portion: float | None = None
+    stop_price: float | None = None
 
 
 class TradeLog(BaseModel):
@@ -458,6 +464,10 @@ class DashboardState:
 
         # Live strategy instances (set by bot)
         self.strategy_instances: list[Any] | None = None
+        # symbol -> its strategy's params, for the positions' next-action
+        # plan. Filled from the DB by the web routes; the live strategy
+        # instances are used when the bot runs in-process.
+        self.symbol_params: dict[str, dict] = {}
 
         # Hot reload callback, and the bot loop it has to run on (set by bot)
         self.reload_callback: Any | None = None
@@ -643,6 +653,26 @@ class DashboardState:
                 record.get("stop_loss_distance", pnl_pct - stop_loss_pct)
             ),
         )
+
+    def apply_position_plans(self) -> None:
+        """Attach each position's next buy/sell trigger and stop price."""
+        from src.strategy.plan import position_plan
+
+        params_by_symbol = dict(self.symbol_params)
+        for strategy in self.strategy_instances or []:
+            for symbol in getattr(strategy, "symbols", []):
+                params_by_symbol.setdefault(
+                    symbol, getattr(strategy, "params", {}) or {},
+                )
+        for symbol, pos in list(self.positions.items()):
+            params = params_by_symbol.get(symbol)
+            if params is None:
+                continue
+            plan = position_plan(
+                params, pos.buy_stage, pos.sell_stage, pos.sl_stage,
+                pos.avg_price,
+            )
+            self.positions[symbol] = pos.model_copy(update=plan)
 
     def replace_positions_from_records(
         self,
@@ -1816,11 +1846,31 @@ def create_app() -> FastAPI:
             if log.symbol == symbol_upper
         ][:20]
 
+        # RSI reference lines: the position's next rungs, else the symbol's
+        # first rungs (where it would start buying / selling)
+        from src.strategy.plan import position_plan
+
+        first = position_plan(
+            dashboard_state.symbol_params.get(symbol_upper, {}), 0, 0, 0, 0,
+        )
+        rsi_buy_line = (
+            position.next_buy_rsi
+            if position and position.next_buy_rsi is not None
+            else first["next_buy_rsi"]
+        )
+        rsi_sell_line = (
+            position.next_sell_rsi
+            if position and position.next_sell_rsi is not None
+            else first["next_sell_rsi"]
+        )
+
         context = {
             "request": request,
             "active_page": "symbols",
             "symbol": symbol_upper,
             "position": position,
+            "rsi_buy_line": rsi_buy_line,
+            "rsi_sell_line": rsi_sell_line,
             "rsi": rsi,
             "current_price": current_price,
             "symbol_market": market,
@@ -2371,17 +2421,32 @@ def create_app() -> FastAPI:
         """Read current positions from DB, falling back to in-memory state."""
         storage = await _get_web_storage()
         if not storage:
+            dashboard_state.apply_position_plans()
             return list(dashboard_state.positions.values())
 
         try:
             records = await storage.get_current_positions()
             dashboard_state.replace_positions_from_records(records)
-            return list(dashboard_state.positions.values())
+            try:
+                dashboard_state.symbol_params = _params_by_symbol(
+                    await storage.get_all_strategy_configs()
+                )
+            except Exception as e:
+                logger.warning(f"Failed to load strategy params for web: {e}")
         except Exception as e:
             logger.warning(f"Failed to load current positions for web: {e}")
-            return list(dashboard_state.positions.values())
         finally:
             await storage.close()
+        dashboard_state.apply_position_plans()
+        return list(dashboard_state.positions.values())
+
+    def _params_by_symbol(configs: list[dict]) -> dict[str, dict]:
+        out: dict[str, dict] = {}
+        for cfg in configs:
+            for s in cfg.get("symbols", []):
+                sym = s["symbol"] if isinstance(s, dict) else s
+                out[str(sym).upper()] = cfg.get("params", {}) or {}
+        return out
 
     async def _load_equity_history_for_web() -> None:
         """Read persisted equity history so performance metrics use the same
@@ -3886,6 +3951,11 @@ def _buying_power_usd() -> float:
     return float(value if value is not None else dashboard_state.cash_usd)
 
 
+def _planned_positions() -> list[dict]:
+    dashboard_state.apply_position_plans()
+    return [p.model_dump() for p in dashboard_state.positions.values()]
+
+
 def get_dashboard_snapshot() -> dict:
     """Get current dashboard state as a snapshot for WebSocket"""
     dashboard_state.update_signal_candidates()
@@ -3899,7 +3969,7 @@ def get_dashboard_snapshot() -> dict:
         "buying_power_usd": _buying_power_usd(),
         "pnl_krw": float(dashboard_state.pnl_krw),
         "pnl_usd": float(dashboard_state.pnl_usd),
-        "positions": [p.model_dump() for p in dashboard_state.positions.values()],
+        "positions": _planned_positions(),
         "rsi_values": dict(dashboard_state.rsi_values),
         "rsi_prices": dict(dashboard_state.rsi_prices),
         "rsi_thresholds": dict(dashboard_state.rsi_thresholds),

@@ -823,6 +823,15 @@ tr:hover { background: rgba(59,130,246,0.04); }
 .stage-kind { font-weight: 700; color: var(--gain); }
 .stage-line.sell .stage-kind { color: var(--loss); }
 .stage-line.sell .stage-dot.filled { background: var(--loss); }
+/* Next trigger per ladder, under the stage counters */
+.stage-next {
+    display: flex; flex-wrap: wrap; gap: 4px 8px;
+    margin-top: 2px;
+    font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.stage-next .next-buy { color: var(--gain); }
+.stage-next .next-sell { color: var(--loss); }
+.stage-next .next-stop { color: var(--amber); }
 .stage-count { color: var(--text); font-variant-numeric: tabular-nums; }
 .stage-reset { min-width: 44px; text-align: left; font-variant-numeric: tabular-nums; color: var(--muted); }
 

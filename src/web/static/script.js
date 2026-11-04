@@ -230,8 +230,23 @@ class DashboardWebSocket {
                     <div class="stage-bar">${dots(sellStage, maxSell)}</div>
                     <span class="stage-reset">${sellReset}</span>
                 </div>
+                ${this.renderNextTriggers(pos)}
             </div>
         `;
+    }
+
+    // Next rung of each ladder: what makes this position trade next
+    renderNextTriggers(pos) {
+        const parts = [];
+        if (pos.next_buy_rsi != null) parts.push(`<span class="next-buy">매수 RSI≤${Math.round(pos.next_buy_rsi)}</span>`);
+        if (pos.next_sell_rsi != null) parts.push(`<span class="next-sell">매도 RSI≥${Math.round(pos.next_sell_rsi)}</span>`);
+        if (pos.stop_price != null) {
+            const price = pos.market === 'KRX'
+                ? Math.round(pos.stop_price).toLocaleString('ko-KR')
+                : '$' + pos.stop_price.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            parts.push(`<span class="next-stop">손절 ${price}</span>`);
+        }
+        return parts.length ? `<div class="stage-next" aria-label="Next triggers">${parts.join('')}</div>` : '';
     }
 
     sortPositions() {

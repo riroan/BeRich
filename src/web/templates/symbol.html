@@ -360,11 +360,38 @@
         // My average cost, dashed. On both series since only one holds data.
         [priceSeries, dailySeries].forEach(s => s.createPriceLine({
             price: {{ position.avg_price }},
-            color: '#f59e0b',
+            color: '#94a3b8',
             lineWidth: 1,
             lineStyle: LightweightCharts.LineStyle.Dashed,
             axisLabelVisible: true,
+            title: '평단',
         }));
+        {% if position.stop_price is not none %}
+        // Where the next stop-loss rung fires
+        [priceSeries, dailySeries].forEach(s => s.createPriceLine({
+            price: {{ position.stop_price }},
+            color: '#f59e0b',
+            lineWidth: 1,
+            lineStyle: LightweightCharts.LineStyle.Dotted,
+            axisLabelVisible: true,
+            title: '손절',
+        }));
+        // Price lines don't widen autoscale, and the stop sits below recent
+        // prices by design — stretch the range so it stays on screen
+        [priceSeries, dailySeries].forEach(s => s.applyOptions({
+            autoscaleInfoProvider: (original) => {
+                const r = original();
+                if (!r || !r.priceRange) return r;
+                return {
+                    ...r,
+                    priceRange: {
+                        minValue: Math.min(r.priceRange.minValue, {{ position.stop_price }}),
+                        maxValue: r.priceRange.maxValue,
+                    },
+                };
+            },
+        }));
+        {% endif %}
         {% endif %}
 
         // Create RSI chart
@@ -399,6 +426,9 @@
             priceFormat: { type: 'price', precision: 1, minMove: 0.1 },
         });
 
+        // RSI reference lines at this symbol's next buy / sell rungs
+        const RSI_BUY_LINE = {{ rsi_buy_line if rsi_buy_line is not none else 35 }};
+        const RSI_SELL_LINE = {{ rsi_sell_line if rsi_sell_line is not none else 65 }};
         // Add RSI reference lines
         const oversoldLine = rsiChart.addLineSeries({
             color: colors.oversold,
@@ -475,12 +505,12 @@
             const times = rsiData.map(r => r.time);
             if (times.length >= 2) {
                 oversoldLine.setData([
-                    { time: times[0], value: 35 },
-                    { time: times[times.length - 1], value: 35 },
+                    { time: times[0], value: RSI_BUY_LINE },
+                    { time: times[times.length - 1], value: RSI_BUY_LINE },
                 ]);
                 overboughtLine.setData([
-                    { time: times[0], value: 65 },
-                    { time: times[times.length - 1], value: 65 },
+                    { time: times[0], value: RSI_SELL_LINE },
+                    { time: times[times.length - 1], value: RSI_SELL_LINE },
                 ]);
             }
         }
@@ -731,12 +761,12 @@
                     const first = dailyRsi[0].time;
                     const last = dailyRsi[dailyRsi.length - 1].time;
                     oversoldLine.setData([
-                        { time: first, value: 35 },
-                        { time: last, value: 35 },
+                        { time: first, value: RSI_BUY_LINE },
+                        { time: last, value: RSI_BUY_LINE },
                     ]);
                     overboughtLine.setData([
-                        { time: first, value: 65 },
-                        { time: last, value: 65 },
+                        { time: first, value: RSI_SELL_LINE },
+                        { time: last, value: RSI_SELL_LINE },
                     ]);
                 }
                 stabilizeCharts(false);

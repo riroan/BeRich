@@ -113,6 +113,13 @@
                                         </div>
                                         <span class="stage-reset">{{ pos.sell_stage_reset_remaining or '-' }}</span>
                                     </div>
+                                    {% if pos.next_buy_rsi is not none or pos.next_sell_rsi is not none or pos.stop_price is not none %}
+                                    <div class="stage-next" aria-label="Next triggers">
+                                        {% if pos.next_buy_rsi is not none %}<span class="next-buy">매수 RSI≤{{ "%.0f"|format(pos.next_buy_rsi) }}</span>{% endif %}
+                                        {% if pos.next_sell_rsi is not none %}<span class="next-sell">매도 RSI≥{{ "%.0f"|format(pos.next_sell_rsi) }}</span>{% endif %}
+                                        {% if pos.stop_price is not none %}<span class="next-stop">손절 {% if pos.market == 'KRX' %}{{ "{:,.0f}".format(pos.stop_price) }}{% else %}${{ "{:,.2f}".format(pos.stop_price) }}{% endif %}</span>{% endif %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
