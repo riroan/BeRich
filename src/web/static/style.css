@@ -16,6 +16,13 @@
     --warning: #f59e0b;
     --oversold: #10b981;
     --overbought: #ef4444;
+    /* Market direction, Korean convention (as on the candles): gains, rises
+       and buys are red; losses, falls and sells are blue. Status colors
+       (running, connected, errors) keep --emerald/--red. */
+    --gain: #ef4444;
+    --loss: #3b82f6;
+    --gain-bg: rgba(239,68,68,0.14);
+    --loss-bg: rgba(59,130,246,0.14);
     --text: #e2e8f0;
     --text-muted: #64748b;
     --dim: #94a3b8;
@@ -297,16 +304,16 @@ body {
     margin-top: 4px;
     font-variant-numeric: tabular-nums;
 }
-.card .value.positive { color: var(--emerald) !important; }
-.card .value.negative { color: var(--red) !important; }
+.card .value.positive { color: var(--gain) !important; }
+.card .value.negative { color: var(--loss) !important; }
 .card .value.rsi-warning { color: var(--amber) !important; }
 .card .delta {
     font-size: 13px;
     margin-top: 4px;
     font-weight: 500;
 }
-.card .delta.up, .positive { color: var(--emerald); }
-.card .delta.down, .negative { color: var(--red); }
+.card .delta.up, .positive { color: var(--gain); }
+.card .delta.down, .negative { color: var(--loss); }
 .card .delta.dim, .dim { color: var(--dim); }
 
 /* Mobile hero summary (hidden on desktop, shown ≤768px) */
@@ -365,9 +372,9 @@ body {
     margin-top: 1px;
 }
 .mobile-hero .hero-stat-value.positive,
-.mobile-hero .hero-stat-sub.positive { color: var(--emerald); }
+.mobile-hero .hero-stat-sub.positive { color: var(--gain); }
 .mobile-hero .hero-stat-value.negative,
-.mobile-hero .hero-stat-sub.negative { color: var(--red); }
+.mobile-hero .hero-stat-sub.negative { color: var(--loss); }
 
 /* Monthly returns grid */
 .monthly-grid {
@@ -394,14 +401,14 @@ body {
     line-height: 1.2;
     font-variant-numeric: tabular-nums;
 }
-.monthly-card.positive .monthly-card-return { color: var(--emerald); }
-.monthly-card.negative .monthly-card-return { color: var(--red); }
+.monthly-card.positive .monthly-card-return { color: var(--gain); }
+.monthly-card.negative .monthly-card-return { color: var(--loss); }
 
 /* Win/Loss bar */
 .wl-bar-wrap { margin-bottom: 20px; }
 .wl-bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; }
-.wl-fill.win { background: var(--emerald); }
-.wl-fill.loss { background: var(--red); }
+.wl-fill.win { background: var(--gain); }
+.wl-fill.loss { background: var(--loss); }
 .wl-bar-none { background: var(--border); }
 .wl-labels {
     display: flex; justify-content: space-between; margin-top: 8px;
@@ -806,16 +813,16 @@ tr:hover { background: rgba(59,130,246,0.04); }
     display: inline-block;
 }
 .rsi-badge.neutral, .rsi.neutral { background: rgba(245,158,11,0.15); color: var(--amber); }
-.rsi-badge.oversold, .rsi.oversold { background: rgba(16,185,129,0.15); color: var(--emerald); }
-.rsi-badge.overbought, .rsi.overbought { background: rgba(239,68,68,0.15); color: var(--red); }
+.rsi-badge.oversold, .rsi.oversold { background: var(--gain-bg); color: var(--gain); }
+.rsi-badge.overbought, .rsi.overbought { background: var(--loss-bg); color: var(--loss); }
 .stage-bar, .stage-indicator { display: flex; gap: 3px; align-items: center; }
 .stage-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--card); }
-.stage-dot.filled { background: var(--blue); }
+.stage-dot.filled { background: var(--gain); }
 .stage-stack { display: inline-flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 132px; }
 .stage-line { display: grid; grid-template-columns: 12px 28px 34px 1fr; gap: 5px; align-items: center; font-size: 10px; color: var(--muted); line-height: 1; }
-.stage-kind { font-weight: 700; color: var(--blue); }
-.stage-line.sell .stage-kind { color: var(--red); }
-.stage-line.sell .stage-dot.filled { background: var(--red); }
+.stage-kind { font-weight: 700; color: var(--gain); }
+.stage-line.sell .stage-kind { color: var(--loss); }
+.stage-line.sell .stage-dot.filled { background: var(--loss); }
 .stage-count { color: var(--text); font-variant-numeric: tabular-nums; }
 .stage-reset { min-width: 44px; text-align: left; font-variant-numeric: tabular-nums; color: var(--muted); }
 
@@ -842,8 +849,8 @@ tr:hover { background: rgba(59,130,246,0.04); }
 /* Within 5 of the first buy/sell rung — the candidate bands. Colours the
    number by which side it is nearing; .rsi-warning/-danger stay untouched
    because the header badge and symbol pages share them. */
-.rsi-item.near-buy .rsi-value { color: var(--emerald) !important; }
-.rsi-item.near-sell .rsi-value { color: var(--red) !important; }
+.rsi-item.near-buy .rsi-value { color: var(--gain) !important; }
+.rsi-item.near-sell .rsi-value { color: var(--loss) !important; }
 /* Past the second rung — same hue, brighter. */
 .rsi-item.near-buy .rsi-value.rsi-danger { color: #6ee7b7 !important; }
 .rsi-item.near-sell .rsi-value.rsi-danger { color: #fca5a5 !important; }
@@ -972,8 +979,8 @@ tr:hover { background: rgba(59,130,246,0.04); }
     justify-self: end;
     min-width: 0;
 }
-.signal-tag.buy { background: rgba(16,185,129,0.12); color: var(--emerald); }
-.signal-tag.sell { background: rgba(239,68,68,0.12); color: var(--red); }
+.signal-tag.buy { background: var(--gain-bg); color: var(--gain); }
+.signal-tag.sell { background: var(--loss-bg); color: var(--loss); }
 .signal-tag.stop { background: rgba(245,158,11,0.14); color: var(--amber); }
 
 /* Mobile trade cards (6a) — hidden on desktop, shown ≤768px */
@@ -1256,8 +1263,8 @@ select option { background: var(--surface); color: var(--text); }
 .trade-summary-strip .tss-item { flex: 1; text-align: center; }
 .trade-summary-strip .tss-item + .tss-item { border-left: 1px solid var(--border); }
 .trade-summary-strip .tss-num { font-size: 19px; font-weight: 700; color: var(--white); font-variant-numeric: tabular-nums; }
-.trade-summary-strip .tss-num.positive { color: var(--emerald); }
-.trade-summary-strip .tss-num.negative { color: var(--red); }
+.trade-summary-strip .tss-num.positive { color: var(--gain); }
+.trade-summary-strip .tss-num.negative { color: var(--loss); }
 .trade-summary-strip .tss-num.warning { color: var(--amber); }
 .trade-summary-strip .tss-label { font-size: 9px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: var(--text-muted); margin-top: 2px; }
 
@@ -1539,9 +1546,11 @@ select option { background: var(--surface); color: var(--text); }
     font-variant-numeric: tabular-nums;
 }
 .analytics-stat-value.positive {
-    color: var(--emerald);
+    color: var(--gain);
 }
-.analytics-stat-value.negative,
+.analytics-stat-value.negative {
+    color: var(--loss);
+}
 .analytics-stat-value.danger {
     color: var(--red);
 }
@@ -1635,10 +1644,10 @@ select option { background: var(--surface); color: var(--text); }
     white-space: nowrap;
 }
 .analytics-symbol-metrics strong.positive {
-    color: var(--emerald);
+    color: var(--gain);
 }
 .analytics-symbol-metrics strong.negative {
-    color: var(--red);
+    color: var(--loss);
 }
 
 /* ===================== Danger / Warning badges ===================== */
@@ -2181,8 +2190,8 @@ select option { background: var(--surface); color: var(--text); }
     .tcm-pnl-amt { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .tcm-pnl-pct { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; margin-top: 1px; }
     .tcm-pnl:not(.positive):not(.negative) .tcm-pnl-amt { color: var(--text-muted); }
-    .tcm-pnl.positive .tcm-pnl-amt, .tcm-pnl.positive .tcm-pnl-pct { color: var(--emerald); }
-    .tcm-pnl.negative .tcm-pnl-amt, .tcm-pnl.negative .tcm-pnl-pct { color: var(--red); }
+    .tcm-pnl.positive .tcm-pnl-amt, .tcm-pnl.positive .tcm-pnl-pct { color: var(--gain); }
+    .tcm-pnl.negative .tcm-pnl-amt, .tcm-pnl.negative .tcm-pnl-pct { color: var(--loss); }
     .trades-empty-m {
         background: var(--surface);
         border-radius: 14px;
@@ -3025,11 +3034,10 @@ select option { background: var(--surface); color: var(--text); }
         min-width: 0;
         border-radius: 8px;
         padding: 11px 8px;
-        background: rgba(20, 184, 166, 0.16);
+        background: var(--card);
     }
-    .page-performance .monthly-card.negative {
-        background: rgba(239, 68, 68, 0.18);
-    }
+    .page-performance .monthly-card.positive { background: var(--gain-bg); }
+    .page-performance .monthly-card.negative { background: var(--loss-bg); }
     .page-performance .monthly-card-month {
         color: var(--text-muted);
         font-size: 11px;
@@ -3365,6 +3373,10 @@ select option { background: var(--surface); color: var(--text); }
         --amber: #d97706;
         --positive: #059669;
         --negative: #dc2626;
+        --gain: #dc2626;
+        --loss: #2563eb;
+        --gain-bg: rgba(220,38,38,0.1);
+        --loss-bg: rgba(37,99,235,0.1);
         --warning: #d97706;
         --oversold: #059669;
         --overbought: #dc2626;

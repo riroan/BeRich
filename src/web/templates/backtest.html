@@ -53,8 +53,8 @@
             font-variant-numeric: tabular-nums;
         }
         .bt-stage-percent { display: none; }
-        .bt-section-h.bt-buy-title { color: var(--emerald); }
-        .bt-section-h.bt-sell-title { color: var(--red); }
+        .bt-section-h.bt-buy-title { color: var(--gain); }
+        .bt-section-h.bt-sell-title { color: var(--loss); }
         .bt-section-h { font-size: 12px; text-transform: uppercase; color: var(--dim); letter-spacing: 0.5px; margin-top: 8px; }
         .bt-run-actions { display: flex; }
         .bt-run-btn {
@@ -415,7 +415,7 @@
                 color: var(--white) !important;
             }
             .page-backtest .bt-result-grid .bt-winrate-card .value.small {
-                color: var(--emerald) !important;
+                color: var(--gain) !important;
             }
             .page-backtest .bt-combined-chart-section {
                 margin-top: 10px;
@@ -797,8 +797,10 @@
 
             const colors = {
                 bg: '#0f172a', grid: '#1e293b', up: '#3b82f6', rsi: '#8b5cf6',
-                oversold: '#10b981', overbought: '#ef4444',
-                buyMarker: '#10b981', sellMarker: '#ef4444', stopMarker: '#dc2626',
+                // Korean convention: buys red, sells blue. Stops are amber so a
+                // stop-loss stands apart from an ordinary sell.
+                oversold: '#ef4444', overbought: '#3b82f6',
+                buyMarker: '#ef4444', sellMarker: '#3b82f6', stopMarker: '#f59e0b',
                 sma: '#f59e0b',
                 // Candle bodies — Korean convention (red up, blue down), same
                 // as the symbol chart. `up` is the price LINE's color.

@@ -40,7 +40,7 @@
         <script>
             const trend = {{ trend | tojson | safe }};
             if (trend.length) {
-                const colors = { bg: '#0f172a', grid: '#1e293b', rsi: '#3b82f6', oversold: '#10b981', overbought: '#ef4444' };
+                const colors = { bg: '#0f172a', grid: '#1e293b', rsi: '#3b82f6', oversold: '#ef4444', overbought: '#3b82f6' };
                 const container = document.getElementById('rsi-trend-chart');
 
                 function isMobile() { return window.innerWidth <= 768; }
