@@ -143,6 +143,46 @@ class TestValidateOrder:
         assert ok is False
         assert "Single position quantity limit exceeded" in reason
 
+    # A sell only shrinks a held position (the bot never sells short), so
+    # none of the limits may stop it — above all not a stop-loss.
+
+    def test_sell_passes_after_daily_loss_limit(self, manager):
+        manager.record_trade(Decimal("-301"))  # buys are blocked now
+        ok, reason = manager.validate_order(_order(side=OrderSide.SELL))
+        assert ok is True and reason is None
+
+    def test_sell_passes_after_daily_trade_limit(self, manager):
+        for _ in range(5):
+            manager.record_trade(Decimal("0"))
+        ok, _ = manager.validate_order(_order(side=OrderSide.SELL))
+        assert ok is True
+
+    def test_sell_passes_when_exposure_is_at_the_cap(self, manager):
+        manager.update_positions([Position(
+            symbol="AAPL", market=Market.NASDAQ, quantity=100,
+            avg_entry_price=Decimal("100"), current_price=Decimal("100"),
+            unrealized_pnl=Decimal("0"),
+        )])  # exposure $10,000 == cap; selling $2,000 must not "exceed" it
+        ok, _ = manager.validate_order(
+            _order(side=OrderSide.SELL, quantity=20)
+        )
+        assert ok is True
+
+    def test_sell_of_a_large_position_passes(self, manager):
+        # 40 × $100 = $4,000, over the $2,500 per-position buy cap
+        ok, _ = manager.validate_order(
+            _order(side=OrderSide.SELL, quantity=40)
+        )
+        assert ok is True
+
+    def test_sell_passes_with_unknown_equity(self):
+        # Buys fail safe on an unknown balance; exits must not
+        m = RiskManager(RiskLimits(), account_value=Decimal("0"))
+        ok, _ = m.validate_order(
+            _order(side=OrderSide.SELL, quantity=1, price=Decimal("1"))
+        )
+        assert ok is True
+
 
 class TestRecordTradeAndStats:
     @pytest.fixture

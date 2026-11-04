@@ -47,6 +47,14 @@ class RiskManager:
         """Validate order against risk limits"""
         self._check_daily_reset()
 
+        # Every limit below caps new risk. The bot never sells short, so a
+        # sell only shrinks a held position and always passes — otherwise
+        # the daily-loss limit would block stop-losses on exactly the day
+        # they matter, and the exposure check (which adds the order's value
+        # to exposure) would reject sells that reduce it.
+        if order.side == OrderSide.SELL:
+            return True, None
+
         # 1. Daily loss limit (fraction of equity)
         max_daily_loss = self._pct(self.limits.max_daily_loss_pct)
         if self._daily_pnl < -max_daily_loss:
