@@ -196,6 +196,23 @@
             </div>
         </div>
 
+        <!-- 3b. Bot activity: what the bot did with each signal, and why not -->
+        <div class="card activity-card">
+            <div class="section-title">봇 활동</div>
+            <ul class="activity-list" id="activity-list">
+                {% for d in decisions %}
+                <li class="activity-item">
+                    <span class="activity-time">{{ d.time[11:16] }}</span>
+                    <a class="sym-badge" href="/symbol/{{ d.symbol }}">{{ d.symbol }}</a>
+                    <span class="activity-tag {{ d.outcome }} {{ d.action }}">{{ {'order': '주문', 'blocked': '보류', 'rejected': '거부'}[d.outcome] }}</span>
+                    <span class="activity-detail">{{ d.detail }}</span>
+                </li>
+                {% else %}
+                <li class="empty-state">아직 기록된 활동이 없습니다</li>
+                {% endfor %}
+            </ul>
+        </div>
+
         <!-- 4. System Status (1행) -->
         <div class="card">
             <div class="section-title">System Status</div>

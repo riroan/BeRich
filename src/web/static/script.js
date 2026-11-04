@@ -78,6 +78,8 @@ class DashboardWebSocket {
             this.updatePositionsTable(data.positions);
         }
 
+        if (data.decisions) this.updateActivity(data.decisions);
+
         // Update RSI grid
         if (data.rsi_values) {
             this.updateRSIGrid(data.rsi_values, data.rsi_prices || {}, data.rsi_thresholds || {});
@@ -233,6 +235,23 @@ class DashboardWebSocket {
                 ${this.renderNextTriggers(pos)}
             </div>
         `;
+    }
+
+    updateActivity(items) {
+        const list = document.getElementById('activity-list');
+        if (!list) return;
+        const tags = {order: '주문', blocked: '보류', rejected: '거부'};
+        if (!items.length) {
+            list.innerHTML = '<li class="empty-state">아직 기록된 활동이 없습니다</li>';
+            return;
+        }
+        list.innerHTML = items.map(d => `
+            <li class="activity-item">
+                <span class="activity-time">${this.escapeHTML(String(d.time).slice(11, 16))}</span>
+                <a class="sym-badge" href="/symbol/${encodeURIComponent(d.symbol)}">${this.escapeHTML(d.symbol)}</a>
+                <span class="activity-tag ${this.escapeHTML(d.outcome)} ${this.escapeHTML(d.action)}">${tags[d.outcome] || ''}</span>
+                <span class="activity-detail">${this.escapeHTML(d.detail)}</span>
+            </li>`).join('');
     }
 
     // Next rung of each ladder: what makes this position trade next

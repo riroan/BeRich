@@ -20,6 +20,16 @@ from src.data.storage import Storage
 from src.utils.notifier import DiscordNotifier
 from src.utils.scheduler import daytime_tag
 from src.web.app import get_dashboard_state
+from src.core import decisions
+
+# Signal reason (minus its stage number) -> activity-feed label
+_REASON_LABEL = {
+    "avg_down_stage": "단계 매수",
+    "staged_sell": "단계 매도",
+    "sell_stage": "단계 매도",
+    "stop_loss": "손절",
+    "take_profit": "익절",
+}
 
 logger = logging.getLogger(__name__)
 
@@ -92,16 +102,23 @@ class OrderManager:
         """Handle signal events"""
         signal: Signal = event.data["signal"]
         strategy_name: str = event.data["strategy"]
+        action = "buy" if signal.signal_type == SignalType.ENTRY_LONG else "sell"
+        reason = str((signal.metadata or {}).get("reason", ""))
+
+        def note(outcome: str, detail: str) -> None:
+            decisions.record(signal.symbol, outcome, action, detail)
 
         # Check if trading is enabled (warmup check)
         if not await self._is_trading_enabled():
             logger.info(f"[WARMUP] Signal ignored: {signal.signal_type.name} {signal.symbol}")
+            note(decisions.BLOCKED, "워밍업 중이라 신호 무시")
             return
 
         # Check if trading is paused
         dashboard = get_dashboard_state()
         if dashboard.trading_paused:
             logger.info(f"[PAUSED] Signal ignored: {signal.signal_type.name} {signal.symbol}")
+            note(decisions.BLOCKED, "매매 일시정지 중이라 신호 무시")
             return
 
         logger.info(f"Processing signal from {strategy_name}: {signal.signal_type.name} {signal.symbol}")
@@ -118,6 +135,7 @@ class OrderManager:
                 f"[DEDUP] Duplicate signal ignored: {side_key} {signal.symbol} "
                 f"(last order {(now - last_order_time).seconds}s ago)"
             )
+            note(decisions.BLOCKED, "60초 안에 같은 주문이 있어 중복 방지")
             return
 
         # In-flight guard: with stage counters now advancing on FILL (not at
@@ -130,18 +148,25 @@ class OrderManager:
                 f"[IN-FLIGHT] Signal suppressed: {side_key} {signal.symbol} "
                 f"(active order outstanding)"
             )
+            note(decisions.BLOCKED, "체결 대기 중인 주문이 있어 보류")
             return
 
         # Convert signal to order
         order = await self._signal_to_order(signal)
         if not order:
             logger.debug("No order generated for signal")
+            note(
+                decisions.BLOCKED,
+                "매수 여유 비중·현금이 없어 주문 수량 0" if action == "buy"
+                else "매도할 보유 수량 없음",
+            )
             return
 
         # Validate with risk manager
         is_valid, reject_reason = self.risk_manager.validate_order(order)
         if not is_valid:
             logger.warning(f"Order rejected by risk manager: {reject_reason}")
+            note(decisions.REJECTED, f"리스크 한도: {(reject_reason or '').split(':')[0]}")
             return
 
         # FIX-001: Record order timestamp for dedup
@@ -153,6 +178,11 @@ class OrderManager:
             f"{order.side.value.upper()} {order.symbol} | "
             f"Qty: {order.quantity} | Price: {order.price:,} | "
             f"Value: {order.quantity * order.price:,}"
+        )
+        note(
+            decisions.ORDER,
+            f"{_REASON_LABEL.get(reason.rstrip('_0123456789'), reason or '신호')} "
+            f"{order.quantity}주 주문",
         )
         await self._submit_order(order, signal_metadata=signal.metadata)
 

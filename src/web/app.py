@@ -1586,6 +1586,7 @@ def create_app() -> FastAPI:
         positions = await _get_current_positions_for_web()
         # Default order: P&L ascending (client can re-sort by rsi/price/symbol)
         positions.sort(key=lambda p: p.pnl_pct)
+        from src.core import decisions
 
         # Update derived states
         dashboard_state.update_signal_candidates()
@@ -1611,6 +1612,7 @@ def create_app() -> FastAPI:
         context = {
             "request": request,
             "active_page": "dashboard",
+            "decisions": decisions.recent(10),
             # Portfolio summary
             "positions": positions,
             "krw_positions": krw_positions,
@@ -3951,6 +3953,11 @@ def _buying_power_usd() -> float:
     return float(value if value is not None else dashboard_state.cash_usd)
 
 
+def _recent_decisions() -> list[dict]:
+    from src.core import decisions
+    return decisions.recent(10)
+
+
 def _planned_positions() -> list[dict]:
     dashboard_state.apply_position_plans()
     return [p.model_dump() for p in dashboard_state.positions.values()]
@@ -3970,6 +3977,7 @@ def get_dashboard_snapshot() -> dict:
         "pnl_krw": float(dashboard_state.pnl_krw),
         "pnl_usd": float(dashboard_state.pnl_usd),
         "positions": _planned_positions(),
+        "decisions": _recent_decisions(),
         "rsi_values": dict(dashboard_state.rsi_values),
         "rsi_prices": dict(dashboard_state.rsi_prices),
         "rsi_thresholds": dict(dashboard_state.rsi_thresholds),

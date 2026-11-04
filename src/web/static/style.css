@@ -3663,3 +3663,27 @@ select option { background: var(--surface); color: var(--text); }
         font-size: 16px !important;
     }
 }
+
+/* ===================== Bot activity feed ===================== */
+.activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.activity-item {
+    display: grid;
+    grid-template-columns: 40px auto auto 1fr;
+    align-items: center; gap: 8px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+}
+.activity-item:last-child { border-bottom: none; }
+.activity-time { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.activity-tag {
+    font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 5px;
+    background: var(--card); color: var(--dim); white-space: nowrap;
+}
+.activity-tag.order.buy { background: var(--gain-bg); color: var(--gain); }
+.activity-tag.order.sell { background: var(--loss-bg); color: var(--loss); }
+.activity-tag.rejected { background: rgba(239,68,68,0.12); color: var(--red); }
+.activity-detail { color: var(--text); min-width: 0; }
+@media (max-width: 768px) {
+    .activity-item { grid-template-columns: 36px auto auto 1fr; font-size: 12px; }
+}

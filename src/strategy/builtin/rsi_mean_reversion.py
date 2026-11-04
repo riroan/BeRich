@@ -15,6 +15,7 @@ from datetime import datetime, date, timedelta
 import pandas as pd
 import logging
 
+from src.core import decisions
 from src.core.types import Signal, SignalType
 from src.strategy.base import BaseStrategy
 from src.strategy.rsi_rules import (
@@ -432,6 +433,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 f"{(datetime.now() - last_exit).days}d ago < "
                 f"{reentry_cooldown_days}d"
             )
+            self._note_blocked_buy(
+                symbol, current_rsi, avg_down_levels,
+                f"청산 후 재진입 쿨다운 {reentry_cooldown_days}일",
+            )
             return None
         if (
             stop_loss_reentry_days
@@ -445,6 +450,10 @@ class RSIMeanReversionStrategy(BaseStrategy):
                 f"[{symbol}] RE-ENTRY BLOCKED | stopped out "
                 f"{(datetime.now() - last_stop).days}d ago < "
                 f"{stop_loss_reentry_days}d"
+            )
+            self._note_blocked_buy(
+                symbol, current_rsi, avg_down_levels,
+                f"손절 후 재진입 쿨다운 {stop_loss_reentry_days}일",
             )
             return None
 
@@ -535,6 +544,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
             f"Qty: {quantity} | Avg: {avg_price:,.0f} | "
             f"Value: {avg_price * quantity:,.0f}"
         )
+
+    @staticmethod
+    def _note_blocked_buy(symbol, rsi, levels, why: str) -> None:
+        """Put a held-back entry in the activity feed — only when RSI is at
+        the first buy rung, i.e. a buy would otherwise have gone out."""
+        if levels and rsi <= levels[0][0]:
+            decisions.record(symbol, decisions.BLOCKED, "buy", why)
 
     def _reset_position(self, symbol: str) -> None:
         """Reset all tracking for a symbol after full exit"""
