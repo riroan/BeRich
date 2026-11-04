@@ -3687,3 +3687,31 @@ select option { background: var(--surface); color: var(--text); }
 @media (max-width: 768px) {
     .activity-item { grid-template-columns: 36px auto auto 1fr; font-size: 12px; }
 }
+
+/* ===================== Header: state in words, one row on mobile ======== */
+/* The pause button said nothing but a play/pause glyph, which read as either
+   the state or the action. It now shows the state in words. */
+.header-right .pause-btn {
+    width: auto;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0;
+}
+.header-right [data-tip] { cursor: help; }
+@media (max-width: 768px) {
+    /* Brand and chips share one row */
+    .header { flex-wrap: nowrap; padding-bottom: 8px; }
+    .header h1 { flex: 0 0 auto; }
+    .header-right { width: auto; flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; }
+    /* Healthy states need no chip on a phone; a chip appears only when
+       something is off (disconnected, bot stopped, paper mode) */
+    .header-right .ws-status.connected,
+    .header-right .bot-status.running,
+    .header-right .mode.real { display: none; }
+    .header-right .rsi-header-badge,
+    .header-right .warmup,
+    .header-right .pause-btn { height: 32px; }
+}

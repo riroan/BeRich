@@ -31,11 +31,11 @@
         const resp = await fetch(endpoint, {method: "POST"});
         const data = await resp.json();
         if (data.paused) {
-            btn.textContent = "PAUSED";
+            btn.textContent = "정지됨";
             btn.classList.add("paused");
             btn.setAttribute("aria-pressed", "true");
         } else {
-            btn.textContent = "TRADING";
+            btn.textContent = "매매 중";
             btn.classList.remove("paused");
             btn.setAttribute("aria-pressed", "false");
         }

@@ -620,6 +620,7 @@ function initTooltips() {
     box.className = 'tip-box';
     document.body.appendChild(box);
     let openEl = null;
+    let shownAt = 0;
 
     function show(el) {
         const text = el.dataset.tip;
@@ -633,6 +634,7 @@ function initTooltips() {
         box.style.transform = 'translate(-50%, calc(-100% - 8px))';
         box.classList.add('visible');
         openEl = el;
+        shownAt = Date.now();
     }
     function hide() {
         box.classList.remove('visible');
@@ -646,7 +648,10 @@ function initTooltips() {
         el.addEventListener('blur', hide);
         el.addEventListener('click', (e) => {
             e.stopPropagation();
-            openEl === el ? hide() : show(el);
+            // A tap focuses the element (showing the tip) and then clicks it;
+            // that click must not close the tip it just opened
+            if (openEl === el && Date.now() - shownAt > 400) hide();
+            else show(el);
         });
     });
     document.addEventListener('click', hide);
