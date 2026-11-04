@@ -50,7 +50,8 @@ def test_performance_page_displays_infinity_for_no_losing_sells():
     web_app.dashboard_state.fills = _winning_sell_fills()
 
     try:
-        response = TestClient(web_app.create_app()).get("/performance")
+        # Trade statistics live on Analytics; Performance is account-level
+        response = TestClient(web_app.create_app()).get("/analytics")
     finally:
         web_app.AUTH_PASSWORD = original_auth_password
         web_app.MOCK_MODE = original_mock_mode
@@ -58,7 +59,7 @@ def test_performance_page_displays_infinity_for_no_losing_sells():
 
     assert response.status_code == 200
     assert "$82.63" in response.text
-    assert "∞" in response.text
+    assert "&infin;" in response.text
 
 
 def test_performance_prefers_adjusted_equity_history():
@@ -375,7 +376,7 @@ def test_performance_page_loads_fills_from_db(tmp_path):
 
     try:
         client = TestClient(web_app.create_app())
-        response = client.get("/performance")
+        response = client.get("/analytics")
         trade_logs_response = client.get("/api/trade-logs")
     finally:
         web_app.AUTH_PASSWORD = original_auth_password
@@ -384,7 +385,7 @@ def test_performance_page_loads_fills_from_db(tmp_path):
 
     assert response.status_code == 200
     assert "$82.63" in response.text
-    assert "∞" in response.text
+    assert "&infin;" in response.text
     assert trade_logs_response.status_code == 200
     assert trade_logs_response.json()[0]["symbol"] == "AAPL"
 

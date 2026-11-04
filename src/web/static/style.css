@@ -3715,3 +3715,8 @@ select option { background: var(--surface); color: var(--text); }
     .header-right .warmup,
     .header-right .pause-btn { height: 32px; }
 }
+
+/* Performance → Analytics link card */
+.perf-link-card { text-decoration: none; color: inherit; display: block; }
+.perf-link-card .value.small { color: var(--blue); }
+.perf-link-card:hover { border-color: var(--blue); }
