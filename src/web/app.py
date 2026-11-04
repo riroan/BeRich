@@ -2,6 +2,7 @@
 
 import asyncio
 import hmac
+import weakref
 import secrets
 import os
 from datetime import date, datetime, timedelta
@@ -340,6 +341,51 @@ def flow_adjusted_series(
         prev_value = value
 
     return augmented, returns
+
+
+# One Storage per (event loop, database) for the web; see _get_web_storage
+_web_storages: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict]" = (
+    weakref.WeakKeyDictionary()
+)
+_web_storage_locks: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Lock]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+async def _shared_storage(db_url: str):
+    from src.data.storage import Storage
+
+    loop = asyncio.get_running_loop()
+    per_loop = _web_storages.setdefault(loop, {})
+    if (storage := per_loop.get(db_url)) is not None:
+        return storage
+    lock = _web_storage_locks.setdefault(loop, asyncio.Lock())
+    async with lock:
+        if (storage := per_loop.get(db_url)) is None:
+            storage = Storage(db_url)
+            await storage.initialize()
+            per_loop[db_url] = storage
+    return storage
+
+
+async def dispose_web_storages() -> None:
+    """Dispose of this loop's shared engines (app shutdown)."""
+    loop = asyncio.get_running_loop()
+    for storage in (_web_storages.pop(loop, None) or {}).values():
+        await storage.close()
+
+
+class _SharedStorage:
+    """A borrowed Storage: everything but close() goes to the shared one."""
+
+    def __init__(self, storage):
+        self._storage = storage
+
+    def __getattr__(self, name):
+        return getattr(self._storage, name)
+
+    async def close(self) -> None:
+        pass
 
 
 def daily_equity_rows(series: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -1491,6 +1537,7 @@ def create_app() -> FastAPI:
         redoc_url="/redoc" if _debug else None,
         openapi_url="/openapi.json" if _debug else None,
     )
+    app.router.add_event_handler("shutdown", dispose_web_storages)
 
     # Rate limiter + security headers
     app.state.limiter = limiter
@@ -2423,13 +2470,19 @@ def create_app() -> FastAPI:
         sector: str = ""
 
     async def _get_web_storage():
-        """Get a storage instance for web requests (own event loop)"""
+        """Storage for web requests, shared per event loop and database.
+
+        Every request used to build a new engine, re-run create_all and the
+        migration checks, then dispose of the pool — several times per page,
+        each a round of connects and schema queries on MySQL. One engine per
+        (loop, db_url) is now kept for the process; the engine's pool is tied
+        to the loop it was created on, and the web server runs on its own.
+        Callers still ``await storage.close()``; on the shared handle that is
+        a no-op, and engines are disposed of on shutdown.
+        """
         if not dashboard_state.db_url:
             return None
-        from src.data.storage import Storage
-        storage = Storage(dashboard_state.db_url)
-        await storage.initialize()
-        return storage
+        return _SharedStorage(await _shared_storage(dashboard_state.db_url))
 
     async def _get_current_positions_for_web() -> list[PositionInfo]:
         """Read current positions from DB, falling back to in-memory state."""
