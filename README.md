@@ -184,6 +184,29 @@ http://localhost:9095
 docker logs quant-bot -f
 ```
 
+### 5. Kubernetes 헬스체크
+
+인증 없이 호출되며 계좌 정보는 응답하지 않는다.
+
+| 경로 | 용도 | 실패 조건 |
+|------|------|-----------|
+| `/healthz` | liveness — 웹 프로세스 응답 여부 | 응답 없음 |
+| `/readyz` | 봇 상태 | 봇 이벤트 루프가 5초 안에 응답하지 않음, 장중 전략 실행이 10분 넘게 없음 → 503 |
+
+봇은 한 개만 떠야 하므로 `replicas: 1`, `strategy: Recreate` 를 쓰고, `/readyz` 실패 시 재시작되도록 liveness 에 연결한다.
+
+```yaml
+startupProbe:
+  httpGet: { path: /healthz, port: 9095 }
+  periodSeconds: 10
+  failureThreshold: 30      # 초기 RSI 로딩 대기 (최대 5분)
+livenessProbe:
+  httpGet: { path: /readyz, port: 9095 }
+  periodSeconds: 60
+  timeoutSeconds: 10
+  failureThreshold: 5       # 5분 연속 실패 시 재시작
+```
+
 ## 웹 페이지
 
 | 경로 | 설명 |

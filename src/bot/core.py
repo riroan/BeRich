@@ -184,6 +184,7 @@ class TradingBot(
         # Initialize scheduler
         self.scheduler = TradingScheduler(interval_seconds=10, us_only=True)
         self.scheduler.add_callback(self.on_tick)
+        self.dashboard.market_open_check = self.scheduler.is_market_open
 
         logger.info("Trading Bot initialized successfully")
 

@@ -520,6 +520,9 @@ class DashboardState:
         # Hot reload callback, and the bot loop it has to run on (set by bot)
         self.reload_callback: Any | None = None
         self.bot_loop: asyncio.AbstractEventLoop | None = None
+        # Scheduler's market-hours check, set by the bot; /readyz only
+        # expects fresh ticks while it says the market is open
+        self.market_open_check: Any | None = None
 
         # Trading pause flag (data collection continues)
         self.trading_paused: bool = False
@@ -1246,6 +1249,59 @@ def _trigger_bot_reload() -> bool:
     return True
 
 
+# Readiness: how long the bot may go without a strategy run while the market
+# is open (ticks come every ~10s), and how long its loop may take to answer.
+READY_TICK_STALE_AFTER = timedelta(minutes=10)
+READY_LOOP_TIMEOUT = 5.0
+
+
+async def _bot_loop_responds(loop: asyncio.AbstractEventLoop) -> bool:
+    """True when the bot's event loop runs a no-op within the timeout."""
+    if loop.is_closed() or not loop.is_running():
+        return False
+    try:
+        future = asyncio.run_coroutine_threadsafe(asyncio.sleep(0), loop)
+        await asyncio.wait_for(asyncio.wrap_future(future), READY_LOOP_TIMEOUT)
+        return True
+    except Exception:
+        return False
+
+
+async def readiness_checks(
+    state: "DashboardState", now: datetime | None = None,
+) -> dict[str, str]:
+    """Named checks for /readyz, each "ok" or a short failure reason.
+
+    Without a bot (dashboard-only mode) only the web app itself is checked.
+    """
+    checks: dict[str, str] = {}
+    loop = state.bot_loop
+    if loop is None:
+        return checks
+    checks["bot_loop"] = "ok" if await _bot_loop_responds(loop) else "unresponsive"
+
+    market_open = False
+    if state.market_open_check is not None:
+        try:
+            market_open = bool(state.market_open_check())
+        except Exception:
+            market_open = False
+    if market_open:
+        now = now or datetime.now()
+        last = state.last_strategy_run
+        if last is None or now - last > READY_TICK_STALE_AFTER:
+            checks["ticks"] = "stale"
+        else:
+            checks["ticks"] = "ok"
+    else:
+        checks["ticks"] = "market closed"
+    return checks
+
+
+def _check_failed(value: str) -> bool:
+    return value not in ("ok", "market closed")
+
+
 # Global templates (created once)
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
@@ -1571,6 +1627,23 @@ def create_app() -> FastAPI:
         if not m_path.exists():
             raise HTTPException(status_code=404)
         return FileResponse(m_path, media_type="application/manifest+json")
+
+    # Kubernetes probes: unauthenticated, cheap, no account data.
+    @app.get("/healthz", include_in_schema=False)
+    @limiter.exempt
+    async def healthz():
+        return {"status": "ok"}
+
+    @app.get("/readyz", include_in_schema=False)
+    @limiter.exempt
+    async def readyz():
+        checks = await readiness_checks(dashboard_state)
+        ready = not any(_check_failed(v) for v in checks.values())
+        return JSONResponse(
+            status_code=200 if ready else 503,
+            content={"status": "ok" if ready else "unavailable", "checks": checks},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.middleware("http")
     async def security_middleware(request: Request, call_next):
