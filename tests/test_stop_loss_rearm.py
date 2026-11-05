@@ -3,9 +3,11 @@
 Its stage only reset when the position went flat. A partial stop (e.g.
 -10% → sell 50%) therefore spent the ladder for good: the rest of the
 position was never stopped again however far it fell. It now re-arms
-cooldown_days after its last rung filled, and whenever a buy moves the
-average it is measured from. A stop-loss exit also blocks re-entry for
-stop_loss_reentry_days, and the backtest mirrors both rules.
+cooldown_days after its last rung filled, or on a fresh entry. An
+averaging-down buy neither re-arms it nor fires inside the stop-loss zone:
+that combination bought 2 shares and stopped out 7 the next tick (RAM,
+2026-11-05). A stop-loss exit also blocks re-entry for
+stop_loss_reentry_days, and the backtest mirrors these rules.
 """
 
 from __future__ import annotations
@@ -121,19 +123,57 @@ def test_rearm_waits_at_least_a_day_even_with_zero_cooldown():
     assert signal is None or signal.metadata.get("reason") != "stop_loss"
 
 
-def test_a_buy_rearms_the_ladder_against_the_new_average():
+def test_an_avg_down_buy_does_not_rearm_a_spent_stop():
+    # RAM: a spent -20% stop, an avg-down fill, then the stop re-fired the
+    # very next tick and sold 7 of the 24 shares — 3.5x what was bought.
     async def run():
         strategy = await _take_partial_stop(_strategy())
         await strategy.on_fill(_fill(
-            OrderSide.BUY, 5, 85, {"reason": "avg_down_stage_1", "stage": 1},
+            OrderSide.BUY, 1, 85, {"reason": "avg_down_stage_1", "stage": 1},
         ))
-        assert strategy._sl_stages["X"] == 0
-        # average is now 92.5; -10% of it is 83.25
+        assert strategy._sl_stages["X"] == 1
         return await _signal_at(strategy, 80.0, days_later=0)
 
     signal = asyncio.run(run())
+    assert signal is None or signal.metadata.get("reason") != "stop_loss"
+
+
+def test_a_fresh_entry_rearms_the_ladder():
+    async def run():
+        strategy = _strategy()
+        strategy._positions["X"] = 0
+        strategy._entry_prices.pop("X")
+        strategy._sl_stages["X"] = 1
+        strategy._last_sl_time["X"] = _FrozenClock._now
+        await strategy.on_fill(_fill(
+            OrderSide.BUY, 10, 100, {"reason": "avg_down_stage_1", "stage": 1},
+        ))
+        return strategy
+
+    strategy = asyncio.run(run())
+    assert strategy._sl_stages["X"] == 0
+    assert "X" not in strategy._last_sl_time
+
+
+def test_no_avg_down_inside_the_stop_loss_zone():
+    async def run():
+        strategy = await _take_partial_stop(_strategy())
+        strategy._buy_stages["X"] = 0  # a buy rung would fire on RSI alone
+        return await _signal_at(strategy, 85.0, days_later=1)
+
+    signal = asyncio.run(run())
+    assert signal is None
+
+
+def test_avg_down_still_fires_above_the_stop_loss_zone():
+    async def run():
+        strategy = _strategy(stop_loss_levels=[[-30, 0.5]])
+        strategy._buy_stages["X"] = 0
+        return await _signal_at(strategy, 85.0, days_later=0)  # -15%
+
+    signal = asyncio.run(run())
     assert signal is not None
-    assert signal.metadata["reason"] == "stop_loss"
+    assert signal.metadata["reason"].startswith("avg_down")
 
 
 def test_an_rsi_exit_does_not_start_the_stop_reentry_gate():

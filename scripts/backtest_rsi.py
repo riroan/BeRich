@@ -205,6 +205,15 @@ class RSIMeanReversionBacktest(BacktestStrategy):
         buy_stage_idx, _ = resolve_buy_stage(
             rsi, self.buy_stage, self.avg_down_levels, buy_repeat_ready,
         )
+        # No averaging down inside the stop-loss zone — mirrors
+        # rsi_mean_reversion.
+        if (
+            buy_stage_idx is not None
+            and self.pos.shares > 0
+            and self.stop_loss_levels
+            and self.pos.pnl_pct(row["Close"]) <= self.stop_loss_levels[0][0]
+        ):
+            return
         if buy_stage_idx is not None:
             yield BacktestSignal(
                 side="buy",
@@ -216,10 +225,10 @@ class RSIMeanReversionBacktest(BacktestStrategy):
     def on_fill(self, signal, date, price, filled, shares_before) -> None:
         if signal.side == "buy":
             self.buy_stage = signal.stage
-            # New cost basis re-arms the loss ladder
-            self.sl_stage = 0
-            self.last_sl_date = None
             if shares_before == 0:
+                # Only a fresh entry re-arms the loss ladder
+                self.sl_stage = 0
+                self.last_sl_date = None
                 self.sell_stage = 0
                 self.last_exit_date = None
                 self.last_stop_exit_date = None

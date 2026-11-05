@@ -470,6 +470,27 @@ class RSIMeanReversionStrategy(BaseStrategy):
             f"Stage: {current_buy_stage}/{len(avg_down_levels)} | Pos: {current_position}"
         )
 
+        # No averaging down inside the stop-loss zone: the loss ladder says
+        # cut the position there, so adding to it only to stop out the next
+        # tick (or the next day) buys at a loss to sell at a loss.
+        if (
+            buy_stage_idx is not None
+            and current_position > 0
+            and stop_loss_levels
+            and (basis := self._entry_prices.get(symbol))
+        ):
+            pnl_pct = float((current_price - basis) / basis * 100)
+            if pnl_pct <= stop_loss_levels[0][0]:
+                logger.info(
+                    f"[{symbol}] AVG-DOWN BLOCKED | PnL {pnl_pct:.1f}% <= "
+                    f"stop-loss {stop_loss_levels[0][0]}%"
+                )
+                decisions.record(
+                    symbol, decisions.BLOCKED, "buy",
+                    f"손절 구간(손익 {stop_loss_levels[0][0]}% 이하)이라 물타기 보류",
+                )
+                return None
+
         if buy_stage_idx is not None:
             rsi_threshold, portion = avg_down_levels[buy_stage_idx]
             # Stage advance and last-buy time both move to on_fill
@@ -620,11 +641,13 @@ class RSIMeanReversionStrategy(BaseStrategy):
             if target_stage is not None:
                 self._buy_stages[symbol] = target_stage
             self._last_buy_time[symbol] = datetime.now()
-            # A buy moves the cost basis the loss ladder is measured from,
-            # so it re-arms the ladder against the new average.
-            self._sl_stages[symbol] = 0
-            self._last_sl_time.pop(symbol, None)
             if old_qty <= 0:
+                # A fresh entry starts a fresh loss ladder. An averaging-down
+                # buy does not re-arm it: that re-fired a spent stop the tick
+                # after the buy filled, selling more than was just bought.
+                # It re-arms cooldown_days after its last rung, as usual.
+                self._sl_stages[symbol] = 0
+                self._last_sl_time.pop(symbol, None)
                 self._sell_stages[symbol] = 0
                 self._last_exit_time.pop(symbol, None)
                 self._last_stop_exit_time.pop(symbol, None)
