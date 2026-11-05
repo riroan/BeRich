@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: berich
+  labels:
+    app: berich
+spec:
+  # Exactly one bot may trade: two pods would place every order twice.
+  # Recreate stops the old pod before the new one starts.
+  replicas: 1
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app: berich
+  template:
+    metadata:
+      labels:
+        app: berich
+    spec:
+      imagePullSecrets:
+        - name: gitlab-registry
+      # SIGTERM → bot.stop() saves runtime state; give it time to finish
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: berich
+          # The Deploy workflow replaces the tag on every release
+          image: registry.gitlab.com/riroan/riroan/berich:v2.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 9095
+          envFrom:
+            - secretRef:
+                name: berich-env
+          env:
+            - name: TZ
+              value: Asia/Seoul
+          # Up to 5 minutes for broker login and the initial RSI load
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          # Restart when the bot loop hangs or ticks stop during market hours
+          livenessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 5
+          resources:
+            requests:
+              cpu: 100m
+              memory: 384Mi
+            limits:
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            # Log files are also on stdout (kubectl logs); these are scratch.
+            - name: logs
+              mountPath: /app/logs
+            - name: data
+              mountPath: /app/data
+      volumes:
+        - name: logs
+          emptyDir:
+            sizeLimit: 1Gi
+        # Holds only the yfinance paper-broker state; positions, trades and
+        # runtime state live in MySQL. Swap for a PVC if you run paper mode.
+        - name: data
+          emptyDir: {}

@@ -184,28 +184,77 @@ http://localhost:9095
 docker logs quant-bot -f
 ```
 
-### 5. Kubernetes 헬스체크
+### 5. Kubernetes 배포
 
-인증 없이 호출되며 계좌 정보는 응답하지 않는다.
+매니페스트는 `deploy/k8s/` 에 있다. MySQL은 이미 떠 있다고 가정한다(클러스터 안이든 밖이든).
 
-| 경로 | 용도 | 실패 조건 |
-|------|------|-----------|
-| `/healthz` | liveness — 웹 프로세스 응답 여부 | 응답 없음 |
-| `/readyz` | 봇 상태 | 봇 이벤트 루프가 5초 안에 응답하지 않음, 장중 전략 실행이 10분 넘게 없음 → 503 |
+```bash
+# 1) 네임스페이스
+kubectl apply -f deploy/k8s/namespace.yaml
 
-봇은 한 개만 떠야 하므로 `replicas: 1`, `strategy: Recreate` 를 쓰고, `/readyz` 실패 시 재시작되도록 liveness 에 연결한다.
+# 2) 앱 환경변수 — .env 에 DATABASE_URL 을 추가한 뒤 그대로 Secret 으로
+#    DATABASE_URL=mysql+aiomysql://quant:<비밀번호>@<mysql 호스트>:3306/quant
+kubectl -n berich create secret generic berich-env --from-env-file=.env
 
-```yaml
-startupProbe:
-  httpGet: { path: /healthz, port: 9095 }
-  periodSeconds: 10
-  failureThreshold: 30      # 초기 RSI 로딩 대기 (최대 5분)
-livenessProbe:
-  httpGet: { path: /readyz, port: 9095 }
-  periodSeconds: 60
-  timeoutSeconds: 10
-  failureThreshold: 5       # 5분 연속 실패 시 재시작
+# 3) GitLab 레지스트리 pull secret (read_registry 권한 토큰)
+kubectl -n berich create secret docker-registry gitlab-registry \
+  --docker-server=registry.gitlab.com \
+  --docker-username=<사용자> --docker-password=<토큰>
+
+# 4) 나머지 전부
+kubectl apply -k deploy/k8s
 ```
+
+- `replicas: 1` + `strategy: Recreate` 로 둔다. 봇이 두 개 뜨면 주문이 두 번 나간다.
+- `.env` 를 바꾼 뒤에는 Secret 을 다시 만들고 `kubectl -n berich rollout restart deployment/berich` 를 실행한다.
+- 대시보드는 ClusterIP Service(`berich:9095`)로만 열려 있다. 외부에서 접속하려면 Ingress 를 붙이거나 `kubectl port-forward` 를 쓴다.
+
+#### 헬스체크
+
+인증 없이 호출되고, 계좌 정보는 응답에 넣지 않는다.
+
+| 경로 | 프로브 | 실패 조건 |
+|------|------|-----------|
+| `/healthz` | startup, readiness | 웹 프로세스 응답 없음 |
+| `/readyz` | liveness (60초 × 5회) | 봇 이벤트 루프가 5초 안에 응답하지 않거나, 장중 전략 실행이 10분 넘게 없으면 503 |
+
+#### 자동 배포 (GitHub Actions)
+
+`vX.Y.Z` 태그를 푸시하면 `Release image` 가 이미지를 빌드한다. 빌드가 성공하면 `Deploy` 가 이 Deployment 의 이미지를 그 태그로 바꾸고 롤아웃이 끝날 때까지 기다린다. Actions 에서 Deploy 를 수동 실행하면서 예전 태그를 넣으면 롤백이 된다.
+
+배포용 kubeconfig 는 `deployer-rbac.yaml` 의 `github-deployer` 로 만든다. 이 계정은 berich Deployment 의 이미지만 바꿀 수 있다.
+
+```bash
+SERVER=https://<외부에서 접속 가능한 API 서버 주소>:6443
+TOKEN=$(kubectl -n berich get secret github-deployer-token -o jsonpath='{.data.token}' | base64 -d)
+CA=$(kubectl -n berich get secret github-deployer-token -o jsonpath='{.data.ca\.crt}')
+cat > deployer.kubeconfig <<EOF
+apiVersion: v1
+kind: Config
+clusters:
+  - name: berich
+    cluster: { server: $SERVER, certificate-authority-data: $CA }
+users:
+  - name: github-deployer
+    user: { token: $TOKEN }
+contexts:
+  - name: berich
+    context: { cluster: berich, user: github-deployer, namespace: berich }
+current-context: berich
+EOF
+```
+
+이 파일 내용을 GitHub 저장소 Settings → Secrets and variables → Actions 에 `KUBE_CONFIG` 시크릿으로 넣는다.
+
+기본값은 네임스페이스 `berich`, Deployment `berich`, 컨테이너 `berich` 이다. 기존 매니페스트를 쓰는 등 이름이 다르면 Variables 에 `K8S_NAMESPACE`, `K8S_DEPLOYMENT`, `K8S_CONTAINER` 를 설정한다. 실제 이름은 다음 명령으로 확인한다.
+
+```bash
+kubectl get deploy -A                       # 네임스페이스, Deployment 이름
+kubectl -n <네임스페이스> get deploy <Deployment> \
+  -o jsonpath='{.spec.template.spec.containers[*].name}'   # 컨테이너 이름
+```
+
+GitHub 러너가 API 서버에 접속할 수 없는 네트워크라면, 그 서버에 self-hosted runner 를 두고 `deploy.yml` 의 `runs-on` 을 `self-hosted` 로 바꾼다.
 
 ## 웹 페이지
 

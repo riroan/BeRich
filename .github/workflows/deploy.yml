@@ -6,7 +6,7 @@ name: Deploy
 #
 # Setup (Settings → Secrets and variables → Actions):
 #   secret   KUBE_CONFIG     kubeconfig contents (plain text, not base64)
-#   variable K8S_NAMESPACE   default: default
+#   variable K8S_NAMESPACE   default: berich
 #   variable K8S_DEPLOYMENT  default: berich
 #   variable K8S_CONTAINER   default: same as K8S_DEPLOYMENT
 on:
@@ -30,7 +30,7 @@ concurrency:
 
 env:
   IMAGE: registry.gitlab.com/riroan/riroan/berich
-  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'default' }}
+  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'berich' }}
   DEPLOYMENT: ${{ vars.K8S_DEPLOYMENT || 'berich' }}
   CONTAINER: ${{ vars.K8S_CONTAINER || vars.K8S_DEPLOYMENT || 'berich' }}
 

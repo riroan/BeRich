@@ -1,0 +1,10 @@
+# kubectl apply -k deploy/k8s
+# The app Secret is not in here: create it from .env first (see README.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: berich
+resources:
+  - namespace.yaml
+  - deployment.yaml
+  - service.yaml
+  - deployer-rbac.yaml
