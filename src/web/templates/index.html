@@ -15,8 +15,8 @@
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Buying Power</div>
-                    <div class="hero-stat-value" id="hero-cash">${{ "{:,.2f}".format(buying_power_usd) }}</div>
-                    <div class="hero-stat-sub">{{ "{:.0f}%".format(buying_power_ratio_usd) }}</div>
+                    <div class="hero-stat-value" id="hero-buying-power">{{ "${:,.2f}".format(buying_power_usd) if buying_power_usd is not none else "—" }}</div>
+                    <div class="hero-stat-sub">Cash <span id="hero-cash">${{ "{:,.2f}".format(cash_usd) }}</span></div>
                 </div>
                 <div class="hero-stat">
                     <div class="hero-stat-label">Positions</div>
@@ -27,14 +27,18 @@
         </div>
 
         <!-- 1b. Desktop summary cards (shown >768px) -->
-        <div class="cards-row cols-3 summary-desktop">
+        <div class="cards-row cols-4 summary-desktop">
             <div class="card">
                 <div class="label">Total</div>
                 <div class="value small" id="balance-usd">${{ "{:,.2f}".format(balance_usd) }}</div>
             </div>
             <div class="card">
                 <div class="label">Buying Power</div>
-                <div class="value small" id="cash-usd">${{ "{:,.2f}".format(buying_power_usd) }}</div>
+                <div class="value small" id="buying-power-usd">{{ "${:,.2f}".format(buying_power_usd) if buying_power_usd is not none else "—" }}</div>
+            </div>
+            <div class="card">
+                <div class="label">Cash</div>
+                <div class="value small" id="cash-usd">${{ "{:,.2f}".format(cash_usd) }}</div>
             </div>
             <div class="card">
                 <div class="label">P&L</div>

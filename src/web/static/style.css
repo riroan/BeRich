@@ -1665,6 +1665,7 @@ select option { background: var(--surface); color: var(--text); }
 
 /* ===================== Grid column helpers ===================== */
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cols-4 { grid-template-columns: repeat(4, 1fr); }
 .symbol-detail-page {
     display: flex;
     flex-direction: column;

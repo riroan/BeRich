@@ -124,11 +124,17 @@ class DashboardWebSocket {
             usdBalance.textContent = this.formatUSD(data.balance_usd);
         }
 
-        // The main screen's Buying Power (KIS 주문가능금액, else 예수금)
-        const buyingPower = data.buying_power_usd ?? data.cash_usd;
-        const usdCash = document.getElementById('cash-usd');
-        if (usdCash && buyingPower !== undefined) {
-            usdCash.textContent = this.formatUSD(buyingPower);
+        // Buying Power (KIS 주문가능금액, null when unknown) and Cash (예수금)
+        // are shown side by side
+        const buyingPowerText = data.buying_power_usd == null
+            ? '—' : this.formatUSD(data.buying_power_usd);
+        for (const id of ['buying-power-usd', 'hero-buying-power']) {
+            const el = document.getElementById(id);
+            if (el && data.buying_power_usd !== undefined) el.textContent = buyingPowerText;
+        }
+        for (const id of ['cash-usd', 'hero-cash']) {
+            const el = document.getElementById(id);
+            if (el && data.cash_usd !== undefined) el.textContent = this.formatUSD(data.cash_usd);
         }
 
         const usdPnl = document.getElementById('pnl-usd');
@@ -154,11 +160,6 @@ class DashboardWebSocket {
         const heroBalance = document.getElementById('hero-balance');
         if (heroBalance && data.balance_usd !== undefined) {
             heroBalance.textContent = this.formatUSD(data.balance_usd);
-        }
-
-        const heroCash = document.getElementById('hero-cash');
-        if (heroCash && buyingPower !== undefined) {
-            heroCash.textContent = this.formatUSD(buyingPower);
         }
 
         const heroPnl = document.getElementById('hero-pnl');

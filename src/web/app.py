@@ -437,7 +437,7 @@ class DashboardState:
         self.cash_usd: Decimal = Decimal("0")
         # USD an order can spend now (KIS 주문가능금액). cash_usd is the
         # settlement-basis 예수금, which lags buys and sells until T+1. None
-        # when the broker can't report it; the dashboard then shows cash_usd.
+        # when the broker can't report it; the dashboard then shows a dash.
         self.buying_power_usd: Decimal | None = None
         # pnl_krw and pnl_usd are derived from the position rows — see the
         # properties below.
@@ -1734,7 +1734,6 @@ def create_app() -> FastAPI:
         cash_ratio_krw = (float(dashboard_state.cash_krw) / total_krw_value * 100) if total_krw_value > 0 else 0
         cash_ratio_usd = (float(dashboard_state.cash_usd) / total_usd_value * 100) if total_usd_value > 0 else 0
         buying_power_usd = _buying_power_usd()
-        buying_power_ratio_usd = (buying_power_usd / total_usd_value * 100) if total_usd_value > 0 else 0
 
         # Separate buy/sell candidates
         buy_candidates = [c for c in dashboard_state.signal_candidates if "buy" in c.signal_type]
@@ -1758,7 +1757,6 @@ def create_app() -> FastAPI:
             "cash_ratio_krw": cash_ratio_krw,
             "cash_ratio_usd": cash_ratio_usd,
             "buying_power_usd": buying_power_usd,
-            "buying_power_ratio_usd": buying_power_ratio_usd,
             "pnl_krw": float(dashboard_state.pnl_krw),
             "pnl_usd": float(dashboard_state.pnl_usd),
             "daily_pnl": float(dashboard_state.daily_pnl),
@@ -4143,10 +4141,12 @@ def create_app() -> FastAPI:
     return app
 
 
-def _buying_power_usd() -> float:
-    """Main-screen Buying Power: KIS 주문가능금액, else the 예수금."""
+def _buying_power_usd() -> float | None:
+    """KIS 주문가능금액 (USD): cash plus unsettled sale proceeds that can be
+    reused. None when the broker could not report it; the screen then
+    shows a dash next to the separate 예수금 (Cash)."""
     value = dashboard_state.buying_power_usd
-    return float(value if value is not None else dashboard_state.cash_usd)
+    return float(value) if value is not None else None
 
 
 def _recent_decisions() -> list[dict]:

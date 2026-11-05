@@ -1,4 +1,4 @@
-"""The main screen shows KIS 주문가능금액 where Cash (예수금) used to be."""
+"""The main screen shows Buying Power (KIS 주문가능금액) and Cash (예수금) apart."""
 
 from decimal import Decimal
 
@@ -26,17 +26,21 @@ def _home(buying_power: Decimal | None) -> tuple[str, dict]:
     return response.text, snapshot
 
 
-def test_main_screen_shows_buying_power():
+def test_main_screen_shows_buying_power_and_cash_apart():
     html, snapshot = _home(Decimal("1961.02"))
 
-    assert 'id="cash-usd">$1,961.02<' in html
-    assert 'id="hero-cash">$1,961.02<' in html
-    assert ">Buying Power<" in html
+    assert 'id="buying-power-usd">$1,961.02<' in html
+    assert 'id="hero-buying-power">$1,961.02<' in html
+    assert 'id="cash-usd">$903.17<' in html
+    assert 'id="hero-cash">$903.17<' in html
+    assert ">Buying Power<" in html and ">Cash<" in html
     assert snapshot["buying_power_usd"] == 1961.02
+    assert snapshot["cash_usd"] == 903.17
 
 
-def test_main_screen_falls_back_to_cash_without_buying_power():
+def test_unknown_buying_power_shows_a_dash_not_the_cash():
     html, snapshot = _home(None)
 
+    assert 'id="buying-power-usd">—<' in html
     assert 'id="cash-usd">$903.17<' in html
-    assert snapshot["buying_power_usd"] == 903.17
+    assert snapshot["buying_power_usd"] is None
