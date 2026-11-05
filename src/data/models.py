@@ -154,6 +154,12 @@ class DailyCloseRSIModel(Base):
     day = Column(Date, primary_key=True)
     close = Column(Numeric(20, 8), nullable=False)
     rsi = Column(Numeric(10, 4))
+    # Filled when retention folds the day's ticks away (src/data/retention),
+    # so the daily candle chart keeps the day once its raw ticks are gone.
+    # NULL for days whose ticks are still in price_rsi.
+    open = Column(Numeric(20, 8))
+    high = Column(Numeric(20, 8))
+    low = Column(Numeric(20, 8))
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
 

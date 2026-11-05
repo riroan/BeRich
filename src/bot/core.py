@@ -10,6 +10,7 @@ from src.core.events import EventBus
 from src.core.types import Market
 from src.broker.base import Broker
 from src.broker.factory import create_broker
+from src.data import retention
 from src.data.storage import Storage
 from src.strategy.engine import StrategyEngine
 from src.execution.order_manager import OrderManager
@@ -77,6 +78,7 @@ class TradingBot(
         # regardless of market hours (the web UI runs in a separate
         # thread/loop and reaches the bot only through the shared DB).
         self._config_sync_task: asyncio.Task | None = None
+        self._retention_task: asyncio.Task | None = None
         self._config_sync_interval = 15  # seconds
 
     async def initialize(self) -> None:
@@ -573,6 +575,7 @@ class TradingBot(
         # symbol edits apply without a restart.
         self._config_sync_task = asyncio.create_task(self._config_sync_loop())
         self._runtime_state_task = asyncio.create_task(self._runtime_state_loop())
+        self._retention_task = asyncio.create_task(self._retention_loop())
 
         logger.info("Trading Bot started")
         logger.info(f"Paper trading: {self.broker.paper_trading}")
@@ -626,6 +629,13 @@ class TradingBot(
             except asyncio.CancelledError:
                 pass
 
+        if self._retention_task:
+            self._retention_task.cancel()
+            try:
+                await self._retention_task
+            except asyncio.CancelledError:
+                pass
+
         if self._runtime_state_task:
             self._runtime_state_task.cancel()
             try:
@@ -655,6 +665,33 @@ class TradingBot(
             await self.notifier.close()
 
         logger.info("Trading Bot stopped")
+
+    async def _retention_loop(self) -> None:
+        """Fold old ticks and thin old equity snapshots once a day."""
+        tick_days = int(self.config.get("retention.tick_days", retention.TICK_DAYS))
+        equity_days = int(
+            self.config.get("retention.equity_full_days", retention.EQUITY_FULL_DAYS)
+        )
+        while self._running:
+            try:
+                now = datetime.now()
+                await asyncio.sleep((retention.next_run(now) - now).total_seconds())
+                if not self._running or not self.storage:
+                    break
+                started = datetime.now()
+                result = await retention.run_retention(
+                    self.storage, tick_days=tick_days, equity_full_days=equity_days,
+                )
+                logger.info(
+                    f"Retention: deleted {result['ticks_deleted']} ticks "
+                    f"(older than {tick_days}d), {result['equity_deleted']} "
+                    f"equity snapshots (older than {equity_days}d) in "
+                    f"{(datetime.now() - started).total_seconds():.1f}s"
+                )
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Retention failed: {e}")
 
     async def _status_loop(self) -> None:
         """Update dashboard status every 60s regardless of market hours (keeps warmup countdown live).

@@ -21,6 +21,11 @@ trading:
 database:
   url: "${DATABASE_URL}"
 
+# Data retention — runs daily at 07:30 KST (src/data/retention.py)
+retention:
+  tick_days: 30          # price_rsi ticks kept raw; older days fold into daily_close_rsi
+  equity_full_days: 90   # equity snapshots kept in full; older days keep one per day
+
 # Risk Management
 risk:
   # Money limits are FRACTIONS of account equity (USD), not absolute

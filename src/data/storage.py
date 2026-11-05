@@ -157,6 +157,16 @@ class Storage:
                             f"to current_positions",
                         )
 
+            if "daily_close_rsi" in insp.get_table_names():
+                for _ohlc_col in ("open", "high", "low"):
+                    _add_column_if_missing(
+                        "daily_close_rsi",
+                        _ohlc_col,
+                        f"ALTER TABLE daily_close_rsi "
+                        f"ADD COLUMN {_ohlc_col} DECIMAL(20,8)",
+                        f"Migrated: added {_ohlc_col} column to daily_close_rsi",
+                    )
+
             if "equity_snapshots" in insp.get_table_names():
                 cols = {c["name"] for c in insp.get_columns("equity_snapshots")}
                 if "adjusted_total_usd" not in cols:
@@ -587,21 +597,44 @@ class Storage:
             )
             rows = result.mappings().all()
 
-        out = []
-        for row in reversed(rows):  # chronological order
+            # Days whose ticks retention already folded away
+            folded = await session.execute(
+                select(DailyCloseRSIModel)
+                .where(
+                    DailyCloseRSIModel.symbol == symbol,
+                    DailyCloseRSIModel.day >= since.date(),
+                    DailyCloseRSIModel.open.isnot(None),
+                    DailyCloseRSIModel.rsi.isnot(None),
+                )
+            )
+            folded_rows = folded.scalars().all()
+
+        by_day: dict[str, dict] = {
+            row.day.isoformat(): {
+                "day": row.day.isoformat(),
+                "open": float(row.open),
+                "high": float(row.high),
+                "low": float(row.low),
+                "close": float(row.close),
+                "rsi": float(row.rsi),
+            }
+            for row in folded_rows
+        }
+        # Raw ticks win for any day present in both
+        for row in rows:
             day = row["bar_day"]
             day_str = (
                 day.isoformat() if hasattr(day, "isoformat") else str(day)[:10]
             )
-            out.append({
+            by_day[day_str] = {
                 "day": day_str,
                 "open": float(row["open"]),
                 "high": float(row["high"]),
                 "low": float(row["low"]),
                 "close": float(row["close"]),
                 "rsi": float(row["rsi"]),
-            })
-        return out
+            }
+        return [by_day[d] for d in sorted(by_day)][-limit:]
 
     async def get_daily_close_rsi(
         self, symbols: list[str], limit: int = 60,
