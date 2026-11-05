@@ -228,6 +228,7 @@ kubectl apply -k deploy/k8s
 SERVER=https://<외부에서 접속 가능한 API 서버 주소>:6443
 TOKEN=$(kubectl -n berich get secret github-deployer-token -o jsonpath='{.data.token}' | base64 -d)
 CA=$(kubectl -n berich get secret github-deployer-token -o jsonpath='{.data.ca\.crt}')
+[ -n "$TOKEN" ] && [ -n "$CA" ] || echo "토큰/CA 가 비어 있음 — deployer-rbac.yaml 적용 여부 확인"
 cat > deployer.kubeconfig <<EOF
 apiVersion: v1
 kind: Config
@@ -242,6 +243,12 @@ contexts:
     context: { cluster: berich, user: github-deployer, namespace: berich }
 current-context: berich
 EOF
+```
+
+만든 뒤 로컬에서 먼저 확인한다. `yes` 가 나와야 한다.
+
+```bash
+kubectl --kubeconfig deployer.kubeconfig -n berich auth can-i patch deployment/berich
 ```
 
 이 파일 내용을 GitHub 저장소 Settings → Secrets and variables → Actions 에 `KUBE_CONFIG` 시크릿으로 넣는다.

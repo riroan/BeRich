@@ -69,6 +69,25 @@ jobs:
           printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
           echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
 
+      # Fail with a reason instead of kubectl prompting for a username
+      # (which it does when the kubeconfig user carries no credentials)
+      - name: Check cluster access
+        run: |
+          if ! kubectl config current-context >/dev/null 2>&1; then
+            echo "::error::KUBE_CONFIG has no current-context (not a kubeconfig, or base64-encoded?)"
+            exit 1
+          fi
+          creds=$(kubectl config view --minify --raw -o \
+            jsonpath='{.users[0].user.token}{.users[0].user.client-certificate-data}{.users[0].user.client-certificate}{.users[0].user.exec.command}')
+          if [ -z "$creds" ]; then
+            echo "::error::KUBE_CONFIG user has no credentials (empty token?). Rebuild it as in README.md."
+            exit 1
+          fi
+          if [ "$(kubectl auth can-i patch "deployment/$DEPLOYMENT" -n "$NAMESPACE" --request-timeout=20s </dev/null)" != "yes" ]; then
+            echo "::error::Cannot patch deployment/$DEPLOYMENT in $NAMESPACE (wrong token, RBAC, or API server unreachable)"
+            exit 1
+          fi
+
       - name: Roll out ${{ steps.tag.outputs.tag }}
         env:
           TAG: ${{ steps.tag.outputs.tag }}
