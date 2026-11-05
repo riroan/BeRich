@@ -338,8 +338,18 @@ class OrderManager:
         remaining_room = max_symbol_value - current_value
         buy_amount = remaining_room * stage_portion
 
-        # Check available cash in the signal market currency
-        cash = float(dashboard.cash_krw if is_krx else dashboard.cash_usd)
+        # Spendable money in the signal market currency. For USD that is the
+        # broker's 주문가능금액 (buying power), which counts sale proceeds
+        # not yet settled; the settlement-basis 예수금 (cash_usd) lags them
+        # until T+1, so sizing on it skipped buys the account could pay for.
+        # cash_usd stays the fallback when buying power could not be read.
+        if is_krx:
+            cash = float(dashboard.cash_krw)
+        else:
+            buying_power = getattr(dashboard, "buying_power_usd", None)
+            cash = float(
+                buying_power if buying_power is not None else dashboard.cash_usd
+            )
 
         # Don't exceed available cash
         buy_amount = min(buy_amount, cash)
