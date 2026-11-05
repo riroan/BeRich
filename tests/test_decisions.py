@@ -91,3 +91,74 @@ async def test_a_risk_rejection_shows_up_with_its_limit():
     entry = decisions.recent()[0]
     assert entry["outcome"] == "rejected"
     assert entry["detail"] == "리스크 한도: Daily loss limit exceeded"
+
+
+def test_record_once_holds_until_cleared():
+    for sym in ("A", "B", "C"):
+        decisions.record_once(decisions.FUNDS, sym, decisions.BLOCKED, "buy", "현금 부족")
+    assert [d["symbol"] for d in decisions.recent()] == ["A"]
+
+    decisions.clear_once(decisions.FUNDS)
+    decisions.record_once(decisions.FUNDS, "B", decisions.BLOCKED, "buy", "현금 부족")
+    assert [d["symbol"] for d in decisions.recent()] == ["B", "A"]
+
+
+def _buy_event(symbol):
+    signal = Signal(
+        signal_type=SignalType.ENTRY_LONG, symbol=symbol, market=Market.NASDAQ,
+        strength=0.5, metadata={"reason": "avg_down_stage_1"},
+    )
+    return Event(
+        event_type=EventType.SIGNAL_GENERATED,
+        data={"signal": signal, "strategy": "test"}, timestamp=datetime.now(),
+        source="test",
+    )
+
+
+def _cash_dashboard(cash):
+    return MagicMock(
+        trading_paused=False, storage=None, positions={},
+        balance_usd=Decimal("10000"), cash_usd=Decimal(str(cash)),
+    )
+
+
+@pytest.mark.asyncio
+async def test_no_cash_is_noted_once_for_the_whole_account():
+    manager = _manager()
+    with patch(PATCH_DASHBOARD, return_value=_cash_dashboard(0)):
+        for sym in ("AAPL", "MSFT", "NVDA"):
+            await manager._on_signal(_buy_event(sym))
+
+    feed = decisions.recent()
+    assert len(feed) == 1
+    assert feed[0]["detail"].startswith("현금 부족")
+    manager.broker.submit_order.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_buy_going_out_rearms_the_cash_note():
+    manager = _manager()
+    manager.broker.submit_order = AsyncMock(return_value="o1")
+    with patch(PATCH_DASHBOARD, return_value=_cash_dashboard(0)):
+        await manager._on_signal(_buy_event("AAPL"))
+    with patch(PATCH_DASHBOARD, return_value=_cash_dashboard(5000)):
+        await manager._on_signal(_buy_event("MSFT"))
+    with patch(PATCH_DASHBOARD, return_value=_cash_dashboard(0)):
+        await manager._on_signal(_buy_event("NVDA"))
+
+    details = [d["detail"] for d in decisions.recent()]
+    assert details[0].startswith("현금 부족")      # NVDA, noted again
+    assert details[1].endswith("주문")              # MSFT went out
+    assert details[2].startswith("현금 부족")      # AAPL
+
+
+@pytest.mark.asyncio
+async def test_a_rejected_order_is_not_shown_as_ordered():
+    manager = _manager()
+    manager.broker.submit_order = AsyncMock(side_effect=Exception("가격 제한폭 초과"))
+    with patch(PATCH_DASHBOARD, return_value=_cash_dashboard(5000)):
+        await manager._on_signal(_buy_event("AAPL"))
+
+    feed = decisions.recent()
+    assert [d["outcome"] for d in feed] == ["rejected"]
+    assert "가격 제한폭" in feed[0]["detail"]

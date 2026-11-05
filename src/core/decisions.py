@@ -6,7 +6,9 @@ The order manager and strategies record them here; the web reads them.
 
 Conditions that hold for many ticks (a re-entry cooldown, a pause) would
 otherwise flood the feed, so the same (symbol, outcome) is recorded at most
-once per ``REPEAT_AFTER``.
+once per ``REPEAT_AFTER``. Account-wide conditions such as a cash shortfall
+hit every symbol's buys, so they go in once through ``record_once`` and stay
+quiet until ``clear_once`` says the condition is over.
 """
 
 from __future__ import annotations
@@ -22,8 +24,12 @@ ORDER = "order"        # an order was submitted
 BLOCKED = "blocked"    # a gate held the signal back on purpose
 REJECTED = "rejected"  # a risk limit or error stopped it
 
+# record_once flags
+FUNDS = "funds"        # not enough cash to buy; cleared by the next buy order
+
 _entries: deque[dict] = deque(maxlen=MAX_ENTRIES)
 _last_seen: dict[tuple[str, str, str], datetime] = {}
+_once: set[str] = set()
 
 
 def record(
@@ -47,6 +53,25 @@ def record(
         "action": action,
         "detail": detail,
     })
+
+
+def record_once(
+    flag: str,
+    symbol: str,
+    outcome: str,
+    action: str,
+    detail: str,
+    now: datetime | None = None,
+) -> None:
+    """Record once per ``flag`` until ``clear_once(flag)``."""
+    if flag in _once:
+        return
+    _once.add(flag)
+    record(symbol, outcome, action, detail, now)
+
+
+def clear_once(flag: str) -> None:
+    _once.discard(flag)
 
 
 def recent(limit: int = 10) -> list[dict]:
@@ -75,3 +100,4 @@ def restore(entries: list[dict]) -> None:
 def clear() -> None:
     _entries.clear()
     _last_seen.clear()
+    _once.clear()
