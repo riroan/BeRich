@@ -40,3 +40,22 @@ def test_main_screen_falls_back_to_cash_without_buying_power():
 
     assert 'id="cash-usd">$903.17<' in html
     assert snapshot["buying_power_usd"] == 903.17
+
+
+def test_portfolio_cash_shows_buying_power():
+    original = (web_app.AUTH_PASSWORD, web_app.MOCK_MODE, web_app.dashboard_state)
+    web_app.AUTH_PASSWORD = "test"
+    web_app.MOCK_MODE = True
+    state = DashboardState()
+    state.balance_usd = Decimal("10000")
+    state.cash_usd = Decimal("903.17")
+    state.buying_power_usd = Decimal("1961.02")
+    web_app.dashboard_state = state
+    try:
+        html = TestClient(web_app.create_app()).get("/portfolio").text
+    finally:
+        web_app.AUTH_PASSWORD, web_app.MOCK_MODE, web_app.dashboard_state = original
+
+    assert ">Cash<" in html
+    assert "$1,961.02" in html
+    assert "$903.17" not in html

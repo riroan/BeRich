@@ -3339,8 +3339,10 @@ def create_app() -> FastAPI:
                 "pnl_pct": pos.pnl_pct,
             })
 
-        # Cash weight
-        cash_total = float(dashboard_state.cash_usd)
+        # Cash weight. Shown as Cash, but it is the main screen's Buying
+        # Power (KIS 주문가능금액, else the 예수금): the 예수금 leaves out
+        # sale proceeds until T+1, and they read as Invested meanwhile.
+        cash_total = _buying_power_usd()
         cash_weight = (
             (cash_total / total_value * 100)
             if total_value > 0 else 100
