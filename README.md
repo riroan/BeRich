@@ -253,7 +253,7 @@ kubectl --kubeconfig deployer.kubeconfig -n berich auth can-i patch deployment/b
 
 이 파일 내용을 GitHub 저장소 Settings → Secrets and variables → Actions 에 `KUBE_CONFIG` 시크릿으로 넣는다.
 
-기본값은 네임스페이스 `berich`, Deployment `berich`, 컨테이너 `berich` 이다. 기존 매니페스트를 쓰는 등 이름이 다르면 Variables 에 `K8S_NAMESPACE`, `K8S_DEPLOYMENT`, `K8S_CONTAINER` 를 설정한다. 실제 이름은 다음 명령으로 확인한다.
+기본값은 네임스페이스 `berich`, Deployment `berich`, 컨테이너 `berich` 이다. 기존 매니페스트를 쓰는 등 이름이 다르면 Secrets(또는 Variables)에 `K8S_NAMESPACE`, `K8S_DEPLOYMENT`, `K8S_CONTAINER` 를 설정한다. 실제 이름은 다음 명령으로 확인한다.
 
 ```bash
 kubectl get deploy -A                       # 네임스페이스, Deployment 이름
