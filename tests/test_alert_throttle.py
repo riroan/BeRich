@@ -118,4 +118,4 @@ async def test_insufficient_funds_alerts_once_and_pauses_that_symbols_buys():
 
     assert broker.submit_order.await_count == 1   # second signal held back
     assert notifier.send.await_count == 1
-    assert decisions.recent()[0]["detail"].startswith("현금 부족")
+    assert decisions.recent()[0]["detail"].startswith("주문가능금액 부족")

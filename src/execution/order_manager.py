@@ -32,15 +32,6 @@ def _is_insufficient_funds(error: Exception) -> bool:
     return any(phrase in str(error) for phrase in _INSUFFICIENT_FUNDS)
 
 
-# Shown once for the whole account until a buy goes through again
-_FUNDS_NOTE = "현금 부족으로 매수 보류 (매수가 다시 나갈 때까지 표시 안 함)"
-# Why _calculate_buy_quantity came back with 0 shares (besides cash)
-_BUY_SKIP_NOTE = {
-    "weight": "종목 비중 한도에 도달해 매수 안 함",
-    "small": "남은 비중이 1주 가격보다 작아 매수 안 함",
-}
-
-
 # Signal reason (minus its stage number) -> activity-feed label
 _REASON_LABEL = {
     "avg_down_stage": "단계 매수",
@@ -93,9 +84,6 @@ class OrderManager:
         # short. Without it the unfilled stage re-fired every minute (the
         # dedup window) and was rejected again each time.
         self._buy_backoff: dict[str, datetime] = {}
-        # Why the last _calculate_buy_quantity returned 0: "funds" (cash),
-        # "weight" (symbol at its max_weight) or "small" (under one share)
-        self._buy_skip: str | None = None
 
     async def start(self) -> None:
         """Start order manager"""
@@ -166,10 +154,7 @@ class OrderManager:
 
         if action == "buy" and (until := self._buy_backoff.get(signal.symbol)):
             if now < until:
-                decisions.record_once(
-                    decisions.FUNDS, signal.symbol, decisions.BLOCKED, "buy",
-                    _FUNDS_NOTE,
-                )
+                note(decisions.BLOCKED, "주문가능금액 부족 — 잠시 매수 중단")
                 return
             del self._buy_backoff[signal.symbol]
 
@@ -187,19 +172,14 @@ class OrderManager:
             return
 
         # Convert signal to order
-        self._buy_skip = None
         order = await self._signal_to_order(signal)
         if not order:
             logger.debug("No order generated for signal")
-            if action == "sell":
-                note(decisions.BLOCKED, "매도할 보유 수량 없음")
-            elif self._buy_skip == "funds":
-                decisions.record_once(
-                    decisions.FUNDS, signal.symbol, decisions.BLOCKED, "buy",
-                    _FUNDS_NOTE,
-                )
-            elif skip_note := _BUY_SKIP_NOTE.get(self._buy_skip or ""):
-                note(decisions.BLOCKED, skip_note)
+            note(
+                decisions.BLOCKED,
+                "매수 여유 비중·현금이 없어 주문 수량 0" if action == "buy"
+                else "매도할 보유 수량 없음",
+            )
             return
 
         # Validate with risk manager
@@ -219,12 +199,12 @@ class OrderManager:
             f"Qty: {order.quantity} | Price: {order.price:,} | "
             f"Value: {order.quantity * order.price:,}"
         )
-        if await self._submit_order(order, signal_metadata=signal.metadata):
-            note(
-                decisions.ORDER,
-                f"{_REASON_LABEL.get(reason.rstrip('_0123456789'), reason or '신호')} "
-                f"{order.quantity}주 주문",
-            )
+        note(
+            decisions.ORDER,
+            f"{_REASON_LABEL.get(reason.rstrip('_0123456789'), reason or '신호')} "
+            f"{order.quantity}주 주문",
+        )
+        await self._submit_order(order, signal_metadata=signal.metadata)
 
     async def _signal_to_order(self, signal: Signal) -> Order | None:
         """Convert signal to order"""
@@ -306,7 +286,6 @@ class OrderManager:
         currency_symbol = "₩" if is_krx else "$"
         if total_value <= 0:
             logger.debug(f"[{symbol}] No portfolio value for {market.value}")
-            self._buy_skip = "funds"
             return 0
 
         # Get max_weight from strategy_configs DB
@@ -348,7 +327,6 @@ class OrderManager:
                 f"{current_value / total_value * 100:.1f}% >= "
                 f"limit {max_weight:.0f}%"
             )
-            self._buy_skip = "weight"
             return 0
 
         # Target buy amount = remaining weight room × stage portion
@@ -359,16 +337,12 @@ class OrderManager:
         cash = float(dashboard.cash_krw if is_krx else dashboard.cash_usd)
 
         # Don't exceed available cash
-        cash_bound = cash < buy_amount
         buy_amount = min(buy_amount, cash)
 
         if buy_amount <= 0:
-            self._buy_skip = "funds"
             return 0
 
         quantity = int(buy_amount / float(price))
-        if quantity <= 0:
-            self._buy_skip = "funds" if cash_bound else "small"
 
         logger.info(
             f"[{symbol}] Buy calc: "
@@ -381,9 +355,8 @@ class OrderManager:
 
         return quantity
 
-    async def _submit_order(self, order: Order, signal_metadata: dict = None) -> bool:
-        """Submit order to broker. True when the broker accepted it."""
-        accepted = False
+    async def _submit_order(self, order: Order, signal_metadata: dict = None) -> None:
+        """Submit order to broker"""
         try:
             # FIX-003: Attach PnL before submission
             if signal_metadata and order.side == OrderSide.SELL:
@@ -392,15 +365,11 @@ class OrderManager:
 
             # FIX-003: Register in active_orders BEFORE submit to prevent lost fills
             order_id = await self.broker.submit_order(order)
-            accepted = True
             self._active_orders[order_id] = order
             self._order_meta[order_id] = signal_metadata or {}
             # It went through, so the next failure for it is news again
             if self.notifier:
                 self.notifier.reset_order_failures(order.symbol, order.side.value)
-            if order.side == OrderSide.BUY:
-                # Cash was enough this time; a later shortfall is news again
-                decisions.clear_once(decisions.FUNDS)
             await self.storage.save_order(order)
             logger.info(f"Order submitted: {order_id}")
 
@@ -455,7 +424,6 @@ class OrderManager:
                 order.price, order.quantity,
                 submitted=True,
             )
-            return True
         except Exception as e:
             logger.error(f"Failed to submit order: {e}")
 
@@ -471,18 +439,11 @@ class OrderManager:
                 result="failed",
             )
 
-            if accepted:
-                pass  # the broker took it; a later bookkeeping step failed
-            elif order.side == OrderSide.BUY and _is_insufficient_funds(e):
+            if order.side == OrderSide.BUY and _is_insufficient_funds(e):
                 self._buy_backoff[order.symbol] = datetime.now() + BUY_BACKOFF
-                decisions.record_once(
-                    decisions.FUNDS, order.symbol, decisions.REJECTED, "buy",
-                    _FUNDS_NOTE,
-                )
-            else:
                 decisions.record(
-                    order.symbol, decisions.REJECTED, order.side.value,
-                    f"브로커 거절: {str(e)[:80]}",
+                    order.symbol, decisions.REJECTED, "buy",
+                    "주문가능금액 부족 — 30분 뒤 다시 시도",
                 )
 
             # Send order failed notification (HIGH PRIORITY). Repeats of the
@@ -504,7 +465,6 @@ class OrderManager:
                     source="OrderManager",
                 )
             )
-            return accepted
 
     async def _send_trade_notification(
         self,
