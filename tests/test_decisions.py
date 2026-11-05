@@ -91,3 +91,20 @@ async def test_a_risk_rejection_shows_up_with_its_limit():
     entry = decisions.recent()[0]
     assert entry["outcome"] == "rejected"
     assert entry["detail"] == "리스크 한도: Daily loss limit exceeded"
+
+
+def test_a_cash_shortfall_repeats_hourly_not_every_half_hour():
+    t0 = datetime(2026, 11, 4, 9, 0)
+    note = "주문가능금액 부족 — 잠시 매수 중단"
+    for minutes in (0, 31, 59):
+        decisions.record(
+            "X", decisions.BLOCKED, "buy", note, now=t0 + timedelta(minutes=minutes),
+            repeat_after=decisions.FUNDS_REPEAT_AFTER,
+        )
+    assert len(decisions.recent()) == 1
+
+    decisions.record(
+        "X", decisions.BLOCKED, "buy", note, now=t0 + timedelta(minutes=61),
+        repeat_after=decisions.FUNDS_REPEAT_AFTER,
+    )
+    assert len(decisions.recent()) == 2

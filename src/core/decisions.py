@@ -16,6 +16,8 @@ from datetime import datetime, timedelta
 
 MAX_ENTRIES = 50
 REPEAT_AFTER = timedelta(minutes=30)
+# A cash shortfall lasts until money comes in; say it less often
+FUNDS_REPEAT_AFTER = timedelta(hours=1)
 
 # Outcome keys, shown as tags in the feed
 ORDER = "order"        # an order was submitted
@@ -32,12 +34,17 @@ def record(
     action: str,
     detail: str,
     now: datetime | None = None,
+    repeat_after: timedelta = REPEAT_AFTER,
 ) -> None:
-    """Add a decision. ``action`` is 'buy' or 'sell'."""
+    """Add a decision. ``action`` is 'buy' or 'sell'.
+
+    ``repeat_after`` overrides how long the same (symbol, outcome, detail)
+    stays quiet — longer for conditions that last, like a cash shortfall.
+    """
     now = now or datetime.now()
     key = (symbol, outcome, detail)
     last = _last_seen.get(key)
-    if outcome != ORDER and last is not None and now - last < REPEAT_AFTER:
+    if outcome != ORDER and last is not None and now - last < repeat_after:
         return
     _last_seen[key] = now
     _entries.appendleft({

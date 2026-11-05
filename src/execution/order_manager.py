@@ -119,8 +119,8 @@ class OrderManager:
         action = "buy" if signal.signal_type == SignalType.ENTRY_LONG else "sell"
         reason = str((signal.metadata or {}).get("reason", ""))
 
-        def note(outcome: str, detail: str) -> None:
-            decisions.record(signal.symbol, outcome, action, detail)
+        def note(outcome: str, detail: str, **kw) -> None:
+            decisions.record(signal.symbol, outcome, action, detail, **kw)
 
         # Check if trading is enabled (warmup check)
         if not await self._is_trading_enabled():
@@ -154,7 +154,10 @@ class OrderManager:
 
         if action == "buy" and (until := self._buy_backoff.get(signal.symbol)):
             if now < until:
-                note(decisions.BLOCKED, "주문가능금액 부족 — 잠시 매수 중단")
+                note(
+                    decisions.BLOCKED, "주문가능금액 부족 — 잠시 매수 중단",
+                    repeat_after=decisions.FUNDS_REPEAT_AFTER,
+                )
                 return
             del self._buy_backoff[signal.symbol]
 
@@ -175,11 +178,13 @@ class OrderManager:
         order = await self._signal_to_order(signal)
         if not order:
             logger.debug("No order generated for signal")
-            note(
-                decisions.BLOCKED,
-                "매수 여유 비중·현금이 없어 주문 수량 0" if action == "buy"
-                else "매도할 보유 수량 없음",
-            )
+            if action == "buy":
+                note(
+                    decisions.BLOCKED, "매수 여유 비중·현금이 없어 주문 수량 0",
+                    repeat_after=decisions.FUNDS_REPEAT_AFTER,
+                )
+            else:
+                note(decisions.BLOCKED, "매도할 보유 수량 없음")
             return
 
         # Validate with risk manager
@@ -444,6 +449,7 @@ class OrderManager:
                 decisions.record(
                     order.symbol, decisions.REJECTED, "buy",
                     "주문가능금액 부족 — 30분 뒤 다시 시도",
+                    repeat_after=decisions.FUNDS_REPEAT_AFTER,
                 )
 
             # Send order failed notification (HIGH PRIORITY). Repeats of the
