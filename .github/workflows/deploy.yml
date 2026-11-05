@@ -87,6 +87,12 @@ jobs:
             echo "::error::Cannot patch deployment/$DEPLOYMENT in $NAMESPACE (wrong token, RBAC, or API server unreachable)"
             exit 1
           fi
+          # The workflow only updates the image; the Deployment itself comes
+          # from deploy/k8s (kubectl apply -k deploy/k8s, see README.md)
+          if ! kubectl -n "$NAMESPACE" get "deployment/$DEPLOYMENT" --request-timeout=20s >/dev/null; then
+            echo "::error::deployment/$DEPLOYMENT not found in $NAMESPACE — apply deploy/k8s first, or set K8S_NAMESPACE / K8S_DEPLOYMENT to the existing one"
+            exit 1
+          fi
 
       - name: Roll out ${{ steps.tag.outputs.tag }}
         env:
