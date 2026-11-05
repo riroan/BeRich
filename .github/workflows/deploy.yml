@@ -1,0 +1,92 @@
+name: Deploy
+
+# Rolls the Kubernetes deployment to the image "Release image" just pushed.
+# Runs after that workflow succeeds on a vX.Y.Z tag; can also be run by hand
+# with any existing tag (a rollback is a deploy of an older tag).
+#
+# Setup (Settings → Secrets and variables → Actions):
+#   secret   KUBE_CONFIG     kubeconfig contents (plain text, not base64)
+#   variable K8S_NAMESPACE   default: default
+#   variable K8S_DEPLOYMENT  default: berich
+#   variable K8S_CONTAINER   default: same as K8S_DEPLOYMENT
+on:
+  workflow_run:
+    workflows: ["Release image"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "배포할 이미지 태그 (예: v2.5.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One deploy at a time, and never cancel one halfway through a rollout
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: registry.gitlab.com/riroan/riroan/berich
+  NAMESPACE: ${{ vars.K8S_NAMESPACE || 'default' }}
+  DEPLOYMENT: ${{ vars.K8S_DEPLOYMENT || 'berich' }}
+  CONTAINER: ${{ vars.K8S_CONTAINER || vars.K8S_DEPLOYMENT || 'berich' }}
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Resolve tag
+        id: tag
+        env:
+          # For a tag-triggered run, head_branch is the tag name
+          TAG: ${{ inputs.tag || github.event.workflow_run.head_branch }}
+        run: |
+          if ! [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Not a release tag: '$TAG'"
+            exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Write kubeconfig
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          if [ -z "$KUBE_CONFIG" ]; then
+            echo "::error::KUBE_CONFIG secret is not set"
+            exit 1
+          fi
+          umask 077
+          printf '%s' "$KUBE_CONFIG" > "$RUNNER_TEMP/kubeconfig"
+          echo "KUBECONFIG=$RUNNER_TEMP/kubeconfig" >> "$GITHUB_ENV"
+
+      - name: Roll out ${{ steps.tag.outputs.tag }}
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          kubectl -n "$NAMESPACE" set image "deployment/$DEPLOYMENT" \
+            "$CONTAINER=$IMAGE:$TAG"
+          kubectl -n "$NAMESPACE" annotate "deployment/$DEPLOYMENT" \
+            kubernetes.io/change-cause="deploy $TAG" --overwrite
+
+      - name: Wait for rollout
+        run: |
+          if ! kubectl -n "$NAMESPACE" rollout status "deployment/$DEPLOYMENT" --timeout=10m; then
+            echo "::error::Rollout did not become ready"
+            kubectl -n "$NAMESPACE" get pods -o wide || true
+            kubectl -n "$NAMESPACE" describe "deployment/$DEPLOYMENT" | tail -30 || true
+            exit 1
+          fi
+
+      - name: Remove kubeconfig
+        if: always()
+        run: rm -f "$RUNNER_TEMP/kubeconfig"
