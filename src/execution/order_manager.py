@@ -333,8 +333,19 @@ class OrderManager:
         remaining_room = max_symbol_value - current_value
         buy_amount = remaining_room * stage_portion
 
-        # Check available cash in the signal market currency
-        cash = float(dashboard.cash_krw if is_krx else dashboard.cash_usd)
+        # Check available cash in the signal market currency. USD caps on
+        # KIS 주문가능금액: it counts unsettled sale proceeds KIS lets a buy
+        # reuse, which the settlement-basis 예수금 leaves out until T+1 —
+        # right after a sell that sized every buy to 0 shares. The 예수금
+        # is the fallback when that query fails.
+        if is_krx:
+            cash = float(dashboard.cash_krw)
+        else:
+            buying_power = dashboard.buying_power_usd
+            cash = float(
+                buying_power if buying_power is not None
+                else dashboard.cash_usd
+            )
 
         # Don't exceed available cash
         buy_amount = min(buy_amount, cash)

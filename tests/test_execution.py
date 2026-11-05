@@ -306,6 +306,7 @@ class TestCalculateBuyQuantity:
         dashboard_mock.cash_krw = Decimal("100000000")
         dashboard_mock.balance_usd = Decimal("10000")
         dashboard_mock.cash_usd = Decimal("300")
+        dashboard_mock.buying_power_usd = None
         dashboard_mock.positions = {}
         dashboard_mock.storage = AsyncMock()
         dashboard_mock.storage.get_all_strategy_configs = AsyncMock(
@@ -318,6 +319,29 @@ class TestCalculateBuyQuantity:
             )
 
         assert quantity == 3
+
+    @pytest.mark.asyncio
+    async def test_us_signal_caps_on_kis_buying_power_not_settled_cash(
+        self, order_manager,
+    ):
+        # Right after a sell: the 예수금 is near zero, but KIS lets the
+        # unsettled sale proceeds be reused, so the orderable amount isn't.
+        dashboard_mock = MagicMock()
+        dashboard_mock.balance_usd = Decimal("10000")
+        dashboard_mock.cash_usd = Decimal("14.20")
+        dashboard_mock.buying_power_usd = Decimal("1445.60")
+        dashboard_mock.positions = {}
+        dashboard_mock.storage = AsyncMock()
+        dashboard_mock.storage.get_all_strategy_configs = AsyncMock(
+            return_value=[{"symbols": [{"symbol": "NVDA", "max_weight": 20.0}]}]
+        )
+
+        with patch(PATCH_DASHBOARD, return_value=dashboard_mock):
+            quantity = await order_manager._calculate_buy_quantity(
+                "NVDA", Market.NASDAQ, Decimal("100"), 1.0
+            )
+
+        assert quantity == 14
 
     @pytest.mark.asyncio
     async def test_krx_signal_uses_krw_cash_not_usd_cash(self, order_manager):
